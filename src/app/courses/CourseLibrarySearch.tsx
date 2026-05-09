@@ -5,9 +5,9 @@ import Link from 'next/link';
 import Fuse from 'fuse.js';
 import {
   EmptyState,
-  PremiumPanel,
+  GhostButton,
   SecondaryButton,
-  fieldClassName,
+  Stamp,
 } from '@/components/ui/Premium';
 import { deleteCourseAction } from './actions';
 
@@ -43,103 +43,116 @@ export function CourseLibrarySearch({ courses }: Props) {
   }, [courses, fuse, query]);
 
   if (courses.length === 0) {
-    return <EmptyState>No courses yet. Create one to import a PGN or Lichess study.</EmptyState>;
+    return (
+      <EmptyState>
+        No courses yet. Begin by importing a PGN or a Lichess study to seed
+        your first body of theory.
+      </EmptyState>
+    );
   }
 
   return (
-    <div className="space-y-5">
-      <PremiumPanel>
-        <section className="p-5 md:p-6">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <label className="block">
-              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#8fa3a0]">
-                Search courses
-              </span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Find a course by name, side, or description..."
-                className={`${fieldClassName} py-3`}
-              />
-            </label>
-            <p className="text-sm text-[#9fb0aa]">
-              {visibleCourses.length} of {courses.length}
-            </p>
-          </div>
-        </section>
-      </PremiumPanel>
+    <div>
+      {/* Search — single ruled line, no chrome */}
+      <div className="mb-10 flex flex-wrap items-baseline gap-x-6 gap-y-3 border-b border-[color:var(--paper-edge)] pb-3">
+        <label className="flex flex-1 min-w-[260px] items-baseline gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+            Find
+          </span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Title, color, or note…"
+            className="font-display flex-1 bg-transparent text-2xl italic text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none"
+          />
+        </label>
+        <p className="font-mono text-[10px] uppercase tracking-[0.20em] text-[color:var(--ink-faint)] tabular-nums">
+          {visibleCourses.length} / {courses.length}
+        </p>
+      </div>
 
       {visibleCourses.length === 0 ? (
-        <PremiumPanel>
-          <div className="flex flex-col gap-4 p-8 text-center md:items-center">
-            <p className="text-sm leading-6 text-[#c9bea4]">No courses match that search.</p>
-            <SecondaryButton onClick={() => setQuery('')} className="mx-auto px-4 py-2 text-xs">
-              Clear search
-            </SecondaryButton>
-          </div>
-        </PremiumPanel>
+        <div className="border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-8 py-12 text-center">
+          <p className="font-display-italic text-lg text-[color:var(--ink-soft)]">
+            Nothing in the index matches that.
+          </p>
+          <SecondaryButton onClick={() => setQuery('')} className="mt-5">
+            Clear
+          </SecondaryButton>
+        </div>
       ) : (
-        <ul className="grid gap-4 md:grid-cols-2">
-          {visibleCourses.map((course) => (
-            <li
-              key={course.id}
-              className="rounded-2xl border border-[#263337] bg-[#182225] p-1"
-            >
-              <div className="flex h-full flex-col justify-between rounded-[0.875rem] bg-[#10191b] p-5">
+        <ol className="divide-y divide-[color:var(--paper-rule)] border-y border-[color:var(--paper-edge)]">
+          {visibleCourses.map((course, idx) => {
+            const num = String(idx + 1).padStart(2, '0');
+            const isDeleting = deleteTargetId === course.id;
+            return (
+              <li
+                key={course.id}
+                className="group relative grid grid-cols-[3rem_1fr_auto] items-baseline gap-x-5 gap-y-2 py-6 transition-colors duration-200 hover:bg-[color:var(--paper-shade)] md:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] md:gap-x-8 md:py-7"
+              >
+                <span
+                  className="font-display text-2xl italic text-[color:var(--ink-faint)] group-hover:text-[color:var(--margin-red)]"
+                  style={{ fontFeatureSettings: '"onum"' }}
+                >
+                  {num}
+                </span>
+
                 <Link
                   href={`/courses/${course.id}`}
-                  className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7dd3c7]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#10191b]"
+                  className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa3a0]">
-                        {course.color}
-                      </span>
-                      <h2 className="mt-3 text-2xl font-semibold text-[#f4faf7] transition-colors duration-200 group-hover:text-[#7dd3c7]">
-                        {course.name}
-                      </h2>
-                    </div>
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#223034] text-sm text-[#a8e7df] transition-transform duration-200 group-hover:translate-x-0.5">
-                      &gt;
-                    </span>
+                  <div className="flex items-baseline gap-3">
+                    <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
+                      {course.name}
+                    </h2>
+                    <Stamp tone={course.color === 'white' ? 'ink' : 'red'}>
+                      {course.color}
+                    </Stamp>
                   </div>
                   {course.description && (
-                    <p className="mt-4 text-sm leading-6 text-[#9fb0aa]">{course.description}</p>
+                    <p className="mt-2 font-display-italic max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
+                      {course.description}
+                    </p>
                   )}
                 </Link>
-                <div className="mt-6 border-t border-[#263337] pt-4">
-                  {deleteTargetId === course.id ? (
-                    <form action={deleteCourseAction} className="flex flex-wrap items-center gap-2">
+
+                <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
+                  Open to manage chapters,
+                  <br />
+                  annotations, and lines.
+                </p>
+
+                <div className="col-start-2 flex items-center gap-3 md:col-start-4 md:justify-self-end">
+                  {isDeleting ? (
+                    <form action={deleteCourseAction} className="flex items-center gap-3">
                       <input type="hidden" name="id" value={course.id} />
-                      <span className="mr-auto text-xs text-[#ff9f8e]">Delete this course?</span>
-                      <SecondaryButton
+                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--margin-red)]">
+                        Confirm?
+                      </span>
+                      <GhostButton
                         type="button"
                         onClick={() => setDeleteTargetId(null)}
-                        className="px-3 py-2 text-xs"
                       >
                         Cancel
-                      </SecondaryButton>
-                      <SecondaryButton type="submit" className="border-[#ff9f8e]/30 px-3 py-2 text-xs text-[#ff9f8e]">
-                        Delete
-                      </SecondaryButton>
-                    </form>
-                  ) : (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-[#8fa3a0]">Open to manage chapters and annotations.</span>
-                      <SecondaryButton
-                        onClick={() => setDeleteTargetId(course.id)}
-                        className="px-3 py-2 text-xs"
+                      </GhostButton>
+                      <button
+                        type="submit"
+                        className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--margin-red)] underline decoration-[color:var(--margin-red)] decoration-1 underline-offset-[6px] hover:opacity-80"
                       >
                         Delete
-                      </SecondaryButton>
-                    </div>
+                      </button>
+                    </form>
+                  ) : (
+                    <GhostButton onClick={() => setDeleteTargetId(course.id)}>
+                      Delete
+                    </GhostButton>
                   )}
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            );
+          })}
+        </ol>
       )}
     </div>
   );

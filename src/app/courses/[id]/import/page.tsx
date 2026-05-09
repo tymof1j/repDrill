@@ -16,9 +16,13 @@ export default async function ImportPgnPage({ params }: { params: Promise<{ id: 
     <AppSurface>
       <BackLink href={`/courses/${id}`}>{course.name}</BackLink>
       <PageHeader
-        eyebrow="PGN import"
-        title="Import theory"
-        body="Paste PGN, drop a file, or browse from disk. Each game becomes a chapter while variations and comments are preserved."
+        eyebrow={`PGN import · ${course.color}`}
+        title={
+          <>
+            Add <span className="font-display-italic">theory</span> to the course.
+          </>
+        }
+        body="Drop a PGN file, paste from disk, or transcribe directly. Each game becomes its own chapter inside this course."
       />
 
       <PgnImportForm courseId={id} />

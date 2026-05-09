@@ -1,26 +1,47 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-const motion =
-  'transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-200 ease-out';
-const focusRing =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7dd3c7]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1214]';
+/*
+ * Editorial chess-manuscript primitives.
+ * No rounded "card" shadows. Hairlines, ink, paper. Mono for labels, Fraunces for display.
+ * The exports keep the previous API so callers continue to work; the look is rebuilt.
+ */
 
-export function AppSurface({ children, className = '' }: { children: ReactNode; className?: string }) {
+const motion =
+  'transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out';
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--margin-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--paper)]';
+
+/* ─── Page surface ─────────────────────────────────────────────── */
+
+export function AppSurface({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={`min-h-full bg-[#0b1214] px-4 pb-8 pt-24 text-[#edf5f2] md:px-8 md:py-10 ${className}`}>
-      <div className="mx-auto w-full max-w-7xl">{children}</div>
+    <div
+      className={`relative min-h-full bg-[color:var(--paper)] px-5 pb-16 pt-20 text-[color:var(--ink)] md:px-10 md:py-12 lg:px-14 ${className}`}
+    >
+      <div className="relative mx-auto w-full max-w-6xl">{children}</div>
     </div>
   );
 }
 
+/* ─── Eyebrow / section label ──────────────────────────────────── */
+
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex rounded-md border border-[#7dd3c7]/18 bg-[#7dd3c7]/[0.09] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#a8e7df]">
+    <span className="inline-flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+      <span aria-hidden className="h-px w-6 bg-[color:var(--paper-edge)]" />
       {children}
     </span>
   );
 }
+
+/* ─── Page header ──────────────────────────────────────────────── */
 
 export function PageHeader({
   eyebrow,
@@ -34,40 +55,82 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-col gap-5 md:mb-9 md:flex-row md:items-end md:justify-between">
-      <div className="max-w-3xl">
-        {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-        <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-normal text-[#f4faf7] md:text-5xl">
-          {title}
-        </h1>
-        {body && <p className="mt-3 max-w-2xl text-sm leading-6 text-[#aebdb8] md:text-base">{body}</p>}
+    <header className="mb-10 border-b border-[color:var(--paper-edge)] pb-8 md:mb-14 md:pb-10">
+      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between md:gap-10">
+        <div className="max-w-3xl">
+          {eyebrow && <div className="mb-5">{eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}</div>}
+          <h1 className="font-display text-[2.75rem] font-medium leading-[1.02] tracking-[-0.01em] text-[color:var(--ink)] md:text-[4rem] lg:text-[4.75rem]">
+            {title}
+          </h1>
+          {body && (
+            <p className="mt-6 max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)] md:text-base">
+              {body}
+            </p>
+          )}
+        </div>
+        {action && (
+          <div className="flex shrink-0 flex-wrap items-center gap-3 md:pb-2">{action}</div>
+        )}
       </div>
-      {action && <div className="flex shrink-0 flex-wrap items-center gap-3">{action}</div>}
-    </div>
+    </header>
   );
 }
+
+/* ─── Panel — bracket-frame replaces the old soft card ─────────── */
 
 export function PremiumPanel({
   children,
   className = '',
   innerClassName = '',
+  bordered = true,
 }: {
   children: ReactNode;
   className?: string;
   innerClassName?: string;
+  bordered?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-2xl border border-[#263337] bg-[#182225] p-1 shadow-[0_18px_48px_rgba(0,0,0,0.24),inset_0_1px_1px_rgba(255,255,255,0.06)] ${className}`}
+    <section
+      className={`relative bg-[color:var(--paper-shade)] ${bordered ? 'border border-[color:var(--paper-edge)]' : ''} ${className}`}
     >
-      <div
-        className={`h-full rounded-[0.875rem] bg-[#10191b] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] ${innerClassName}`}
-      >
-        {children}
-      </div>
-    </div>
+      <div className={`relative ${innerClassName}`}>{children}</div>
+    </section>
   );
 }
+
+/* ─── Diagram frame — bracket-cornered, for board panels ───────── */
+
+export function DiagramFrame({
+  children,
+  caption,
+  className = '',
+}: {
+  children: ReactNode;
+  caption?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <figure className={`relative ${className}`}>
+      <div className="bracket-frame relative bg-[color:var(--paper-shade)] p-2 md:p-3">
+        <span className="bracket-tl" />
+        <span className="bracket-tr" />
+        <span className="bracket-bl" />
+        <span className="bracket-br" />
+        {children}
+      </div>
+      {caption && (
+        <figcaption className="mt-3 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+          {caption}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────── */
+
+const primaryClasses =
+  `group relative inline-flex min-h-11 items-center justify-center gap-3 border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.18em] text-[color:var(--paper)] ${motion} hover:bg-[color:var(--margin-red)] hover:border-[color:var(--margin-red)] active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 
 export function PremiumButton({
   children,
@@ -84,13 +147,14 @@ export function PremiumButton({
   onClick?: () => void;
   className?: string;
 }) {
-  const classes = `group inline-flex min-h-11 items-center justify-center gap-3 rounded-xl bg-[#7dd3c7] px-4 py-2.5 text-sm font-semibold text-[#071314] shadow-[0_10px_24px_rgba(125,211,199,0.14)] ${motion} hover:bg-[#a8e7df] hover:shadow-[0_12px_28px_rgba(125,211,199,0.22)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${className}`;
+  const classes = `${primaryClasses} ${className}`;
   const content = (
     <>
-      {children}
-      <span className={`flex h-7 w-7 items-center justify-center rounded-lg bg-[#071314]/[0.10] ${motion} group-hover:translate-x-0.5 group-hover:-translate-y-[1px]`}>
-        ↗
-      </span>
+      <span>{children}</span>
+      <span
+        aria-hidden
+        className={`inline-flex h-px w-4 bg-current transition-all duration-200 group-hover:w-7`}
+      />
     </>
   );
 
@@ -109,6 +173,9 @@ export function PremiumButton({
   );
 }
 
+const secondaryClasses =
+  `inline-flex min-h-10 items-center justify-center gap-2 border border-[color:var(--paper-edge)] bg-transparent px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink)] ${motion} hover:border-[color:var(--ink)] hover:bg-[color:var(--paper-deep)] active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+
 export function SecondaryButton({
   children,
   href,
@@ -124,7 +191,7 @@ export function SecondaryButton({
   onClick?: () => void;
   className?: string;
 }) {
-  const classes = `inline-flex min-h-10 items-center justify-center rounded-xl border border-[#2b3a3e] bg-[#172225] px-4 py-2.5 text-sm font-semibold text-[#e6f1ed] ${motion} hover:border-[#496066] hover:bg-[#1d2b2f] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${className}`;
+  const classes = `${secondaryClasses} ${className}`;
 
   if (href) {
     return (
@@ -159,7 +226,7 @@ export function GhostButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-lg px-3 py-2 text-xs font-semibold text-[#9fb0aa] ${motion} hover:bg-[#223034] hover:text-[#f4faf7] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${className}`}
+      className={`relative inline-flex items-center px-2 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] ${motion} hover:text-[color:var(--margin-red)] hover:decoration-[color:var(--margin-red)] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${className}`}
     >
       {children}
     </button>
@@ -170,27 +237,41 @@ export function BackLink({ href, children }: { href: string; children: ReactNode
   return (
     <Link
       href={href}
-      className={`mb-6 inline-flex rounded-lg border border-[#2b3a3e] bg-[#172225] px-3 py-2 text-xs font-semibold text-[#9fb0aa] ${motion} hover:bg-[#223034] hover:text-[#f4faf7] ${focusRing}`}
+      className={`mb-8 inline-flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--ink-faint)] ${motion} hover:text-[color:var(--margin-red)] ${focusRing}`}
     >
-      ← {children}
+      <span aria-hidden className="text-[color:var(--paper-edge)]">←</span>
+      <span className="underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:decoration-[color:var(--margin-red)]">
+        {children}
+      </span>
     </Link>
   );
 }
 
+/* ─── Form helpers ─────────────────────────────────────────────── */
+
 export function FieldLabel({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#8fa3a0]">
-        {label}
-        {required && <span className="ml-1 text-[#ff9f8e]">*</span>}
+      <span className="mb-2 flex items-baseline justify-between gap-3 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--ink-soft)]">
+        <span>
+          {label}
+          {required && <span className="ml-1 text-[color:var(--margin-red)]">*</span>}
+        </span>
+        {hint && (
+          <span className="font-mono text-[10px] tracking-[0.14em] text-[color:var(--ink-ghost)] normal-case">
+            {hint}
+          </span>
+        )}
       </span>
       {children}
     </label>
@@ -198,38 +279,102 @@ export function FieldLabel({
 }
 
 export const fieldClassName =
-  'w-full rounded-xl border border-[#2b3a3e] bg-[#172225] px-4 py-3 text-sm text-[#f4faf7] outline-none transition-[background-color,border-color,box-shadow] duration-200 ease-out placeholder:text-[#6f807c] focus:border-[#7dd3c7]/70 focus:bg-[#1d2b2f] focus:ring-2 focus:ring-[#7dd3c7]/20';
+  'w-full rounded-none border border-[color:var(--paper-edge)] bg-[color:var(--paper)] px-3.5 py-3 text-[14px] text-[color:var(--ink)] outline-none transition-[background-color,border-color,box-shadow] duration-200 ease-out placeholder:text-[color:var(--ink-ghost)] focus:border-[color:var(--ink)] focus:bg-[color:var(--paper-shade)] focus:ring-1 focus:ring-[color:var(--ink)]';
+
+/* ─── Stat tile — book-style spec sheet entry ──────────────────── */
 
 export function StatTile({
   label,
   value,
   tone = 'cream',
+  hint,
 }: {
   label: string;
   value: ReactNode;
   tone?: 'cream' | 'green' | 'red' | 'gold';
+  hint?: ReactNode;
 }) {
-  const toneClass =
+  const toneColor =
     tone === 'green'
-      ? 'text-[#8ee6ae]'
+      ? 'text-[color:var(--library-green)]'
       : tone === 'red'
-        ? 'text-[#ff9f8e]'
+        ? 'text-[color:var(--margin-red)]'
         : tone === 'gold'
-          ? 'text-[#f1cc7a]'
-          : 'text-[#f4faf7]';
+          ? 'text-[color:var(--gilt)]'
+          : 'text-[color:var(--ink)]';
 
   return (
-    <div className="rounded-xl border border-[#263337] bg-[#152023] p-4">
-      <p className="text-xs font-medium text-[#8fa3a0]">{label}</p>
-      <p className={`mt-2 text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
+    <div className="border-l border-[color:var(--paper-edge)] py-1 pl-4">
+      <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
+        {label}
+      </p>
+      <p
+        className={`mt-1 font-display text-[2.25rem] font-medium leading-none tabular-nums ${toneColor}`}
+        style={{ fontFeatureSettings: '"onum"' }}
+      >
+        {value}
+      </p>
+      {hint && (
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
 
+/* ─── Empty state ──────────────────────────────────────────────── */
+
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <PremiumPanel>
-      <div className="p-8 text-center text-sm leading-6 text-[#aebdb8] md:p-12">{children}</div>
-    </PremiumPanel>
+    <div className="border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-8 py-16 text-center">
+      <p className="font-display-italic mx-auto max-w-xl text-lg leading-relaxed text-[color:var(--ink-soft)]">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+/* ─── Stamp — diagonal status badge ────────────────────────────── */
+
+export function Stamp({
+  children,
+  tone = 'red',
+  rotate = false,
+}: {
+  children: ReactNode;
+  tone?: 'red' | 'green' | 'gold' | 'ink';
+  rotate?: boolean;
+}) {
+  const color =
+    tone === 'green'
+      ? 'text-[color:var(--library-green)]'
+      : tone === 'gold'
+        ? 'text-[color:var(--gilt)]'
+        : tone === 'ink'
+          ? 'text-[color:var(--ink)]'
+          : 'text-[color:var(--margin-red)]';
+  return (
+    <span className={`stamp ${rotate ? 'stamp-rotate' : ''} ${color}`}>{children}</span>
+  );
+}
+
+/* ─── Section divider ──────────────────────────────────────────── */
+
+export function BookDivider({ symbol = '§' }: { symbol?: string }) {
+  return (
+    <div className="book-divider my-12 font-display-italic text-base text-[color:var(--paper-edge)]">
+      <span aria-hidden>{symbol}</span>
+    </div>
+  );
+}
+
+/* ─── ECO-style code chip ──────────────────────────────────────── */
+
+export function EcoCode({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center border border-[color:var(--ink)] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.08em] text-[color:var(--ink)]">
+      {children}
+    </span>
   );
 }

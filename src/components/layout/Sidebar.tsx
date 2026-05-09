@@ -8,53 +8,79 @@ export async function Sidebar() {
   return (
     <>
       <MobileNav />
-      <aside className="relative z-30 hidden w-72 shrink-0 p-4 md:block">
-        <div className="flex h-[calc(100dvh-2rem)] flex-col rounded-2xl border border-[#263337] bg-[#10191b]/[0.94] p-2 shadow-[0_24px_72px_rgba(0,0,0,0.30),inset_0_1px_1px_rgba(255,255,255,0.06)] backdrop-blur-2xl">
-        <div className="px-4 py-5">
-          <Link
-            href="/"
-            className="rounded-lg text-sm font-semibold uppercase tracking-[0.2em] text-[#f4faf7] transition-colors duration-200 hover:text-[#7dd3c7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7dd3c7]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#10191b]"
-          >
-            RepDrill
-          </Link>
-          <p className="mt-2 text-xs leading-5 text-[#8fa3a0]">Opening memory workspace</p>
-        </div>
-
-        <SidebarNav />
-
-        <div className="rounded-xl border border-[#263337] bg-[#152023] p-3">
-          {session?.user ? (
-            <div className="flex flex-col gap-3">
-              <div className="px-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa3a0]">
-                  Signed in
-                </p>
-                <p className="mt-1 truncate text-xs text-[#dfe8e4]">{session.user.email}</p>
-              </div>
-              <form
-                action={async () => {
-                  'use server';
-                  await signOut({ redirectTo: '/' });
-                }}
-              >
-                <button
-                  type="submit"
-                  className="w-full rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-[#9fb0aa] transition-colors duration-200 hover:bg-[#223034] hover:text-[#f4faf7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7dd3c7]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#10191b] active:scale-[0.98]"
-                >
-                  Sign out
-                </button>
-              </form>
-            </div>
-          ) : (
+      <aside className="relative z-30 hidden w-72 shrink-0 bg-[color:var(--paper)] md:block">
+        <div className="sticky top-0 flex h-screen flex-col px-7 py-9">
+          <div>
             <Link
-              href="/login"
-              className="block rounded-lg px-3 py-2.5 text-xs font-semibold text-[#dfe8e4] transition-colors duration-200 hover:bg-[#223034] hover:text-[#f4faf7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7dd3c7]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#10191b]"
+              href="/"
+              className="group block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
             >
-              Sign in
+              <p className="font-mono text-[9px] uppercase tracking-[0.32em] text-[color:var(--ink-faint)]">
+                A manual of
+              </p>
+              <h1 className="mt-1 font-display text-[2rem] font-medium leading-none tracking-[-0.01em] text-[color:var(--ink)] transition-colors duration-200 group-hover:text-[color:var(--margin-red)]">
+                RepDrill
+              </h1>
+              <p className="mt-1 font-display-italic text-sm text-[color:var(--ink-faint)]">
+                opening memory
+              </p>
             </Link>
-          )}
+          </div>
+
+          <div className="mt-10 mb-4 flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.28em] text-[color:var(--ink-faint)]">
+            <span aria-hidden className="h-px flex-1 bg-[color:var(--paper-edge)]" />
+            <span>Index</span>
+            <span aria-hidden className="h-px flex-1 bg-[color:var(--paper-edge)]" />
+          </div>
+
+          <SidebarNav />
+
+          <div className="mt-auto pt-6">
+            <div className="mb-4 flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.28em] text-[color:var(--ink-faint)]">
+              <span aria-hidden className="h-px flex-1 bg-[color:var(--paper-edge)]" />
+              <span>Colophon</span>
+              <span aria-hidden className="h-px flex-1 bg-[color:var(--paper-edge)]" />
+            </div>
+            {session?.user ? (
+              <div className="space-y-3">
+                <p className="truncate font-display-italic text-sm text-[color:var(--ink-soft)]">
+                  {session.user.email}
+                </p>
+                <form
+                  action={async () => {
+                    'use server';
+                    await signOut({ redirectTo: '/' });
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="group inline-flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--margin-red)] hover:decoration-[color:var(--margin-red)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+                  >
+                    Sign out
+                    <span
+                      aria-hidden
+                      className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
+                    />
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="group inline-flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--margin-red)] hover:decoration-[color:var(--margin-red)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+              >
+                Sign in
+                <span
+                  aria-hidden
+                  className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
+                />
+              </Link>
+            )}
+            <p className="mt-6 font-mono text-[9px] uppercase tracking-[0.24em] text-[color:var(--ink-ghost)]">
+              Vol. I — Repertoire trainer
+            </p>
+          </div>
         </div>
-      </div>
       </aside>
     </>
   );

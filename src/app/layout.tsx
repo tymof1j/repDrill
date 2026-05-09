@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist, Fraunces, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { AppShell } from '@/components/layout/AppShell';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -9,14 +9,23 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const fraunces = Fraunces({
+  variable: '--font-fraunces',
   subsets: ['latin'],
+  axes: ['SOFT', 'opsz'],
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: '--font-jetbrains-mono',
+  subsets: ['latin'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: 'RepDrill — Chess Repertoire Trainer',
-  description: 'Open-source, self-hostable chess opening repertoire trainer with FSRS spaced repetition.',
+  title: 'RepDrill — A Manual of Opening Memory',
+  description:
+    'A self-hosted chess opening repertoire trainer. Annotated lines, FSRS recall, and game review — laid out like a book.',
 };
 
 export default function RootLayout({
@@ -28,9 +37,9 @@ export default function RootLayout({
     <html
       lang="en"
       data-scroll-behavior="smooth"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#050504] text-[#f8f1df]">
+      <body className="min-h-full text-[color:var(--ink)]">
         <AppShell sidebar={<Sidebar />}>{children}</AppShell>
       </body>
     </html>

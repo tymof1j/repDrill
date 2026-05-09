@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import Fuse from 'fuse.js';
-import { SecondaryButton, fieldClassName } from '@/components/ui/Premium';
+import { GhostButton, SecondaryButton, fieldClassName } from '@/components/ui/Premium';
 
 export type SearchablePosition = {
   id: string;
@@ -21,10 +21,7 @@ export function AnnotationSearch({ positions, onSelect, alwaysOpen = false }: Pr
   const [open, setOpen] = useState(alwaysOpen);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const annotated = useMemo(
-    () => positions.filter((p) => p.annotation),
-    [positions],
-  );
+  const annotated = useMemo(() => positions.filter((p) => p.annotation), [positions]);
 
   const fuse = useMemo(
     () =>
@@ -65,23 +62,25 @@ export function AnnotationSearch({ positions, onSelect, alwaysOpen = false }: Pr
           setOpen(true);
           setTimeout(() => inputRef.current?.focus(), 0);
         }}
-        className="px-4 py-2 text-xs"
       >
-        Search annotations (/)
+        Search annotations <span className="opacity-60">(/)</span>
       </SecondaryButton>
     );
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+          /
+        </span>
         <input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search annotations..."
-          className={`${fieldClassName} py-2`}
+          placeholder="Find a phrase in any annotation…"
+          className="font-display flex-1 bg-transparent text-lg italic text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               setOpen(false);
@@ -90,20 +89,19 @@ export function AnnotationSearch({ positions, onSelect, alwaysOpen = false }: Pr
           }}
         />
         {!alwaysOpen && (
-          <SecondaryButton
+          <GhostButton
             onClick={() => {
               setOpen(false);
               setQuery('');
             }}
-            className="px-4 py-2 text-xs"
           >
             Close
-          </SecondaryButton>
+          </GhostButton>
         )}
       </div>
 
       {results.length > 0 && (
-        <ul className="max-h-64 overflow-y-auto rounded-xl border border-[#263337] bg-[#172225]">
+        <ul className="max-h-72 divide-y divide-[color:var(--paper-rule)] overflow-y-auto border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)]">
           {results.map((r) => (
             <li key={r.item.id}>
               <button
@@ -112,12 +110,14 @@ export function AnnotationSearch({ positions, onSelect, alwaysOpen = false }: Pr
                   setOpen(false);
                   setQuery('');
                 }}
-                className="flex w-full flex-col gap-1 border-b border-[#263337] px-4 py-3 text-left text-sm text-[#dfe8e4] transition-colors duration-200 last:border-b-0 hover:bg-[#223034] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7dd3c7]/70"
+                className="grid w-full grid-cols-1 gap-1 px-4 py-3 text-left transition-colors duration-200 hover:bg-[color:var(--paper-deep)] focus-visible:outline-none focus-visible:bg-[color:var(--paper-deep)]"
               >
-                <span className="font-mono text-xs text-[#8fa3a0]">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
                   {r.item.fen.split(' ').slice(0, 2).join(' ')}
                 </span>
-                <span className="line-clamp-2">{r.item.annotation}</span>
+                <span className="line-clamp-2 font-display-italic text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
+                  {r.item.annotation}
+                </span>
               </button>
             </li>
           ))}
@@ -125,7 +125,9 @@ export function AnnotationSearch({ positions, onSelect, alwaysOpen = false }: Pr
       )}
 
       {query.trim() && results.length === 0 && (
-        <p className="text-sm text-[#9fb0aa]">No matching annotations.</p>
+        <p className="font-display-italic text-[14px] text-[color:var(--ink-soft)]">
+          No matching annotations.
+        </p>
       )}
     </div>
   );

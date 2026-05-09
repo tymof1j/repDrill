@@ -7,7 +7,6 @@ import {
   FieldLabel,
   PageHeader,
   PremiumButton,
-  PremiumPanel,
   SecondaryButton,
   fieldClassName,
 } from '@/components/ui/Premium';
@@ -20,37 +19,43 @@ export default async function NewRepertoirePage() {
     <AppSurface>
       <BackLink href="/repertoires">Repertoires</BackLink>
       <PageHeader
-        eyebrow="New repertoire"
-        title="Create a repertoire"
-        body="Combine multiple courses into one preparation map for tournament work."
+        eyebrow="New entry · § repertoire"
+        title={
+          <>
+            Bind a new <span className="font-display-italic">repertoire</span>.
+          </>
+        }
+        body="Combine multiple courses into one preparation map. When two courses overlap on the same position, you'll choose which line wins."
       />
 
-      <PremiumPanel className="max-w-2xl">
-        <form action={createRepertoireAction} className="space-y-6 p-6 md:p-8">
-          <FieldLabel label="Name" required>
-            <input
-              name="name"
-              required
-              placeholder="My tournament repertoire"
-              className={fieldClassName}
-            />
-          </FieldLabel>
+      <form
+        action={createRepertoireAction}
+        className="max-w-2xl space-y-8 border-y border-[color:var(--paper-edge)] py-8"
+      >
+        <FieldLabel label="Name" required>
+          <input
+            name="name"
+            required
+            placeholder="My tournament repertoire"
+            className={fieldClassName}
+            autoFocus
+          />
+        </FieldLabel>
 
-          <FieldLabel label="Description">
-            <textarea
-              name="description"
-              rows={4}
-              placeholder="Optional notes"
-              className={fieldClassName}
-            />
-          </FieldLabel>
+        <FieldLabel label="Description" hint="optional">
+          <textarea
+            name="description"
+            rows={4}
+            placeholder="A short note on the use of this repertoire."
+            className={fieldClassName}
+          />
+        </FieldLabel>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <PremiumButton type="submit">Create</PremiumButton>
-            <SecondaryButton href="/repertoires">Cancel</SecondaryButton>
-          </div>
-        </form>
-      </PremiumPanel>
+        <div className="flex flex-wrap gap-3 pt-4">
+          <PremiumButton type="submit">Create repertoire</PremiumButton>
+          <SecondaryButton href="/repertoires">Cancel</SecondaryButton>
+        </div>
+      </form>
     </AppSurface>
   );
 }

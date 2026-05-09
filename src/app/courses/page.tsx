@@ -7,7 +7,6 @@ import {
   AppSurface,
   PageHeader,
   PremiumButton,
-  PremiumPanel,
   StatTile,
 } from '@/components/ui/Premium';
 
@@ -29,29 +28,37 @@ export default async function CoursesListPage() {
   return (
     <AppSurface>
       <PageHeader
-        eyebrow="Course library"
-        title="Courses"
-        body='One course is one body of opening theory for one color, such as "My Grunfeld".'
+        eyebrow="Part I — Courses"
+        title={
+          <>
+            The <span className="font-display-italic">library</span>.
+          </>
+        }
+        body="One course is one body of opening theory for one color — a self-contained chapter of preparation, like 'My Grünfeld' or 'Sicilian as Black'."
         action={<PremiumButton href="/courses/new">New course</PremiumButton>}
       />
 
       {lineData.totalLines > 0 && (
-        <PremiumPanel className="mb-8">
-          <div className="grid gap-3 p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-center">
+        <section className="mb-12 border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)]">
+          <div className="flex items-center justify-between gap-4 border-b border-[color:var(--paper-edge)] px-5 py-3 md:px-7">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Training queue · today
+            </p>
+            {lineData.dueLines > 0 && (
+              <PremiumButton href="/train">Train now</PremiumButton>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-x-2 gap-y-6 px-5 py-7 md:px-7 md:py-8">
             <StatTile
               label="Due lines"
               value={lineData.dueLines}
-              tone={lineData.dueLines > 0 ? 'green' : 'cream'}
+              tone={lineData.dueLines > 0 ? 'red' : 'cream'}
+              hint={lineData.dueLines > 0 ? 'awaiting recall' : 'none scheduled'}
             />
-            <StatTile label="New lines" value={lineData.newLines} tone="gold" />
-            <StatTile label="Total lines" value={lineData.totalLines} />
-            {lineData.dueLines > 0 && (
-              <PremiumButton href="/train" className="md:ml-2">
-                Train now
-              </PremiumButton>
-            )}
+            <StatTile label="New lines" value={lineData.newLines} tone="gold" hint="never seen" />
+            <StatTile label="Total lines" value={lineData.totalLines} hint="across all courses" />
           </div>
-        </PremiumPanel>
+        </section>
       )}
 
       <CourseLibrarySearch courses={courses} />

@@ -6,10 +6,12 @@ import { Chess } from 'chess.js';
 import { ChessBoard } from '@/components/board/ChessBoard';
 import {
   AppSurface,
+  DiagramFrame,
+  GhostButton,
   PageHeader,
   PremiumButton,
-  PremiumPanel,
   SecondaryButton,
+  Stamp,
   StatTile,
   fieldClassName,
 } from '@/components/ui/Premium';
@@ -31,7 +33,6 @@ export function TrainingSession({ initialLines }: Props) {
   );
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>('playing');
 
-  // Per-line state
   const [stepIndex, setStepIndex] = useState(0);
   const [boardFen, setBoardFen] = useState('');
   const [lastMoveUci, setLastMoveUci] = useState<[string, string] | undefined>();
@@ -41,13 +42,11 @@ export function TrainingSession({ initialLines }: Props) {
   const [lineResults, setLineResults] = useState<MoveResult[]>([]);
   const [moveStartTime, setMoveStartTime] = useState(0);
 
-  // Input mode
   const [inputMode, setInputMode] = useState<'mouse' | 'keyboard'>('mouse');
   const [notationInput, setNotationInput] = useState('');
   const [notationError, setNotationError] = useState<string | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
 
-  // Session-wide stats
   const [sessionStats, setSessionStats] = useState({
     linesCompleted: 0,
     totalCorrect: 0,
@@ -59,7 +58,6 @@ export function TrainingSession({ initialLines }: Props) {
   const step: LineStep | null = line ? line.steps[stepIndex] ?? null : null;
   const playerColor = line?.courseColor ?? 'white';
 
-  // Initialize line
   useEffect(() => {
     if (!line) return;
     const firstFen = line.steps[0]?.parentFen ?? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
@@ -75,11 +73,10 @@ export function TrainingSession({ initialLines }: Props) {
     setLinePhase(line.isNew ? 'learn' : 'drill');
   }, [line, lineIndex]);
 
-  // ─── LEARN MODE: auto-play through the line ────────────────────
+  // LEARN: auto-play through line
   useEffect(() => {
     if (linePhase !== 'learn' || !line) return;
     if (stepIndex >= line.steps.length) {
-      // Learn done, switch to drill
       setStepIndex(0);
       const firstFen = line.steps[0]?.parentFen ?? '';
       setBoardFen(firstFen + ' 0 1');
@@ -95,7 +92,6 @@ export function TrainingSession({ initialLines }: Props) {
       setLastMoveUci([s.uci.slice(0, 2), s.uci.slice(2, 4)]);
       setShowAnnotation(!!s.annotation);
 
-      // After showing this move, advance
       const advanceTimer = setTimeout(() => {
         setShowAnnotation(false);
         setStepIndex((i) => i + 1);
@@ -107,7 +103,7 @@ export function TrainingSession({ initialLines }: Props) {
     return () => clearTimeout(timer);
   }, [linePhase, stepIndex, line]);
 
-  // ─── DRILL MODE: alternate between opponent auto-play and user input ──
+  // DRILL
   useEffect(() => {
     if (linePhase !== 'drill' || !line) return;
     if (stepIndex >= line.steps.length) {
@@ -116,16 +112,13 @@ export function TrainingSession({ initialLines }: Props) {
     }
 
     const s = line.steps[stepIndex];
-
-    if (feedback) return; // showing feedback, wait for advance
+    if (feedback) return;
 
     if (!s.isUserMove) {
-      // Opponent move — auto-play after a short delay
       const timer = setTimeout(() => {
         setBoardFen(s.childFen + ' 0 1');
         setLastMoveUci([s.uci.slice(0, 2), s.uci.slice(2, 4)]);
         setShowAnnotation(!!s.annotation);
-        // Auto-advance after showing opponent move
         const advance = setTimeout(() => {
           setShowAnnotation(false);
           setStepIndex((i) => i + 1);
@@ -135,7 +128,6 @@ export function TrainingSession({ initialLines }: Props) {
       return () => clearTimeout(timer);
     }
 
-    // User move — wait for input
     setWaitingForUser(true);
     setMoveStartTime(Date.now());
     if (inputMode === 'keyboard') {
@@ -143,7 +135,6 @@ export function TrainingSession({ initialLines }: Props) {
     }
   }, [linePhase, stepIndex, line, feedback, inputMode]);
 
-  // ─── LINE DONE: submit ratings ──────────────────────────────────
   useEffect(() => {
     if (linePhase !== 'line-done') return;
     if (lineResults.length > 0) {
@@ -158,7 +149,6 @@ export function TrainingSession({ initialLines }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linePhase]);
 
-  // ─── Move validation ────────────────────────────────────────────
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
       if (!step || !waitingForUser || linePhase !== 'drill') return;
@@ -196,7 +186,6 @@ export function TrainingSession({ initialLines }: Props) {
           setShowAnnotation(!!step.annotation);
         }
 
-        // Auto-advance after feedback
         const delay = step.annotation ? 2000 : correct ? 800 : 1800;
         setTimeout(() => {
           setFeedback(null);
@@ -233,7 +222,6 @@ export function TrainingSession({ initialLines }: Props) {
     }
   }, [step, waitingForUser, notationInput, tryMove]);
 
-  // Legal dests for mouse input
   const legalDests = useMemo(() => {
     if (!step || !waitingForUser || linePhase !== 'drill') return undefined;
     try {
@@ -250,7 +238,6 @@ export function TrainingSession({ initialLines }: Props) {
     }
   }, [step, waitingForUser, linePhase]);
 
-  // Tab to toggle input mode
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -286,34 +273,39 @@ export function TrainingSession({ initialLines }: Props) {
     setLinePhase('drill');
   };
 
-  // ─── RENDER ─────────────────────────────────────────────────────
-
+  // ─── Session done ───────────────────────────────────────
   if (sessionPhase === 'done') {
     const elapsed = Math.round((Date.now() - sessionStats.startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     const total = sessionStats.totalCorrect + sessionStats.totalWrong;
+    const accuracy = total > 0 ? Math.round((sessionStats.totalCorrect / total) * 100) : 0;
     return (
       <AppSurface>
         <PageHeader
-          eyebrow="Review complete"
-          title="Session complete"
-          body="Your recall data has been submitted back into the scheduler."
+          eyebrow="End of session — § fin"
+          title={
+            <>
+              Session <span className="font-display-italic">closed</span>.
+            </>
+          }
+          body="Your recall data has been written back into the schedule. The next review will appear when memory is due."
         />
-        <div className="grid max-w-5xl gap-3 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-8 border-y border-[color:var(--paper-edge)] py-8 md:grid-cols-5">
           <StatTile label="Lines drilled" value={sessionStats.linesCompleted} />
           <StatTile label="Moves correct" value={sessionStats.totalCorrect} tone="green" />
           <StatTile label="Moves wrong" value={sessionStats.totalWrong} tone="red" />
           <StatTile
             label="Accuracy"
-            value={total > 0 ? `${Math.round((sessionStats.totalCorrect / total) * 100)}%` : '-'}
-            tone="gold"
+            value={total > 0 ? `${accuracy}%` : '—'}
+            tone={accuracy >= 80 ? 'green' : accuracy >= 50 ? 'gold' : 'red'}
           />
-          <StatTile label="Time" value={`${minutes}m ${seconds}s`} />
+          <StatTile label="Elapsed" value={`${minutes}m ${seconds}s`} />
         </div>
-        <PremiumButton onClick={() => window.location.reload()} className="mt-8">
-          Train again
-        </PremiumButton>
+        <div className="mt-10 flex flex-wrap gap-3">
+          <PremiumButton onClick={() => window.location.reload()}>Train again</PremiumButton>
+          <SecondaryButton href="/courses">Back to library</SecondaryButton>
+        </div>
       </AppSurface>
     );
   }
@@ -330,238 +322,291 @@ export function TrainingSession({ initialLines }: Props) {
       : linePhase === 'line-done'
         ? 100
         : Math.round((playedUserMoves / Math.max(userMovesInLine, 1)) * 100);
-  const actionCopy =
+
+  const phaseLabel =
     linePhase === 'learn'
-      ? 'Watch the continuation once, then drill it from memory.'
+      ? 'Watch first'
       : linePhase === 'line-done'
-        ? 'Review the result, then continue to the next line.'
+        ? 'Line complete'
+        : waitingForUser
+          ? `Your move · ${playerColor}`
+          : 'Opponent';
+
+  const promptCopy =
+    linePhase === 'learn'
+      ? 'Watch the line once, then drill it from memory.'
+      : linePhase === 'line-done'
+        ? 'Review the result, then continue.'
         : waitingForUser
           ? inputMode === 'keyboard'
             ? 'Type the prepared move in algebraic notation.'
-            : 'Play the prepared move on the board.'
-          : 'Opponent move is being played.';
+            : 'Find the prepared move on the board.'
+          : 'The opponent is replying…';
 
   return (
     <AppSurface>
-      <PageHeader
-        eyebrow={`Line ${lineIndex + 1} of ${lines.length}`}
-        title={linePhase === 'learn' ? 'Learn the line' : linePhase === 'drill' ? 'Find the move' : 'Line complete'}
-        body={`${line.courseName} · ${line.chapterName}. ${userMovesInLine} moves to play as ${playerColor}.`}
-        action={
-          <div className="grid grid-cols-2 gap-3">
-            <StatTile label="Correct" value={sessionStats.totalCorrect + correctInLine} tone="green" />
-            <StatTile label="Wrong" value={sessionStats.totalWrong + wrongInLine} tone="red" />
-          </div>
-        }
-      />
-
-      <PremiumPanel className="mb-6">
-        <div className="grid gap-4 p-4 md:grid-cols-[1fr_auto] md:items-center md:p-5">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm font-semibold text-[#fff8e6]">{actionCopy}</p>
-              <span className="rounded-md bg-[#f8f1df]/[0.08] px-2.5 py-1 text-xs font-medium text-[#d7c69f]">
-                {playedUserMoves}/{userMovesInLine} moves
-              </span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f8f1df]/[0.08]">
-              <div
-                className="h-full rounded-full bg-[#d7b46a] transition-[width] duration-300 ease-out"
-                style={{ width: `${lineProgress}%` }}
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 text-xs text-[#c9bea4]">
-            <span className="rounded-lg bg-[#167753]/[0.18] px-3 py-2 text-[#73d5a0]">
-              {correctInLine} correct
-            </span>
-            <span className="rounded-lg bg-[#96382a]/[0.18] px-3 py-2 text-[#e88a72]">
-              {wrongInLine} wrong
-            </span>
-          </div>
+      {/* Header ribbon — book-style line meta */}
+      <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+          Training · Line{' '}
+          <span className="font-display italic text-[color:var(--ink)]">
+            {lineIndex + 1}
+          </span>{' '}
+          of {lines.length}
+        </p>
+        <p className="truncate font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+          {line.courseName} <span className="text-[color:var(--ink-ghost)]">·</span> {line.chapterName}
+        </p>
+        <div className="flex items-center gap-3">
+          <Stamp tone={linePhase === 'learn' ? 'gold' : linePhase === 'drill' ? 'red' : 'green'}>
+            {linePhase === 'learn' ? 'New · learn' : linePhase === 'drill' ? 'Drill' : 'Done'}
+          </Stamp>
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)] tabular-nums">
+            {playedUserMoves}/{userMovesInLine}
+          </span>
         </div>
-      </PremiumPanel>
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(360px,520px)_1fr]">
-        <PremiumPanel>
-          <div className="p-4 md:p-5">
-            <div className="rounded-xl bg-[#f8f1df]/[0.065] p-3">
-              <ChessBoard
-                fen={boardFen}
-                orientation={playerColor}
-                viewOnly={!waitingForUser}
-                lastMove={lastMoveUci}
-                movable={
-                  waitingForUser && inputMode === 'mouse'
-                    ? { free: false, dests: legalDests, color: playerColor, showDests: true }
-                    : undefined
-                }
-                onMove={onBoardMove}
-                arrows={
-                  feedback?.type === 'wrong' && step
-                    ? [{ orig: step.uci.slice(0, 2), dest: step.uci.slice(2, 4), brush: 'green' }]
-                    : undefined
-                }
+      {/* Progress hairline */}
+      <div className="mb-10 h-px bg-[color:var(--paper-rule)]">
+        <div
+          className="h-full bg-[color:var(--margin-red)] transition-[width] duration-500 ease-out"
+          style={{ width: `${lineProgress}%` }}
+        />
+      </div>
+
+      <div className="grid gap-10 lg:grid-cols-[minmax(360px,520px)_1fr] lg:gap-14">
+        {/* Diagram column */}
+        <div>
+          <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Diagram
+            </p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
+              {phaseLabel}
+            </p>
+          </div>
+
+          <DiagramFrame caption={`Move ${stepIndex + 1} / ${line.steps.length}`}>
+            <ChessBoard
+              fen={boardFen}
+              orientation={playerColor}
+              viewOnly={!waitingForUser}
+              lastMove={lastMoveUci}
+              movable={
+                waitingForUser && inputMode === 'mouse'
+                  ? { free: false, dests: legalDests, color: playerColor, showDests: true }
+                  : undefined
+              }
+              onMove={onBoardMove}
+              arrows={
+                feedback?.type === 'wrong' && step
+                  ? [{ orig: step.uci.slice(0, 2), dest: step.uci.slice(2, 4), brush: 'green' }]
+                  : undefined
+              }
+            />
+          </DiagramFrame>
+
+          {/* Input controls */}
+          {waitingForUser && (
+            <div className="mt-6 space-y-4">
+              <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
+                {(['mouse', 'keyboard'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setInputMode(mode);
+                      if (mode === 'keyboard') setTimeout(() => notationRef.current?.focus(), 50);
+                    }}
+                    className={`px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${
+                      inputMode === mode
+                        ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+                        : 'text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'
+                    }`}
+                  >
+                    {mode === 'mouse' ? 'Board' : 'Notation'}
+                  </button>
+                ))}
+              </div>
+              {inputMode === 'keyboard' && (
+                <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                    →
+                  </span>
+                  <input
+                    ref={notationRef}
+                    type="text"
+                    value={notationInput}
+                    onChange={(e) => {
+                      setNotationInput(e.target.value);
+                      setNotationError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleNotationSubmit();
+                      }
+                    }}
+                    placeholder="e.g. Nf3"
+                    className="notation flex-1 bg-transparent text-lg text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none"
+                    autoFocus
+                  />
+                  <SecondaryButton onClick={handleNotationSubmit}>Play</SecondaryButton>
+                </div>
+              )}
+              {notationError && (
+                <p className="font-display-italic text-sm text-[color:var(--margin-red)]">
+                  {notationError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {linePhase === 'learn' && (
+            <div className="mt-6">
+              <SecondaryButton onClick={skipLearn}>Skip to drill</SecondaryButton>
+            </div>
+          )}
+
+          <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
+            <kbd className="font-mono">tab</kbd> toggle input ·{' '}
+            <kbd className="font-mono">enter</kbd> submit
+          </p>
+        </div>
+
+        {/* Right column: prompt, feedback, marginalia, trace */}
+        <div className="space-y-10">
+          {/* Prompt */}
+          <section>
+            <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Prompt
+            </p>
+            <p className="mt-5 font-display text-3xl font-medium leading-[1.15] tracking-[-0.01em] text-[color:var(--ink)] md:text-4xl">
+              {linePhase === 'learn' ? (
+                <>
+                  Watch <span className="font-display-italic">once</span>, then drill from memory.
+                </>
+              ) : linePhase === 'line-done' ? (
+                wrongInLine === 0 ? (
+                  <>
+                    A <span className="font-display-italic">perfect</span> line.
+                  </>
+                ) : (
+                  <>
+                    {correctInLine}/{correctInLine + wrongInLine} <span className="font-display-italic">correct</span>.
+                  </>
+                )
+              ) : waitingForUser ? (
+                <>
+                  Your turn — move {playedUserMoves + 1} of {userMovesInLine}.
+                </>
+              ) : (
+                <>
+                  Opponent <span className="font-display-italic">replies…</span>
+                </>
+              )}
+            </p>
+            <p className="mt-3 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+              {promptCopy}
+            </p>
+          </section>
+
+          {/* Feedback */}
+          {feedback && (
+            <section
+              className={`border-l-2 pl-4 ${
+                feedback.type === 'correct'
+                  ? 'border-[color:var(--library-green)]'
+                  : 'border-[color:var(--margin-red)]'
+              }`}
+            >
+              <p
+                className={`font-mono text-[10px] uppercase tracking-[0.22em] ${
+                  feedback.type === 'correct'
+                    ? 'text-[color:var(--library-green)]'
+                    : 'text-[color:var(--margin-red)]'
+                }`}
+              >
+                {feedback.type === 'correct' ? '✓ Correct' : '✗ Departure from prep'}
+              </p>
+              <p className="notation mt-2 text-[15px] text-[color:var(--ink)]">
+                {feedback.text}
+              </p>
+            </section>
+          )}
+
+          {/* Annotation marginalia */}
+          {showAnnotation && step?.annotation && (
+            <section>
+              <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Annotation
+              </p>
+              <p className="marginalia mt-4 text-[15px] leading-relaxed">
+                {step.annotation}
+              </p>
+            </section>
+          )}
+
+          {/* Move trace — render played moves like a notation column */}
+          {linePhase === 'drill' && lineResults.length > 0 && (
+            <section>
+              <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Trace
+              </p>
+              <ol className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+                {lineResults.map((r, i) => (
+                  <li
+                    key={i}
+                    className={`notation text-[14px] tabular-nums ${
+                      r.correct ? 'text-[color:var(--library-green)]' : 'text-[color:var(--margin-red)] line-through'
+                    }`}
+                  >
+                    <span className="text-[color:var(--ink-faint)]">{i + 1}.</span> {r.correct ? '✓' : '✗'}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {/* Line done */}
+          {linePhase === 'line-done' && (
+            <section>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-6 border-y border-[color:var(--paper-edge)] py-6">
+                <StatTile label="Correct" value={correctInLine} tone="green" />
+                <StatTile label="Wrong" value={wrongInLine} tone={wrongInLine === 0 ? 'green' : 'red'} />
+              </div>
+              <div className="mt-6">
+                <PremiumButton onClick={nextLine}>
+                  {lineIndex + 1 < lines.length ? 'Next line' : 'Finish session'}
+                </PremiumButton>
+              </div>
+            </section>
+          )}
+
+          {/* Session running totals */}
+          <section className="border-t border-[color:var(--paper-rule)] pt-6">
+            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Session totals
+            </p>
+            <div className="grid grid-cols-3 gap-x-2">
+              <StatTile
+                label="Lines"
+                value={sessionStats.linesCompleted}
+                hint="completed"
+              />
+              <StatTile
+                label="Correct"
+                value={sessionStats.totalCorrect + correctInLine}
+                tone="green"
+              />
+              <StatTile
+                label="Wrong"
+                value={sessionStats.totalWrong + wrongInLine}
+                tone="red"
               />
             </div>
-
-            {waitingForUser && (
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#f8f1df]/[0.06] p-1">
-                  {(['mouse', 'keyboard'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => {
-                        setInputMode(mode);
-                        if (mode === 'keyboard') setTimeout(() => notationRef.current?.focus(), 50);
-                      }}
-                      className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d7b46a]/70 ${
-                        inputMode === mode
-                          ? 'bg-[#f8f1df] text-[#11100d]'
-                          : 'text-[#c9bea4] hover:bg-[#f8f1df]/[0.08] hover:text-[#fff8e6]'
-                      }`}
-                    >
-                      {mode === 'mouse' ? 'Board' : 'Notation'}
-                    </button>
-                  ))}
-                </div>
-                {inputMode === 'keyboard' && (
-                  <div className="flex gap-2">
-                    <input
-                      ref={notationRef}
-                      type="text"
-                      value={notationInput}
-                      onChange={(e) => {
-                        setNotationInput(e.target.value);
-                        setNotationError(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleNotationSubmit();
-                        }
-                      }}
-                      placeholder="Type move, e.g. Nf3"
-                      className={`${fieldClassName} py-2 font-mono`}
-                      autoFocus
-                    />
-                    <SecondaryButton onClick={handleNotationSubmit} className="px-4 py-2 text-xs">
-                      Play
-                    </SecondaryButton>
-                  </div>
-                )}
-                {notationError && <p className="text-sm text-[#e88a72]">{notationError}</p>}
-              </div>
-            )}
-
-            {linePhase === 'learn' && (
-              <SecondaryButton onClick={skipLearn} className="mt-4 px-4 py-2 text-xs">
-                Skip to drill
-              </SecondaryButton>
-            )}
-          </div>
-        </PremiumPanel>
-
-        <div className="space-y-4">
-          <PremiumPanel>
-            <section className="p-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#a99d82]">
-                Next action
-              </p>
-              {linePhase === 'learn' && (
-                <div className="mt-4 rounded-xl bg-[#d7b46a]/[0.14] p-4 text-sm leading-6 text-[#ead9a5]">
-                  Watch the continuation, then drill it from memory.
-                  <p className="mt-2 text-xs text-[#c8b68c]">
-                    Step {Math.min(stepIndex + 1, line.steps.length)} / {line.steps.length}
-                  </p>
-                </div>
-              )}
-
-              {linePhase === 'drill' && waitingForUser && !feedback && (
-                <div className="mt-4 rounded-xl bg-[#f8f1df]/[0.075] p-4 text-sm leading-6 text-[#e5dcc7]">
-                  <span className="font-semibold text-[#fff8e6]">Your move.</span> Play move{' '}
-                  {playedUserMoves + 1} of {userMovesInLine} for {playerColor}.
-                </div>
-              )}
-
-              {feedback && (
-                <div
-                  className={`mt-4 rounded-xl p-4 text-sm font-semibold ${
-                    feedback.type === 'correct'
-                      ? 'bg-[#167753]/[0.18] text-[#73d5a0]'
-                      : 'bg-[#96382a]/[0.18] text-[#e88a72]'
-                  }`}
-                >
-                  {feedback.type === 'correct' ? 'Correct' : 'Wrong'} · {feedback.text}
-                </div>
-              )}
-
-              {linePhase === 'line-done' && (
-                <div className="mt-4 space-y-4">
-                  <div className="rounded-xl bg-[#f8f1df]/[0.075] p-4">
-                    <p className="font-semibold text-[#fff8e6]">
-                      {correctInLine}/{correctInLine + wrongInLine} correct
-                    </p>
-                    {wrongInLine === 0 && (
-                      <p className="mt-1 text-sm text-[#73d5a0]">Perfect line.</p>
-                    )}
-                  </div>
-                  <PremiumButton onClick={nextLine}>
-                    {lineIndex + 1 < lines.length ? 'Next line' : 'Finish session'}
-                  </PremiumButton>
-                </div>
-              )}
-            </section>
-          </PremiumPanel>
-
-          {(showAnnotation && step?.annotation) && (
-            <PremiumPanel>
-              <section className="p-5">
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8f846d]">
-                  Annotation
-                </p>
-                <p className="text-sm leading-6 text-[#d8cfba]">{step.annotation}</p>
-              </section>
-            </PremiumPanel>
-          )}
-
-          {linePhase === 'learn' && stepIndex > 0 && line.steps[stepIndex - 1]?.annotation && (
-            <PremiumPanel>
-              <section className="p-5">
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8f846d]">
-                  Annotation
-                </p>
-                <p className="text-sm leading-6 text-[#d8cfba]">
-                  {line.steps[stepIndex - 1].annotation}
-                </p>
-              </section>
-            </PremiumPanel>
-          )}
-
-          {linePhase === 'drill' && lineResults.length > 0 && (
-            <PremiumPanel>
-              <section className="p-5">
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8f846d]">
-                  Move trace
-                </p>
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {lineResults.map((r, i) => (
-                    <span
-                      key={i}
-                      className={`rounded-lg px-3 py-1.5 font-semibold ${
-                        r.correct
-                          ? 'bg-[#167753]/[0.18] text-[#73d5a0]'
-                          : 'bg-[#96382a]/[0.18] text-[#e88a72]'
-                      }`}
-                    >
-                      {r.correct ? 'Correct' : 'Wrong'}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            </PremiumPanel>
-          )}
+          </section>
         </div>
       </div>
     </AppSurface>

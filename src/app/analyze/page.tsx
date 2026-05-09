@@ -8,8 +8,8 @@ export default async function AnalyzePage() {
 
   return (
     <PlaceholderPage
-      title="Analyze"
-      body="Phase 4 will land here: pull recent games from Lichess/Chess.com and find the deviation point."
+      title="Analysis."
+      body="Find the move where preparation became improvisation. Pull recent online games and let RepDrill mark each departure from the book."
     />
   );
 }
