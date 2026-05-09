@@ -5,7 +5,6 @@ import { importPgnAction } from '../../actions';
 import {
   FieldLabel,
   PremiumButton,
-  PremiumPanel,
   SecondaryButton,
   fieldClassName,
 } from '@/components/ui/Premium';
@@ -33,51 +32,73 @@ export function PgnImportForm({ courseId }: { courseId: string }) {
   };
 
   return (
-    <PremiumPanel className="max-w-4xl">
-      <form action={importPgnAction} className="space-y-6 p-6 md:p-8">
-        <input type="hidden" name="courseId" value={courseId} />
+    <form
+      action={importPgnAction}
+      className="max-w-4xl space-y-8 border-y border-[color:var(--paper-edge)] py-8"
+    >
+      <input type="hidden" name="courseId" value={courseId} />
 
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          onClick={() => fileRef.current?.click()}
-          className={`cursor-pointer rounded-[1.75rem] border border-dashed p-8 text-center text-sm font-semibold transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.99] ${
-            dragging
-              ? 'border-[#73d5a0]/60 bg-[#167753]/[0.16] text-[#bff2d1]'
-              : 'border-[#f8f1df]/15 bg-[#f8f1df]/[0.06] text-[#b9af98] hover:border-[#c8b68c]/50 hover:bg-[#f8f1df]/[0.10]'
-          }`}
-        >
-          {dragging ? 'Drop the .pgn file here' : 'Drag a .pgn file here, or click to browse'}
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pgn"
-            onChange={onFileChange}
-            className="hidden"
-          />
-        </div>
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        onClick={() => fileRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click();
+        }}
+        role="button"
+        tabIndex={0}
+        className={`group cursor-pointer border-2 border-dashed bg-[color:var(--paper-shade)] px-8 py-14 text-center transition-colors duration-200 ${
+          dragging
+            ? 'border-[color:var(--margin-red)] bg-[color:var(--paper-deep)]'
+            : 'border-[color:var(--paper-edge)] hover:border-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'
+        }`}
+      >
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+          Source · § 1
+        </p>
+        <p className="mt-3 font-display text-2xl font-medium leading-tight text-[color:var(--ink)] md:text-3xl">
+          {dragging ? (
+            <>
+              Drop the <span className="font-display-italic">.pgn</span> here.
+            </>
+          ) : (
+            <>
+              Drop a <span className="font-display-italic">.pgn</span>, or click to browse.
+            </>
+          )}
+        </p>
+        <p className="mt-3 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+          Each game becomes a chapter; variations and comments are preserved.
+        </p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pgn"
+          onChange={onFileChange}
+          className="hidden"
+        />
+      </div>
 
-        <FieldLabel label="PGN" required>
-          <textarea
-            name="pgn"
-            required
-            rows={16}
-            value={pgn}
-            onChange={(e) => setPgn(e.target.value)}
-            placeholder='[Event "Sicilian Najdorf"]&#10;[White "Repertoire"]&#10;&#10;1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 *'
-            className={`${fieldClassName} font-mono`}
-          />
-        </FieldLabel>
+      <FieldLabel label="Or paste the PGN directly" required hint="any standard format">
+        <textarea
+          name="pgn"
+          required
+          rows={16}
+          value={pgn}
+          onChange={(e) => setPgn(e.target.value)}
+          placeholder={'[Event "Sicilian Najdorf"]\n[White "Repertoire"]\n\n1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 *'}
+          className={`${fieldClassName} notation`}
+        />
+      </FieldLabel>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <PremiumButton type="submit">Import</PremiumButton>
-          <SecondaryButton href={`/courses/${courseId}`}>Cancel</SecondaryButton>
-        </div>
-      </form>
-    </PremiumPanel>
+      <div className="flex flex-wrap gap-3 pt-4">
+        <PremiumButton type="submit">Import</PremiumButton>
+        <SecondaryButton href={`/courses/${courseId}`}>Cancel</SecondaryButton>
+      </div>
+    </form>
   );
 }

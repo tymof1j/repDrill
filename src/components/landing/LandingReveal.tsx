@@ -29,7 +29,7 @@ export function LandingReveal({
           observer.unobserve(element);
         }
       },
-      { rootMargin: '0px 0px -10% 0px', threshold: 0.16 },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.12 },
     );
 
     observer.observe(element);
@@ -40,8 +40,8 @@ export function LandingReveal({
   return (
     <div
       ref={ref}
-      className={`${className} transition-all duration-1000 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-        !ready || visible ? 'translate-y-0 opacity-100 blur-0' : 'translate-y-16 opacity-0 blur-md'
+      className={`${className} transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        !ready || visible ? 'translate-y-0 opacity-100 blur-0' : 'translate-y-8 opacity-0 blur-[2px]'
       }`}
       style={{ transitionDelay: `${delay}ms` }}
     >

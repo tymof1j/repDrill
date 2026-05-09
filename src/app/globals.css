@@ -1,64 +1,318 @@
 @import "tailwindcss";
 
+/*
+ * RepDrill — Editorial chess manuscript design system
+ *
+ * Aesthetic: aged paper, ink black, library green, margin red.
+ * Hard 1px hairlines instead of soft cards. Serif display, mono for notation.
+ * The board is the dark felt instrument at the center of an otherwise light page.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Paper & ink */
+  --paper:        #f3ead2;  /* primary surface — aged book page */
+  --paper-shade:  #ebe0c0;  /* duotone fold */
+  --paper-deep:   #e0d2ab;  /* deeper paper for hover/selection */
+  --paper-rule:   #c8b585;  /* hairline rules */
+  --paper-edge:   #a3895a;  /* heavier rules / dividers */
+  --ink:          #161310;  /* primary text */
+  --ink-soft:     #4a4133;  /* secondary text */
+  --ink-faint:    #7c6f56;  /* tertiary, captions */
+  --ink-ghost:    #a99875;  /* placeholder, disabled */
+
+  /* Accents — sparingly used */
+  --margin-red:   #b3261e;  /* chess publication red */
+  --margin-red-soft: #d96f64;
+  --library-green:#2f5d3a;  /* deep board green */
+  --library-green-soft: #6a8264;
+  --gilt:         #8a6a2b;  /* faded gold */
+  --walnut:       #3a2a1c;  /* dark wood */
+
+  /* Status semantic */
+  --status-due:        var(--margin-red);
+  --status-new:        var(--gilt);
+  --status-mastered:   var(--library-green);
+
+  /* Board — felt + bone */
+  --square-light: #ecdfba;
+  --square-dark:  #6a8264;
+  --board-shadow: 0 12px 28px rgba(58, 42, 28, 0.18), 0 1px 0 rgba(58, 42, 28, 0.10);
+}
+
+/* Evening "study" theme — dark walnut + cream ink. Reserved for users who toggle. */
+[data-theme="evening"] {
+  --paper:        #1a1612;
+  --paper-shade:  #221c17;
+  --paper-deep:   #2c241d;
+  --paper-rule:   #3a3026;
+  --paper-edge:   #534534;
+  --ink:          #ede2c8;
+  --ink-soft:     #b8ad94;
+  --ink-faint:    #84795f;
+  --ink-ghost:    #5d543f;
+  --margin-red-soft: #e8857a;
+  --library-green-soft: #8aaa84;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-paper-shade: var(--paper-shade);
+  --color-paper-deep: var(--paper-deep);
+  --color-paper-rule: var(--paper-rule);
+  --color-paper-edge: var(--paper-edge);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-ghost: var(--ink-ghost);
+  --color-margin-red: var(--margin-red);
+  --color-library-green: var(--library-green);
+  --color-gilt: var(--gilt);
+  --color-walnut: var(--walnut);
+  --font-display: var(--font-fraunces);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), -apple-system, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  /* Subtle paper grain — doesn't render in evening mode (covered by paper) */
+  background-image:
+    radial-gradient(rgba(58, 42, 28, 0.045) 1px, transparent 1px),
+    radial-gradient(rgba(58, 42, 28, 0.025) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 1px;
 }
 
+/* Display heading defaults */
+.font-display {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-feature-settings: "ss01", "ss02", "ss03";
+}
+
+/* Optical italic for editorial flourishes */
+.font-display-italic {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-style: italic;
+  font-feature-settings: "ss01";
+}
+
+/* Algebraic notation — tabular figures */
+.notation {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-feature-settings: "tnum", "ss01";
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Section divider — book-style ornamental rule */
+.book-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--paper-edge);
+}
+.book-divider::before,
+.book-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--paper-rule);
+}
+
+/* Small caps eyebrow */
+.eyebrow {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Margin number — like printed page numerals */
+.margin-num {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-feature-settings: "onum";
+}
+
+/* Pull quote / annotation marginalia */
+.marginalia {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-style: italic;
+  border-left: 1px solid var(--paper-edge);
+  padding-left: 1rem;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+/* Corner-bracket frame — for "diagram" panels */
+.bracket-frame {
+  position: relative;
+}
+.bracket-frame::before,
+.bracket-frame::after,
+.bracket-frame > .bracket-tl,
+.bracket-frame > .bracket-tr,
+.bracket-frame > .bracket-bl,
+.bracket-frame > .bracket-br {
+  pointer-events: none;
+}
+.bracket-frame > .bracket-tl,
+.bracket-frame > .bracket-tr,
+.bracket-frame > .bracket-bl,
+.bracket-frame > .bracket-br {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--ink);
+}
+.bracket-frame > .bracket-tl { top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
+.bracket-frame > .bracket-tr { top: -1px; right: -1px; border-top: 1px solid; border-right: 1px solid; }
+.bracket-frame > .bracket-bl { bottom: -1px; left: -1px; border-bottom: 1px solid; border-left: 1px solid; }
+.bracket-frame > .bracket-br { bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+
+/* Stamp — diagonal rubber-stamp accent for status badges */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  padding: 2px 6px;
+  border-radius: 1px;
+}
+.stamp-rotate {
+  transform: rotate(-3deg);
+}
+
+/* Underline link — offset, ink */
+.book-link {
+  text-decoration: underline;
+  text-decoration-color: var(--paper-edge);
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color 200ms ease, color 200ms ease;
+}
+.book-link:hover {
+  color: var(--margin-red);
+  text-decoration-color: var(--margin-red);
+}
+
+/* ─── Chessboard theming ──────────────────────────────────────── */
 cg-board {
-  background-color: #d7e0d9;
+  background-color: var(--square-light);
   background-image: conic-gradient(
-    #7f9698 25%,
-    #d7e0d9 0 50%,
-    #7f9698 0 75%,
-    #d7e0d9 0
+    var(--square-dark) 25%,
+    var(--square-light) 0 50%,
+    var(--square-dark) 0 75%,
+    var(--square-light) 0
   );
   background-size: 25% 25%;
 }
 
 cg-board square.last-move {
-  background-color: rgba(125, 211, 199, 0.45);
+  background-color: rgba(179, 38, 30, 0.30);
 }
 
 cg-board square.selected {
-  background-color: rgba(53, 143, 133, 0.5);
+  background-color: rgba(179, 38, 30, 0.45);
 }
 
 cg-board square.move-dest {
-  background: radial-gradient(rgba(11, 70, 69, 0.58) 22%, #1f8f86 0, rgba(0, 0, 0, 0.24) 0, rgba(0, 0, 0, 0) 0);
+  background: radial-gradient(
+    rgba(22, 19, 16, 0.42) 22%,
+    rgba(22, 19, 16, 0.18) 0,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 0
+  );
+}
+
+cg-board square.move-dest.oc {
+  background: radial-gradient(
+    transparent 60%,
+    rgba(179, 38, 30, 0.55) 64%,
+    rgba(179, 38, 30, 0.55) 70%,
+    transparent 73%
+  );
 }
 
 .cg-wrap {
-  border-radius: 0.9rem;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--board-shadow);
+  border: 1px solid var(--ink);
 }
 
 .cg-wrap coords {
-  color: rgba(248, 241, 223, 0.72);
-  font-family: var(--font-geist-mono), monospace;
+  color: rgba(22, 19, 16, 0.55);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.cg-wrap coords.ranks {
+  color: rgba(248, 241, 223, 0.85);
 }
 
-html {
-  scroll-behavior: smooth;
+/* ─── Selection ───────────────────────────────────────────────── */
+::selection {
+  background: var(--margin-red);
+  color: var(--paper);
+}
+
+/* ─── Form reset ──────────────────────────────────────────────── */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+/* ─── Animations ──────────────────────────────────────────────── */
+@keyframes book-rule-sweep {
+  0% { transform: scaleX(0); transform-origin: left; }
+  50% { transform: scaleX(1); transform-origin: left; }
+  51% { transform-origin: right; }
+  100% { transform: scaleX(0); transform-origin: right; }
+}
+
+.rule-sweep {
+  animation: book-rule-sweep 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes ink-fade-up {
+  from { opacity: 0; transform: translateY(0.5rem); filter: blur(2px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+.ink-fade-up {
+  animation: ink-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes pulse-due {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.pulse-due {
+  animation: pulse-due 2.4s ease-in-out infinite;
+}
+
+/* ─── Reduced motion ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

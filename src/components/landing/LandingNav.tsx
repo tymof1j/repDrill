@@ -1,112 +1,138 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const navLinks = [
-  { href: '#training', label: 'Training' },
-  { href: '#analysis', label: 'Analysis' },
-  { href: '#stack', label: 'Stack' },
+  { href: '#method', label: 'Method', numeral: 'II' },
+  { href: '#specimen', label: 'Specimen', numeral: 'III' },
+  { href: '#colophon', label: 'Colophon', numeral: 'IV' },
 ];
 
-export function LandingNav({ ctaHref }: { ctaHref: string }) {
+export function LandingNav({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: string }) {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
     <>
-      <header className="fixed left-1/2 top-0 z-40 w-[min(92vw,760px)] -translate-x-1/2 pt-5">
-        <nav className="mx-auto flex h-14 items-center justify-between rounded-full border border-white/10 bg-[#080807]/70 px-3 pl-5 text-[#f8f1df] shadow-[0_22px_80px_rgba(0,0,0,0.28),inset_0_1px_1px_rgba(255,255,255,0.12)] backdrop-blur-2xl">
+      <header
+        className={`fixed inset-x-0 top-0 z-40 border-b transition-colors duration-300 ${
+          scrolled
+            ? 'border-[color:var(--paper-edge)] bg-[color:var(--paper)]/96 backdrop-blur-sm'
+            : 'border-transparent bg-transparent'
+        }`}
+      >
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-5 md:h-16 md:px-10">
           <Link
             href="/"
-            className="text-sm font-semibold tracking-[0.22em] text-[#fff8e6] uppercase"
+            className="group flex items-baseline gap-2.5 focus-visible:outline-none"
             onClick={() => setOpen(false)}
           >
-            RepDrill
+            <span className="font-display text-[1.35rem] font-medium leading-none tracking-[-0.01em] text-[color:var(--ink)]">
+              RepDrill
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.28em] text-[color:var(--ink-faint)]">
+              Vol. I
+            </span>
           </Link>
 
-          <div className="hidden items-center gap-1 md:flex">
+          <div className="hidden items-center gap-7 md:flex">
             {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className="rounded-full px-4 py-2 text-xs font-medium text-[#c9c0aa] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.08] hover:text-[#fff8e6]"
+                className="group flex items-baseline gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--ink-soft)] transition-colors duration-200 hover:text-[color:var(--margin-red)]"
               >
+                <span className="font-display text-[11px] italic text-[color:var(--ink-faint)] group-hover:text-[color:var(--margin-red)]">
+                  {link.numeral}.
+                </span>
                 {link.label}
               </a>
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link
               href={ctaHref}
-              className="group hidden items-center gap-3 rounded-full bg-[#f8f1df] px-3 py-2 pl-5 text-xs font-semibold text-[#0b0b09] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] md:inline-flex"
+              className="group hidden items-center gap-2 border border-[color:var(--ink)] bg-[color:var(--ink)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.20em] text-[color:var(--paper)] transition-colors duration-200 hover:bg-[color:var(--margin-red)] hover:border-[color:var(--margin-red)] md:inline-flex"
             >
-              Open app
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0b0b09]/[0.08] transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-1 group-hover:-translate-y-[1px] group-hover:scale-105">
-                ↗
-              </span>
+              {ctaLabel}
+              <span aria-hidden className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5" />
             </Link>
 
             <button
               type="button"
               aria-label={open ? 'Close menu' : 'Open menu'}
               aria-expanded={open}
-              onClick={() => setOpen((value) => !value)}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96] md:hidden"
+              onClick={() => setOpen((v) => !v)}
+              className="relative flex h-9 w-9 items-center justify-center border border-[color:var(--ink)] transition-colors duration-200 hover:bg-[color:var(--ink)] hover:text-[color:var(--paper)] md:hidden"
             >
               <span
-                className={`absolute h-px w-4 bg-[#f8f1df] transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-                  open ? 'translate-y-0 rotate-45' : '-translate-y-1.5 rotate-0'
+                className={`absolute h-px w-4 bg-current transition-transform duration-300 ${
+                  open ? 'translate-y-0 rotate-45' : '-translate-y-1.5'
                 }`}
               />
               <span
-                className={`absolute h-px w-4 bg-[#f8f1df] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+                className={`absolute h-px w-4 bg-current transition-opacity duration-300 ${
                   open ? 'opacity-0' : 'opacity-100'
                 }`}
               />
               <span
-                className={`absolute h-px w-4 bg-[#f8f1df] transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-                  open ? 'translate-y-0 -rotate-45' : 'translate-y-1.5 rotate-0'
+                className={`absolute h-px w-4 bg-current transition-transform duration-300 ${
+                  open ? 'translate-y-0 -rotate-45' : 'translate-y-1.5'
                 }`}
               />
             </button>
           </div>
-        </nav>
+        </div>
       </header>
 
       <div
-        className={`fixed inset-0 z-30 bg-[#050504]/[0.88] backdrop-blur-3xl transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] md:hidden ${
-          open ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-8 opacity-0'
+        className={`fixed inset-0 z-30 bg-[color:var(--paper)] transition-opacity duration-500 md:hidden ${
+          open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <div className="flex min-h-[100dvh] flex-col justify-end px-6 pb-12 pt-28">
-          <div className="space-y-4">
+        <div className="flex min-h-[100dvh] flex-col justify-end px-6 pb-12 pt-24">
+          <div className="space-y-6">
             {navLinks.map((link, index) => (
               <a
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className={`block overflow-hidden text-5xl font-semibold tracking-normal text-[#f8f1df] transition-all duration-1000 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-                  open ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
+                className={`group flex items-baseline gap-4 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                  open ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
                 }`}
-                style={{ transitionDelay: open ? `${120 + index * 70}ms` : '0ms' }}
+                style={{ transitionDelay: open ? `${120 + index * 80}ms` : '0ms' }}
               >
-                {link.label}
+                <span
+                  className="font-display text-2xl italic text-[color:var(--ink-faint)] group-hover:text-[color:var(--margin-red)]"
+                  style={{ fontFeatureSettings: '"onum"' }}
+                >
+                  {link.numeral}.
+                </span>
+                <span className="font-display text-5xl font-medium text-[color:var(--ink)] group-hover:italic group-hover:text-[color:var(--margin-red)]">
+                  {link.label}
+                </span>
               </a>
             ))}
           </div>
           <Link
             href={ctaHref}
             onClick={() => setOpen(false)}
-            className={`group mt-10 inline-flex w-max items-center gap-3 rounded-full bg-[#f8f1df] px-3 py-3 pl-6 text-sm font-semibold text-[#0b0b09] transition-all duration-1000 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] ${
-              open ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
+            className={`mt-12 inline-flex w-max items-center gap-3 border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.20em] text-[color:var(--paper)] transition-all duration-700 ${
+              open ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
             }`}
-            style={{ transitionDelay: open ? '360ms' : '0ms' }}
+            style={{ transitionDelay: open ? '380ms' : '0ms' }}
           >
-            Open app
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0b0b09]/[0.08] transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-1 group-hover:-translate-y-[1px] group-hover:scale-105">
-              ↗
-            </span>
+            {ctaLabel}
+            <span aria-hidden className="h-px w-4 bg-current" />
           </Link>
         </div>
       </div>

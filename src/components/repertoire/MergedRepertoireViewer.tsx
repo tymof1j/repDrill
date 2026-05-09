@@ -7,7 +7,7 @@ import {
   setRepertoireChoiceAction,
   clearRepertoireChoiceAction,
 } from '@/app/repertoires/actions';
-import { PremiumPanel, SecondaryButton } from '@/components/ui/Premium';
+import { DiagramFrame, GhostButton, SecondaryButton, Stamp } from '@/components/ui/Premium';
 
 export type MergedMove = {
   id: string;
@@ -125,144 +125,177 @@ export function MergedRepertoireViewer({
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(360px,520px)_1fr]">
-      <PremiumPanel>
-        <div className="p-4 md:p-5">
-          <div className="mb-4 rounded-xl bg-[#f8f1df]/[0.065] px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#a99d82]">
-              Position
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[#fff8e6]">
-              {path.length === 0 ? 'Starting position' : `${path.length} moves deep`}
-            </p>
-          </div>
-          <div className="rounded-xl bg-[#f8f1df]/[0.065] p-3">
-            <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} />
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <SecondaryButton onClick={goRoot} disabled={path.length === 0} className="px-3 py-2 text-xs">
-              Start
-            </SecondaryButton>
-            <SecondaryButton onClick={goBack} disabled={path.length === 0} className="px-3 py-2 text-xs">
-              Back
-            </SecondaryButton>
-            <SecondaryButton onClick={goForward} disabled={grouped.length === 0} className="px-3 py-2 text-xs">
-              Forward
-            </SecondaryButton>
-          </div>
+    <div className="grid gap-10 lg:grid-cols-[minmax(360px,500px)_1fr] lg:gap-14">
+      {/* ── Left page: the diagram ─────────────────────────── */}
+      <div>
+        <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+            Diagram
+          </p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
+            {path.length === 0 ? 'starting' : `${path.length} ply deep`}
+          </p>
         </div>
-      </PremiumPanel>
 
-      <div className="space-y-4">
-        <PremiumPanel>
-          <section className="p-5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#a99d82]">Line</p>
-            {path.length === 0 ? (
-              <p className="mt-3 text-sm text-[#a99f89]">Starting position. Pick a move below.</p>
-            ) : (
-              <ol className="mt-3 flex flex-wrap gap-2 text-sm">
-                {path.map((m, i) => (
-                  <li key={`${m.id}-${i}`}>
-                    <button
-                      onClick={() => goToIndex(i)}
-                      className="rounded-lg bg-[#f8f1df]/[0.07] px-3 py-1.5 font-mono text-[#d8cfba] transition-colors duration-200 hover:bg-[#f8f1df]/[0.12] hover:text-[#fff8e6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d7b46a]/70"
-                    >
-                      {m.colorToMove === 'black' && <span className="text-[#8f846d]">{m.moveNumber}.</span>}
-                      {m.colorToMove === 'white' && <span className="text-[#8f846d]">{m.moveNumber}...</span>}{' '}
-                      {m.san}
-                    </button>
-                  </li>
-                ))}
-              </ol>
+        <DiagramFrame caption={`§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}>
+          <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} />
+        </DiagramFrame>
+
+        <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
+          <button
+            type="button"
+            onClick={goRoot}
+            disabled={path.length === 0}
+            className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink)] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:text-[color:var(--ink-ghost)]"
+          >
+            ⟪ Start
+          </button>
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={path.length === 0}
+            className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink)] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:text-[color:var(--ink-ghost)]"
+          >
+            ◀ Back
+          </button>
+          <button
+            type="button"
+            onClick={goForward}
+            disabled={grouped.length === 0}
+            className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink)] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:text-[color:var(--ink-ghost)]"
+          >
+            Forward ▶
+          </button>
+        </div>
+      </div>
+
+      {/* ── Right page: line + branches + annotation ───────── */}
+      <div className="space-y-10">
+        {/* Line */}
+        <section>
+          <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+            Line
+          </p>
+          {path.length === 0 ? (
+            <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+              Starting position. Pick a continuation below.
+            </p>
+          ) : (
+            <ol className="notation mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[15px] leading-relaxed text-[color:var(--ink)]">
+              {path.map((m, i) => (
+                <li key={`${m.id}-${i}`}>
+                  <button
+                    onClick={() => goToIndex(i)}
+                    className="rounded-none px-1 py-0.5 transition-colors duration-200 hover:bg-[color:var(--paper-deep)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+                  >
+                    {m.colorToMove === 'black' && (
+                      <span className="text-[color:var(--ink-faint)]">{m.moveNumber}.</span>
+                    )}
+                    {m.colorToMove === 'white' && (
+                      <span className="text-[color:var(--ink-faint)]">{m.moveNumber}…</span>
+                    )}{' '}
+                    {m.san}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
+        {/* Branches */}
+        <section>
+          <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Branches{grouped.length > 0 && ` · ${grouped.length}`}
+            </p>
+            {hasConflict && (
+              <Stamp tone="red" rotate>
+                Conflict
+              </Stamp>
             )}
-          </section>
-        </PremiumPanel>
+          </div>
 
-        <PremiumPanel>
-          <section className="p-5">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#a99d82]">
-                Next moves {grouped.length > 0 && `(${grouped.length})`}
-              </p>
-              {hasConflict && (
-                <span className="rounded-md bg-[#d7b46a]/[0.16] px-3 py-1 text-xs font-semibold text-[#ead9a5]">
-                  Conflict
-                </span>
-              )}
-            </div>
+          {hasConflict && (
+            <p className="mt-3 marginalia text-[14px]">
+              Two of your courses prepare different moves here. Choose which line wins
+              for this repertoire — the others remain available as alternatives.
+            </p>
+          )}
 
-            {grouped.length === 0 ? (
-              <p className="text-sm text-[#a99f89]">End of line.</p>
-            ) : (
-              <ul className="space-y-2">
-                {grouped.map((g, i) => {
-                  const isPreferred = g.moves.some((m) => m.id === preferredMoveId);
-                  const repertoireMove = g.moves.find((m) => m.moveType === 'repertoire');
-                  return (
-                    <li key={g.san}>
-                      <div
-                        className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-                          isPreferred
-                            ? 'border-[#73d5a0]/40 bg-[#167753]/[0.16]'
-                            : 'border-[#f8f1df]/10 bg-[#f8f1df]/[0.06]'
-                        }`}
-                      >
-                        <button
-                          onClick={() => playMove(g.moves[0])}
-                          className="flex flex-1 flex-wrap items-center gap-3 rounded-lg text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d7b46a]/70"
-                        >
-                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f8f1df]/[0.09] text-xs font-semibold text-[#d7c69f]">
-                            {i + 1}
+          {grouped.length === 0 ? (
+            <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+              End of line.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-[color:var(--paper-rule)] border-y border-[color:var(--paper-edge)]">
+              {grouped.map((g, i) => {
+                const isPreferred = g.moves.some((m) => m.id === preferredMoveId);
+                const repertoireMove = g.moves.find((m) => m.moveType === 'repertoire');
+                const isRepertoire = !!repertoireMove;
+                return (
+                  <li
+                    key={g.san}
+                    className={`group grid grid-cols-[2.25rem_1fr_auto] items-baseline gap-4 px-2 py-3 transition-colors duration-200 hover:bg-[color:var(--paper-shade)] ${
+                      isPreferred ? 'bg-[color:var(--paper-shade)]' : ''
+                    }`}
+                  >
+                    <span
+                      className="font-display text-base italic text-[color:var(--ink-faint)]"
+                      style={{ fontFeatureSettings: '"onum"' }}
+                    >
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <button
+                      onClick={() => playMove(g.moves[0])}
+                      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+                    >
+                      <span className="notation text-base font-medium text-[color:var(--ink)]">
+                        {g.san}
+                      </span>
+                      {isPreferred && <Stamp tone="green">preferred</Stamp>}
+                      {isRepertoire && !isPreferred && <Stamp tone="ink">prep</Stamp>}
+                      <span className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+                        {g.moves.map((m) => (
+                          <span key={m.id} title={`${m.courseName} · ${m.chapterName}`}>
+                            {m.courseName}
                           </span>
-                          <span className="font-mono text-[#fff8e6]">{g.san}</span>
-                          <span className="flex flex-wrap gap-1">
-                            {g.moves.map((m) => (
-                              <span
-                                key={m.id}
-                                className="rounded-md bg-[#f8f1df]/[0.08] px-2 py-1 text-xs text-[#c8b68c]"
-                                title={`${m.courseName} · ${m.chapterName}`}
-                              >
-                                {m.courseName}
-                              </span>
-                            ))}
-                          </span>
-                        </button>
-                        {hasConflict && repertoireMove && (
-                          <div className="flex shrink-0 items-center gap-1">
-                            {isPreferred ? (
-                              <SecondaryButton onClick={clearPreferred} disabled={pending} className="px-4 py-2 text-xs">
-                                Clear
-                              </SecondaryButton>
-                            ) : (
-                              <SecondaryButton
-                                onClick={() => setPreferred(repertoireMove)}
-                                disabled={pending}
-                                className="px-4 py-2 text-xs"
-                              >
-                                Pick
-                              </SecondaryButton>
-                            )}
-                          </div>
+                        ))}
+                      </span>
+                    </button>
+                    {hasConflict && repertoireMove && (
+                      <div className="flex items-center gap-3">
+                        {isPreferred ? (
+                          <GhostButton onClick={clearPreferred} disabled={pending}>
+                            Clear
+                          </GhostButton>
+                        ) : (
+                          <SecondaryButton
+                            onClick={() => setPreferred(repertoireMove)}
+                            disabled={pending}
+                            className="px-3 py-1.5 text-[10px]"
+                          >
+                            Pick
+                          </SecondaryButton>
                         )}
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        </PremiumPanel>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
 
+        {/* Annotation marginalia */}
         {currentPosition?.annotation && (
-          <PremiumPanel>
-            <section className="p-5">
-              <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#a99d82]">Note</p>
-              <p className="rounded-xl bg-[#f8f1df]/[0.07] p-4 text-sm leading-6 text-[#d8cfba]">
-                {currentPosition.annotation}
-              </p>
-            </section>
-          </PremiumPanel>
+          <section>
+            <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Annotation
+            </p>
+            <p className="marginalia mt-4 text-[15px] leading-relaxed">
+              {currentPosition.annotation}
+            </p>
+          </section>
         )}
       </div>
     </div>
