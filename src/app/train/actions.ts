@@ -12,9 +12,12 @@ async function requireUserId(): Promise<string> {
   return session.user.id;
 }
 
-export async function loadTrainingLines(opts?: { courseId?: string }) {
+export async function loadTrainingLines(opts?: { courseId?: string; fromPositionId?: string }) {
   const userId = await requireUserId();
-  return getTrainingLines(userId, { courseId: opts?.courseId });
+  return getTrainingLines(userId, {
+    courseId: opts?.courseId,
+    fromPositionId: opts?.fromPositionId,
+  });
 }
 
 export async function submitRating(

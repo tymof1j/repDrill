@@ -12,6 +12,8 @@ export type LineStep = {
   uci: string;
   parentFen: string;
   childFen: string;
+  parentPositionId: string;
+  childPositionId: string;
   moveNumber: number;
   isUserMove: boolean;
   annotation: string | null;
@@ -33,7 +35,7 @@ const ROOT_FEN = normalizeFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk
 
 export async function getTrainingLines(
   userId: string,
-  opts: { courseId?: string; newLineLimit?: number } = {},
+  opts: { courseId?: string; newLineLimit?: number; fromPositionId?: string } = {},
 ): Promise<{ lines: TrainingLine[]; totalLines: number; dueLines: number; newLines: number }> {
   const newLineLimit = opts.newLineLimit ?? 5;
 
@@ -132,6 +134,8 @@ export async function getTrainingLines(
           uci: m.uci,
           parentFen: parentPos?.fen ?? '',
           childFen: childPos?.fen ?? '',
+          parentPositionId: m.parentPositionId,
+          childPositionId: m.childPositionId,
           moveNumber: m.moveNumber,
           isUserMove: m.moveType === 'repertoire',
           annotation: childPos?.annotation ?? null,
@@ -145,7 +149,15 @@ export async function getTrainingLines(
 
     dfs(rootPos.id, []);
 
-    for (const [i, steps] of chapterLines.entries()) {
+    for (const [i, rawSteps] of chapterLines.entries()) {
+      let steps = rawSteps;
+      if (opts.fromPositionId) {
+        const startIdx = rawSteps.findIndex(
+          (s) => s.parentPositionId === opts.fromPositionId,
+        );
+        if (startIdx === -1) continue;
+        steps = rawSteps.slice(startIdx);
+      }
       if (!steps.some((s) => s.isUserMove)) continue;
 
       const lineIsNew = steps.some((s) => s.isNew);
@@ -159,7 +171,9 @@ export async function getTrainingLines(
       if (lineIsNew) newLinesCount++;
       if (lineDueCount > 0 || lineIsNew) dueLines++;
 
-      if (lineDueCount === 0 && !lineIsNew) continue;
+      // When drilling from a deviation, ignore the due/new gate — the user wants
+      // these specific lines now, regardless of FSRS schedule.
+      if (!opts.fromPositionId && lineDueCount === 0 && !lineIsNew) continue;
 
       allExtracted.push({
         lineId: `${chapterId}-${i}`,

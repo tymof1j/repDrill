@@ -11,6 +11,7 @@ import { parsePgn } from '@/lib/chess/pgn-parser';
 import { buildTree } from '@/lib/chess/tree';
 import { importTreeIntoChapter } from '@/lib/course/import';
 import { getCourse } from '@/lib/course/queries';
+import { copyCourseToUser, generateShareToken } from '@/lib/course/share';
 
 async function requireUserId(): Promise<string> {
   const session = await auth();
@@ -130,6 +131,55 @@ export async function deleteChapterAction(formData: FormData): Promise<void> {
 
   await db.delete(chapters).where(eq(chapters.id, id));
   revalidatePath(`/courses/${courseId}`);
+}
+
+export async function setSharingAction(formData: FormData): Promise<{ token: string | null; isPublic: boolean }> {
+  const userId = await requireUserId();
+  const courseId = String(formData.get('courseId') ?? '');
+  const intent = String(formData.get('intent') ?? ''); // 'enable' | 'disable' | 'rotate'
+  if (!courseId) throw new Error('Missing courseId');
+
+  const course = await getCourse(userId, courseId);
+  if (!course) throw new Error('Course not found');
+
+  let isPublic = course.isPublic;
+  let token = course.shareToken;
+
+  if (intent === 'disable') {
+    isPublic = false;
+  } else if (intent === 'enable') {
+    isPublic = true;
+    if (!token) token = generateShareToken();
+  } else if (intent === 'rotate') {
+    isPublic = true;
+    token = generateShareToken();
+  } else {
+    throw new Error('Invalid intent');
+  }
+
+  await db
+    .update(courses)
+    .set({ isPublic, shareToken: token, updatedAt: new Date() })
+    .where(and(eq(courses.id, courseId), eq(courses.userId, userId)));
+
+  revalidatePath(`/courses/${courseId}`);
+  return { token: isPublic ? token : null, isPublic };
+}
+
+export async function copySharedCourseAction(formData: FormData): Promise<void> {
+  const userId = await requireUserId();
+  const sourceCourseId = String(formData.get('sourceCourseId') ?? '');
+  const newName = String(formData.get('newName') ?? '').trim() || undefined;
+  if (!sourceCourseId) throw new Error('Missing sourceCourseId');
+
+  const newCourseId = await copyCourseToUser({
+    sourceCourseId,
+    targetUserId: userId,
+    newName,
+  });
+
+  revalidatePath('/courses');
+  redirect(`/courses/${newCourseId}`);
 }
 
 export async function updateAnnotationAction(formData: FormData): Promise<void> {

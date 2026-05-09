@@ -10,7 +10,8 @@ export function AppShell({
   sidebar: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isPublicPage = pathname === '/' || pathname === '/login';
+  const isPublicPage =
+    pathname === '/' || pathname === '/login' || pathname.startsWith('/share/');
 
   if (isPublicPage) {
     return (

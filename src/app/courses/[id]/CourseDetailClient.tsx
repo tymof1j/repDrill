@@ -23,9 +23,17 @@ import {
   deleteChapterAction,
   updateAnnotationAction,
 } from '../actions';
+import { SharePanel } from './SharePanel';
 
 type Props = {
-  course: { id: string; name: string; color: string; description: string | null };
+  course: {
+    id: string;
+    name: string;
+    color: string;
+    description: string | null;
+    isPublic: boolean;
+    shareToken: string | null;
+  };
   chapters: { id: string; name: string }[];
   rootPositionId: string;
   positions: ViewerPosition[];
@@ -214,9 +222,18 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
               <SecondaryButton onClick={() => setEditingName(false)}>Cancel</SecondaryButton>
             </>
           ) : (
-            <PremiumButton href={`/courses/${course.id}/import`}>Import PGN</PremiumButton>
+            <>
+              <PremiumButton href={`/courses/${course.id}/import`}>Import PGN</PremiumButton>
+              <SecondaryButton href={`/api/export/course?id=${course.id}`}>Export PGN</SecondaryButton>
+            </>
           )
         }
+      />
+
+      <SharePanel
+        courseId={course.id}
+        isPublic={course.isPublic}
+        shareToken={course.shareToken}
       />
 
       {chapters.length > 0 && (

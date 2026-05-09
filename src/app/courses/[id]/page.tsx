@@ -68,7 +68,14 @@ export default async function CourseDetailPage({
 
   return (
     <CourseDetailClient
-      course={{ id: course.id, name: course.name, color: course.color, description: course.description }}
+      course={{
+        id: course.id,
+        name: course.name,
+        color: course.color,
+        description: course.description,
+        isPublic: course.isPublic,
+        shareToken: course.shareToken,
+      }}
       chapters={chapters.map((c) => ({ id: c.id, name: c.name }))}
       rootPositionId={rootPosition?.id ?? ''}
       positions={viewerPositions}

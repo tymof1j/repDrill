@@ -4,11 +4,16 @@ import { AppSurface, EmptyState, PageHeader, PremiumButton, SecondaryButton, Sta
 import { loadTrainingLines } from './actions';
 import { TrainingSession } from './TrainingSession';
 
-export default async function TrainPage() {
+export default async function TrainPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const result = await loadTrainingLines();
+  const params = await searchParams;
+  const result = await loadTrainingLines({ fromPositionId: params.from });
 
   if (result.lines.length === 0) {
     return (
