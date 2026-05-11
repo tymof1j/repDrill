@@ -420,11 +420,10 @@ export function TrainingSession({ initialLines }: Props) {
                       setInputMode(mode);
                       if (mode === 'keyboard') setTimeout(() => notationRef.current?.focus(), 50);
                     }}
-                    className={`px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${
-                      inputMode === mode
+                    className={`px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${inputMode === mode
                         ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
                         : 'text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'
-                    }`}
+                      }`}
                   >
                     {mode === 'mouse' ? 'Board' : 'Notation'}
                   </button>
@@ -526,18 +525,16 @@ export function TrainingSession({ initialLines }: Props) {
           {/* Feedback */}
           {feedback && (
             <section
-              className={`border-l-2 pl-4 ${
-                feedback.type === 'correct'
+              className={`border-l-2 pl-4 ${feedback.type === 'correct'
                   ? 'border-[color:var(--library-green)]'
                   : 'border-[color:var(--margin-red)]'
-              }`}
+                }`}
             >
               <p
-                className={`font-mono text-[10px] uppercase tracking-[0.22em] ${
-                  feedback.type === 'correct'
+                className={`font-mono text-[10px] uppercase tracking-[0.22em] ${feedback.type === 'correct'
                     ? 'text-[color:var(--library-green)]'
                     : 'text-[color:var(--margin-red)]'
-                }`}
+                  }`}
               >
                 {feedback.type === 'correct' ? '✓ Correct' : '✗ Departure from prep'}
               </p>
@@ -569,9 +566,8 @@ export function TrainingSession({ initialLines }: Props) {
                 {lineResults.map((r, i) => (
                   <li
                     key={i}
-                    className={`notation text-[14px] tabular-nums ${
-                      r.correct ? 'text-[color:var(--library-green)]' : 'text-[color:var(--margin-red)] line-through'
-                    }`}
+                    className={`notation text-[14px] tabular-nums ${r.correct ? 'text-[color:var(--library-green)]' : 'text-[color:var(--margin-red)] line-through'
+                      }`}
                   >
                     <span className="text-[color:var(--ink-faint)]">{i + 1}.</span> {r.correct ? '✓' : '✗'}
                   </li>

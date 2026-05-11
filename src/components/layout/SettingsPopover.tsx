@@ -127,7 +127,7 @@ export function SettingsPopover({
           ref={panelRef}
           role="dialog"
           aria-label="Settings"
-          className="absolute bottom-0 left-full z-50 ml-3 w-80 animate-in fade-in slide-in-from-left-2 rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] shadow-[0_24px_70px_rgba(47,58,50,0.18)]"
+          className="absolute bottom-full left-[-1.25rem] z-50 mb-2 w-[calc(100%+2.5rem)] animate-in fade-in slide-in-from-bottom-2 rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] shadow-[0_24px_70px_rgba(47,58,50,0.18)]"
         >
           <div className="max-h-[80vh] overflow-y-auto p-5">
             {email && (
@@ -145,22 +145,37 @@ export function SettingsPopover({
 
             <div className="space-y-4">
               <label className="block">
-                <span className="mb-1.5 flex items-baseline justify-between font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                <span className="mb-2 flex h-5 items-center justify-between font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                   {text.language}
                   <span className="tracking-[0.14em] text-[color:var(--library-green)]">
                     {isPending ? text.saving : saved ? text.saved : ''}
                   </span>
                 </span>
-                <select
-                  name="language"
-                  value={selectedLanguage}
-                  onChange={(event) => handleLanguageChange(event.target.value)}
-                  disabled={isPending}
-                  className="w-full rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--paper)] px-3 py-2 text-[13px] text-[color:var(--ink)] outline-none transition-colors duration-200 focus:border-[color:var(--library-green)] focus:ring-1 focus:ring-[color:var(--library-green)]/20 disabled:opacity-70"
-                >
-                  <option value="en">English</option>
-                  <option value="uk">Українська</option>
-                </select>
+                <div className="relative">
+                  <select
+                    name="language"
+                    value={selectedLanguage}
+                    onChange={(event) => handleLanguageChange(event.target.value)}
+                    disabled={isPending}
+                    className="w-full appearance-none rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--paper)] py-2.5 pl-3 pr-10 text-[13px] text-[color:var(--ink)] outline-none transition-colors duration-200 focus:border-[color:var(--library-green)] focus:ring-1 focus:ring-[color:var(--library-green)]/20 disabled:opacity-70"
+                  >
+                    <option value="en">English</option>
+                    <option value="uk">Українська</option>
+                  </select>
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-soft)]"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </div>
               </label>
             </div>
 

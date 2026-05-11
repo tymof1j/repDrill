@@ -15,7 +15,16 @@ export async function Sidebar() {
   return (
     <>
       <LanguageSync language={language} />
-      <MobileNav language={language} />
+      <MobileNav
+        language={language}
+        email={session?.user?.email ?? null}
+        lichessUsername={user?.lichessUsername ?? null}
+        chesscomUsername={user?.chesscomUsername ?? null}
+        signOutAction={async () => {
+          'use server';
+          await signOut({ redirectTo: '/' });
+        }}
+      />
       <aside className="relative z-30 hidden w-72 shrink-0 bg-[color:var(--surface)] md:block">
         <div className="sticky top-0 flex h-screen flex-col px-5 py-5">
           <div>

@@ -3,7 +3,13 @@
 import { useEffect, useState } from 'react';
 import { LANGUAGE_STORAGE_KEY, type Language, normalizeLanguage } from '@/lib/i18n/translations';
 
-export function LanguageToggle({ initialLanguage = 'en' }: { initialLanguage?: Language }) {
+export function LanguageToggle({
+  initialLanguage = 'en',
+  onPersist,
+}: {
+  initialLanguage?: Language;
+  onPersist?: (lang: Language) => Promise<void>;
+}) {
   const [language, setLanguage] = useState<Language>(initialLanguage);
 
   useEffect(() => {
@@ -30,6 +36,8 @@ export function LanguageToggle({ initialLanguage = 'en' }: { initialLanguage?: L
     window.dispatchEvent(
       new CustomEvent('repdrill-language', { detail: { language: nextLanguage } }),
     );
+    // Persist to DB if a handler is provided (e.g. from landing page for logged-in users)
+    onPersist?.(nextLanguage);
   };
 
   return (

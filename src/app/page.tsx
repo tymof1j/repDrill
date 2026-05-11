@@ -76,7 +76,7 @@ export default async function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[color:var(--paper)] text-[color:var(--ink)]">
-      <LandingNav ctaHref={ctaHref} ctaLabel={ctaLabel} />
+      <LandingNav ctaHref={ctaHref} ctaLabel={ctaLabel} isLoggedIn={!!session?.user} />
 
       <section className="relative mx-auto grid w-full max-w-7xl grid-cols-1 gap-12 px-5 pb-10 pt-24 md:px-10 md:pb-14 md:pt-28 lg:grid-cols-12 lg:gap-10 lg:px-14">
         <LandingReveal className="lg:col-span-6 xl:col-span-5">

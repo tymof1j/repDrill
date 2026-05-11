@@ -18,7 +18,7 @@ Running list of fixes / improvements. Each entry: short title, description, stat
 
 ## Short-term, high-priority (work step by step)
 
-- [ ] **Valid move input — short form + notation hints**
+- [x] **Valid move input — short form + notation hints**
   - Accept short-form move notation in the move input.
   - Show a note that the site only accepts notation in the X form (figurine/SAN — clarify with user) and in **English**.
 - [ ] **Wrong teaching method** — current training/teaching method is wrong; revisit and fix (needs scoping).

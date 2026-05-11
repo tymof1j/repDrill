@@ -16,23 +16,33 @@ export async function importTreeIntoChapter(params: {
 
   const fenToId = new Map<string, string>();
 
-  const upsertPosition = async (fen: string): Promise<string> => {
+  const upsertPosition = async (fen: string, annotation?: string): Promise<string> => {
     const cached = fenToId.get(fen);
-    if (cached) return cached;
+    if (cached) {
+      // If we have an annotation now but didn't before, we might want to update it.
+      // But for performance in this loop, we'll skip for now or handle it outside.
+      return cached;
+    }
 
     const existing = await db
-      .select({ id: positions.id })
+      .select({ id: positions.id, annotation: positions.annotation })
       .from(positions)
       .where(and(eq(positions.userId, userId), eq(positions.fen, fen)))
       .limit(1);
 
     if (existing[0]) {
+      if (annotation && !existing[0].annotation) {
+        await db
+          .update(positions)
+          .set({ annotation })
+          .where(eq(positions.id, existing[0].id));
+      }
       fenToId.set(fen, existing[0].id);
       return existing[0].id;
     }
 
     const id = nanoid(12);
-    await db.insert(positions).values({ id, userId, fen });
+    await db.insert(positions).values({ id, userId, fen, annotation: annotation ?? null });
     fenToId.set(fen, id);
     return id;
   };
@@ -48,7 +58,7 @@ export async function importTreeIntoChapter(params: {
   for (const [index, mv] of tree.moves.entries()) {
     const before = fenToId.size;
     const parentId = await upsertPosition(mv.parentFen);
-    const childId = await upsertPosition(mv.fen);
+    const childId = await upsertPosition(mv.fen, mv.comment);
     positionsCreated += fenToId.size - before;
 
     const dup = await db

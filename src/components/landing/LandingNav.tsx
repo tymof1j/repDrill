@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { LanguageToggle } from '@/components/i18n/LanguageToggle';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import { updateLanguageAction } from '@/app/settings/actions';
+import type { Language } from '@/lib/i18n/translations';
 
 const navLinks = [
   { href: '#use-cases', label: 'Use cases' },
@@ -12,9 +14,13 @@ const navLinks = [
   { href: '#ownership', label: 'Ownership' },
 ];
 
-export function LandingNav({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: string }) {
+export function LandingNav({ ctaHref, ctaLabel, isLoggedIn }: { ctaHref: string; ctaLabel: string; isLoggedIn?: boolean }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  const persistLanguage = isLoggedIn
+    ? async (lang: Language) => { await updateLanguageAction(lang); }
+    : undefined;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -60,7 +66,7 @@ export function LandingNav({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: s
 
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 md:flex">
-              <LanguageToggle />
+              <LanguageToggle onPersist={persistLanguage} />
               <ThemeToggle variant="mobile" />
             </div>
             <Link
@@ -134,7 +140,7 @@ export function LandingNav({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: s
             <span aria-hidden>→</span>
           </Link>
           <div className="mt-6 flex gap-2">
-            <LanguageToggle />
+            <LanguageToggle onPersist={persistLanguage} />
             <ThemeToggle variant="mobile" />
           </div>
         </div>
