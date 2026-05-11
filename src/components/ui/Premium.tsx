@@ -2,15 +2,15 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 /*
- * Editorial chess-manuscript primitives.
- * No rounded "card" shadows. Hairlines, ink, paper. Mono for labels, Fraunces for display.
- * The exports keep the previous API so callers continue to work; the look is rebuilt.
+ * Shared RepDrill primitives.
+ * The exports keep the previous API so callers continue to work while the
+ * visual language moves toward a quieter modern product surface.
  */
 
 const motion =
   'transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out';
 const focusRing =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--margin-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--paper)]';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--paper)]';
 
 /* ─── Page surface ─────────────────────────────────────────────── */
 
@@ -35,7 +35,7 @@ export function AppSurface({
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-      <span aria-hidden className="h-px w-6 bg-[color:var(--paper-edge)]" />
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--library-green)]" />
       {children}
     </span>
   );
@@ -55,11 +55,11 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="mb-10 border-b border-[color:var(--paper-edge)] pb-8 md:mb-14 md:pb-10">
+    <header className="mb-10 border-b border-[color:var(--paper-rule)] pb-8 md:mb-14 md:pb-10">
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between md:gap-10">
         <div className="max-w-3xl">
           {eyebrow && <div className="mb-5">{eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}</div>}
-          <h1 className="font-display text-[2.75rem] font-medium leading-[1.02] tracking-[-0.01em] text-[color:var(--ink)] md:text-[4rem] lg:text-[4.75rem]">
+          <h1 className="font-display text-[2.75rem] font-semibold leading-[1.02] tracking-[-0.03em] text-[color:var(--ink)] md:text-[4rem] lg:text-[4.75rem]">
             {title}
           </h1>
           {body && (
@@ -76,7 +76,7 @@ export function PageHeader({
   );
 }
 
-/* ─── Panel — bracket-frame replaces the old soft card ─────────── */
+/* ─── Panel ────────────────────────────────────────────────────── */
 
 export function PremiumPanel({
   children,
@@ -91,14 +91,14 @@ export function PremiumPanel({
 }) {
   return (
     <section
-      className={`relative bg-[color:var(--paper-shade)] ${bordered ? 'border border-[color:var(--paper-edge)]' : ''} ${className}`}
+      className={`relative rounded-lg bg-[color:var(--surface)] shadow-[0_18px_55px_rgba(47,58,50,0.08)] ${bordered ? 'border border-[color:var(--paper-rule)]' : ''} ${className}`}
     >
       <div className={`relative ${innerClassName}`}>{children}</div>
     </section>
   );
 }
 
-/* ─── Diagram frame — bracket-cornered, for board panels ───────── */
+/* ─── Diagram frame ────────────────────────────────────────────── */
 
 export function DiagramFrame({
   children,
@@ -111,7 +111,7 @@ export function DiagramFrame({
 }) {
   return (
     <figure className={`relative ${className}`}>
-      <div className="bracket-frame relative bg-[color:var(--paper-shade)] p-2 md:p-3">
+      <div className="bracket-frame relative bg-[color:var(--surface)] p-2 shadow-[0_18px_55px_rgba(47,58,50,0.10)] md:p-3">
         <span className="bracket-tl" />
         <span className="bracket-tr" />
         <span className="bracket-bl" />
@@ -130,7 +130,7 @@ export function DiagramFrame({
 /* ─── Buttons ──────────────────────────────────────────────────── */
 
 const primaryClasses =
-  `group relative inline-flex min-h-11 items-center justify-center gap-3 border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.18em] text-[color:var(--paper)] ${motion} hover:bg-[color:var(--margin-red)] hover:border-[color:var(--margin-red)] active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+  `group relative inline-flex min-h-11 items-center justify-center gap-3 rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--paper)] shadow-[0_10px_30px_rgba(23,26,23,0.14)] ${motion} hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 
 export function PremiumButton({
   children,
@@ -174,7 +174,7 @@ export function PremiumButton({
 }
 
 const secondaryClasses =
-  `inline-flex min-h-10 items-center justify-center gap-2 border border-[color:var(--paper-edge)] bg-transparent px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink)] ${motion} hover:border-[color:var(--ink)] hover:bg-[color:var(--paper-deep)] active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+  `inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ink)] ${motion} hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 
 export function SecondaryButton({
   children,
@@ -226,7 +226,7 @@ export function GhostButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`relative inline-flex items-center px-2 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] ${motion} hover:text-[color:var(--margin-red)] hover:decoration-[color:var(--margin-red)] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${className}`}
+      className={`relative inline-flex items-center rounded-md px-2 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] ${motion} hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing} ${className}`}
     >
       {children}
     </button>
@@ -237,10 +237,10 @@ export function BackLink({ href, children }: { href: string; children: ReactNode
   return (
     <Link
       href={href}
-      className={`mb-8 inline-flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--ink-faint)] ${motion} hover:text-[color:var(--margin-red)] ${focusRing}`}
+      className={`mb-8 inline-flex items-center gap-2 rounded-md font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink-faint)] ${motion} hover:text-[color:var(--library-green)] ${focusRing}`}
     >
       <span aria-hidden className="text-[color:var(--paper-edge)]">←</span>
-      <span className="underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:decoration-[color:var(--margin-red)]">
+      <span className="underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:decoration-[color:var(--library-green)]">
         {children}
       </span>
     </Link>
@@ -279,9 +279,9 @@ export function FieldLabel({
 }
 
 export const fieldClassName =
-  'w-full rounded-none border border-[color:var(--paper-edge)] bg-[color:var(--paper)] px-3.5 py-3 text-[14px] text-[color:var(--ink)] outline-none transition-[background-color,border-color,box-shadow] duration-200 ease-out placeholder:text-[color:var(--ink-ghost)] focus:border-[color:var(--ink)] focus:bg-[color:var(--paper-shade)] focus:ring-1 focus:ring-[color:var(--ink)]';
+  'w-full rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3.5 py-3 text-[14px] text-[color:var(--ink)] outline-none transition-[background-color,border-color,box-shadow] duration-200 ease-out placeholder:text-[color:var(--ink-ghost)] focus:border-[color:var(--library-green)] focus:bg-[color:var(--surface)] focus:ring-2 focus:ring-[color:var(--library-green)]/20';
 
-/* ─── Stat tile — book-style spec sheet entry ──────────────────── */
+/* ─── Stat tile ────────────────────────────────────────────────── */
 
 export function StatTile({
   label,
@@ -304,12 +304,12 @@ export function StatTile({
           : 'text-[color:var(--ink)]';
 
   return (
-    <div className="border-l border-[color:var(--paper-edge)] py-1 pl-4">
+    <div className="rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-4 py-4 shadow-[0_14px_36px_rgba(47,58,50,0.06)]">
       <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
         {label}
       </p>
       <p
-        className={`mt-1 font-display text-[2.25rem] font-medium leading-none tabular-nums ${toneColor}`}
+        className={`mt-2 font-display text-[2.25rem] font-semibold leading-none tracking-[-0.03em] tabular-nums ${toneColor}`}
         style={{ fontFeatureSettings: '"onum"' }}
       >
         {value}
@@ -327,7 +327,7 @@ export function StatTile({
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-8 py-16 text-center">
+    <div className="rounded-lg border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--surface-soft)] px-8 py-16 text-center">
       <p className="font-display-italic mx-auto max-w-xl text-lg leading-relaxed text-[color:var(--ink-soft)]">
         {children}
       </p>
@@ -335,7 +335,7 @@ export function EmptyState({ children }: { children: ReactNode }) {
   );
 }
 
-/* ─── Stamp — diagonal status badge ────────────────────────────── */
+/* ─── Status badge ─────────────────────────────────────────────── */
 
 export function Stamp({
   children,
@@ -373,7 +373,7 @@ export function BookDivider({ symbol = '§' }: { symbol?: string }) {
 
 export function EcoCode({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center border border-[color:var(--ink)] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.08em] text-[color:var(--ink)]">
+    <span className="inline-flex items-center rounded-sm border border-[color:var(--paper-edge)] bg-[color:var(--surface-soft)] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.08em] text-[color:var(--ink)]">
       {children}
     </span>
   );
