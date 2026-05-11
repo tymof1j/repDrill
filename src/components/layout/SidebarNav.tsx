@@ -9,6 +9,7 @@ export const navItems = [
   { href: '/repertoires', label: 'Repertoires', shortcut: 'R', subtitle: 'Merged prep' },
   { href: '/train', label: 'Train', shortcut: 'T', subtitle: 'FSRS recall' },
   { href: '/analyze', label: 'Analyze', shortcut: 'A', subtitle: 'Game review' },
+  { href: '/settings', label: 'Settings', shortcut: 'S', subtitle: 'Accounts · language' },
 ];
 
 function isActive(pathname: string, href: string) {

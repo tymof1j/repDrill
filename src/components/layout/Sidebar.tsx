@@ -39,6 +39,43 @@ export async function Sidebar() {
 
           <div className="mt-auto pt-6">
             <ThemeToggle />
+            <Link
+              href="/documentation"
+              className="group mt-3 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[color:var(--ink-soft)] transition-colors duration-200 hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
+            >
+              <span className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="grid h-8 w-8 place-items-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] text-[color:var(--ink-faint)]"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="13"
+                    height="13"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+                    <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5A2.5 2.5 0 0 1 4 20.5z" />
+                  </svg>
+                </span>
+                <span className="flex flex-col">
+                  <span className="text-[13px] font-semibold leading-tight text-[color:var(--ink)]">
+                    Documentation
+                  </span>
+                  <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                    Notation · method · FSRS
+                  </span>
+                </span>
+              </span>
+              <span
+                aria-hidden
+                className="h-px w-3 bg-[color:var(--paper-edge)] transition-all duration-200 group-hover:w-5 group-hover:bg-[color:var(--library-green)]"
+              />
+            </Link>
             <div className="mt-6 mb-4 flex items-center gap-2 px-2 font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--paper-edge)]" />
               <span>Account</span>

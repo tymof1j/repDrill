@@ -462,7 +462,7 @@ export function TrainingSession({ initialLines }: Props) {
                     {notationError}
                   </p>
                   <Link
-                    href="/faq/notation"
+                    href="/documentation/notation"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[5px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)]"

@@ -17,14 +17,17 @@ export async function updateUsernamesAction(formData: FormData): Promise<void> {
   const userId = await requireUserId();
   const rawLichess = String(formData.get('lichess') ?? '').trim();
   const rawChesscom = String(formData.get('chesscom') ?? '').trim();
+  const rawLanguage = String(formData.get('language') ?? '').trim();
   const lichess = rawLichess || null;
   const chesscom = rawChesscom || null;
+  const language: 'en' | 'uk' = rawLanguage === 'uk' ? 'uk' : 'en';
 
   await db
     .update(users)
     .set({
       lichessUsername: lichess,
       chesscomUsername: chesscom,
+      language,
       updatedAt: new Date(),
     })
     .where(eq(users.id, userId));

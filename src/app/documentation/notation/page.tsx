@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { AppSurface, PageHeader, PremiumPanel } from '@/components/ui/Premium';
 
 export const metadata: Metadata = {
-  title: 'Notation — Help · RepDrill',
+  title: 'Notation — Documentation · RepDrill',
   description:
     'Which move notations the keyboard input accepts: Standard Algebraic Notation (SAN) and Short Notation. English piece letters only.',
 };
@@ -93,7 +93,7 @@ export default function NotationFaqPage() {
   return (
     <AppSurface>
       <PageHeader
-        eyebrow="Help — Notation"
+        eyebrow="Documentation — Notation"
         title={
           <>
             How to <span className="font-display-italic">type</span> a move.
