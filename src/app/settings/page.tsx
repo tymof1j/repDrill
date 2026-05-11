@@ -38,11 +38,8 @@ export default async function SettingsPage() {
         <a className="hover:text-[color:var(--ink)]" href="#accounts">
           · Accounts
         </a>
-        <a className="hover:text-[color:var(--ink)]" href="#preferences">
-          · Preferences
-        </a>
         <a className="hover:text-[color:var(--ink)]" href="#data">
-          · Data
+          · Other settings & export
         </a>
       </nav>
 
@@ -85,39 +82,12 @@ export default async function SettingsPage() {
               />
             </FieldLabel>
 
-            <div id="preferences" className="hidden md:block scroll-mt-24 pt-2">
-              <div className="mb-4 border-t border-[color:var(--paper-rule)] pt-6">
-                <h3 className="font-display text-lg font-semibold tracking-[-0.01em] text-[color:var(--ink)]">
-                  Preferences
-                </h3>
-                <p className="mt-1 text-[13px] text-[color:var(--ink-faint)]">
-                  Account-wide preferences. More to come.
-                </p>
-              </div>
-              <FieldLabel
-                label="Interface language"
-                hint={
-                  <span className="normal-case">
-                    UI translation is rolling out — preference is saved now
-                  </span>
-                }
-              >
-                <select
-                  name="language"
-                  defaultValue={language}
-                  className={fieldClassName}
-                  aria-label="Interface language"
-                >
-                  <option value="en">English</option>
-                  <option value="uk">Українська (Ukrainian)</option>
-                </select>
-              </FieldLabel>
-            </div>
+
 
             <div className="flex items-center gap-3 pt-2">
               <PremiumButton type="submit">Save</PremiumButton>
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
-                Saves accounts and preferences together
+                Saves accounts
               </p>
             </div>
           </form>
@@ -130,7 +100,7 @@ export default async function SettingsPage() {
             id="data-heading"
             className="font-display text-2xl font-semibold tracking-[-0.01em] text-[color:var(--ink)] md:text-3xl"
           >
-            Data
+            Other settings & export
           </h2>
           <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
             Import courses, export your library, and manage your stored data.

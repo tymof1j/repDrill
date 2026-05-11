@@ -16,7 +16,7 @@ const copy = {
     language: 'Language',
     saving: 'Saving',
     saved: 'Saved',
-    data: 'Data & export',
+    data: 'Other settings & export',
     signOut: 'Sign out',
   },
   uk: {
@@ -24,7 +24,7 @@ const copy = {
     language: 'Мова',
     saving: 'Збереження',
     saved: 'Збережено',
-    data: 'Дані та експорт',
+    data: 'Інші налаштування та експорт',
     signOut: 'Вийти',
   },
 };
