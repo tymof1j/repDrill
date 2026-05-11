@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { auth, signOut } from '@/auth';
 import { MobileNav, SidebarNav } from './SidebarNav';
+import { ThemeToggle } from './ThemeToggle';
 
 export async function Sidebar() {
   const session = await auth();
@@ -37,7 +38,8 @@ export async function Sidebar() {
           <SidebarNav />
 
           <div className="mt-auto pt-6">
-            <div className="mb-4 flex items-center gap-2 px-2 font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+            <ThemeToggle />
+            <div className="mt-6 mb-4 flex items-center gap-2 px-2 font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--paper-edge)]" />
               <span>Account</span>
             </div>

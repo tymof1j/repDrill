@@ -37,8 +37,16 @@ export default function RootLayout({
     <html
       lang="en"
       data-scroll-behavior="smooth"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem('repdrill-theme');var t=(s==='evening'||s==='morning')?s:(window.matchMedia('(prefers-color-scheme: dark)').matches?'evening':'morning');if(t==='evening')document.documentElement.setAttribute('data-theme','evening');}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="min-h-full text-[color:var(--ink)]">
         <AppShell sidebar={<Sidebar />}>{children}</AppShell>
       </body>

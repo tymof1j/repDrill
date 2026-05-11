@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ThemeToggle } from './ThemeToggle';
 
 export const navItems = [
   { href: '/courses', label: 'Courses', shortcut: 'C', subtitle: 'Theory' },
@@ -74,7 +75,7 @@ export function MobileNav() {
           RepDrill
         </Link>
         <span aria-hidden className="h-3 w-px bg-[color:var(--paper-rule)]" />
-        <nav className="min-w-0 flex-1 overflow-x-auto">
+        <nav className="min-w-0 flex-1 overflow-x-auto" aria-label="Primary">
           <ul className="flex min-w-max gap-0">
             {navItems.map((item) => {
               const active = isActive(pathname, item.href);
@@ -96,6 +97,7 @@ export function MobileNav() {
             })}
           </ul>
         </nav>
+        <ThemeToggle variant="mobile" />
       </div>
     </header>
   );
