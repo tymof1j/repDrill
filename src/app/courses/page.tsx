@@ -29,11 +29,7 @@ export default async function CoursesListPage() {
     <AppSurface>
       <PageHeader
         eyebrow="Part I — Courses"
-        title={
-          <>
-            The <span className="font-display-italic">library</span>.
-          </>
-        }
+        title="The library."
         body="One course is one body of opening theory for one color — a self-contained chapter of preparation, like 'My Grünfeld' or 'Sicilian as Black'."
         action={<PremiumButton href="/courses/new">New course</PremiumButton>}
       />

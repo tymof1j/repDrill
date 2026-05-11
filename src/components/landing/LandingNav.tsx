@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { LanguageToggle } from '@/components/i18n/LanguageToggle';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 
 const navLinks = [
   { href: '#use-cases', label: 'Use cases' },
@@ -57,6 +59,10 @@ export function LandingNav({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: s
           </div>
 
           <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2 md:flex">
+              <LanguageToggle />
+              <ThemeToggle variant="mobile" />
+            </div>
             <Link
               href={ctaHref}
               className="group hidden min-h-10 items-center gap-2 rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-4 py-2 text-[13px] font-semibold text-[color:var(--paper)] shadow-[0_10px_30px_rgba(23,26,23,0.12)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] md:inline-flex"
@@ -127,6 +133,10 @@ export function LandingNav({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: s
             {ctaLabel}
             <span aria-hidden>→</span>
           </Link>
+          <div className="mt-6 flex gap-2">
+            <LanguageToggle />
+            <ThemeToggle variant="mobile" />
+          </div>
         </div>
       </div>
     </>

@@ -1,13 +1,21 @@
 import Link from 'next/link';
 import { auth, signOut } from '@/auth';
+import { getUser } from '@/lib/user/queries';
+import { LanguageSync } from '@/components/i18n/LanguageSync';
+import { normalizeLanguage } from '@/lib/i18n/translations';
 import { MobileNav, SidebarNav } from './SidebarNav';
+import { ThemeToggle } from './ThemeToggle';
+import { SettingsPopover } from './SettingsPopover';
 
 export async function Sidebar() {
   const session = await auth();
+  const user = session?.user?.id ? await getUser(session.user.id) : null;
+  const language = normalizeLanguage(user?.language);
 
   return (
     <>
-      <MobileNav />
+      <LanguageSync language={language} />
+      <MobileNav language={language} />
       <aside className="relative z-30 hidden w-72 shrink-0 bg-[color:var(--surface)] md:block">
         <div className="sticky top-0 flex h-screen flex-col px-5 py-5">
           <div>
@@ -23,7 +31,7 @@ export async function Sidebar() {
                   RepDrill
                 </span>
                 <span className="mt-1 block text-xs text-[color:var(--ink-faint)]">
-                  Opening memory
+                  {language === 'uk' ? 'Памʼять дебютів' : 'Opening memory'}
                 </span>
               </span>
             </Link>
@@ -34,48 +42,67 @@ export async function Sidebar() {
             <span>Workspace</span>
           </div>
 
-          <SidebarNav />
+          <SidebarNav language={language} />
 
           <div className="mt-auto pt-6">
-            <div className="mb-4 flex items-center gap-2 px-2 font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--paper-edge)]" />
-              <span>Account</span>
-            </div>
-            {session?.user ? (
-              <div className="rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] p-3">
-                <p className="truncate text-sm text-[color:var(--ink-soft)]">
-                  {session.user.email}
-                </p>
-                <form
-                  action={async () => {
+            <ThemeToggle />
+            <Link
+              href="/documentation"
+              className="group mt-3 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[color:var(--ink-soft)] transition-colors duration-200 hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
+            >
+              <span className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="grid h-8 w-8 place-items-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] text-[color:var(--ink-faint)]"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="13"
+                    height="13"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+                    <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5A2.5 2.5 0 0 1 4 20.5z" />
+                  </svg>
+                </span>
+                <span className="flex flex-col">
+                  <span className="text-[13px] font-semibold leading-tight text-[color:var(--ink)]">
+                    FAQ
+                  </span>
+                </span>
+              </span>
+              <span
+                aria-hidden
+                className="h-px w-3 bg-[color:var(--paper-edge)] transition-all duration-200 group-hover:w-5 group-hover:bg-[color:var(--library-green)]"
+              />
+            </Link>
+            <div className="mt-4">
+              {session?.user ? (
+                <SettingsPopover
+                  email={session.user.email ?? null}
+                  language={language}
+                  signOutAction={async () => {
                     'use server';
                     await signOut({ redirectTo: '/' });
                   }}
-                >
-                  <button
-                    type="submit"
-                    className="group mt-3 inline-flex items-center gap-2 rounded-md font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
-                  >
-                    Sign out
-                    <span
-                      aria-hidden
-                      className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
-                    />
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                className="group inline-flex items-center gap-2 rounded-md font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
-              >
-                Sign in
-                <span
-                  aria-hidden
-                  className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
                 />
-              </Link>
-            )}
+              ) : (
+                <Link
+                  href="/login"
+                  className="group inline-flex items-center gap-2 rounded-md px-3 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
+                >
+                  Sign in
+                  <span
+                    aria-hidden
+                    className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
+                  />
+                </Link>
+              )}
+            </div>
             <p className="mt-6 font-mono text-[9px] uppercase tracking-[0.24em] text-[color:var(--ink-ghost)]">
               Self-hosted repertoire trainer
             </p>

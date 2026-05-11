@@ -17,13 +17,9 @@ export default async function AnalyzePage() {
     <AppSurface>
       <PageHeader
         eyebrow="Part IV — Analysis"
-        title={
-          <>
-            The <span className="font-display-italic">post-mortem</span>.
-          </>
-        }
+        title="The post-mortem."
         body="Find the move where preparation became improvisation. Pull recent online games and let RepDrill mark each departure from the book."
-        action={<PremiumButton href="/settings">Accounts</PremiumButton>}
+        action={<PremiumButton href="/settings#accounts">Accounts</PremiumButton>}
       />
 
       {!hasLichess && !hasChessCom ? (
@@ -33,7 +29,7 @@ export default async function AnalyzePage() {
           </p>
           <div className="mt-6 inline-flex">
             <Link
-              href="/settings"
+              href="/settings#accounts"
               className="font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:text-[color:var(--margin-red)] hover:decoration-[color:var(--margin-red)]"
             >
               Add a username →

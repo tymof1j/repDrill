@@ -325,7 +325,7 @@ export function RepertoireViewer({
               </div>
             </div>
           ) : currentPosition?.annotation ? (
-            <p className="marginalia mt-4 text-[15px] leading-relaxed">
+            <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
               {currentPosition.annotation}
             </p>
           ) : (

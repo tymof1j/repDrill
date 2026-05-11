@@ -2,6 +2,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Chess } from 'chess.js';
 import { ChessBoard } from '@/components/board/ChessBoard';
 import {
@@ -456,9 +457,19 @@ export function TrainingSession({ initialLines }: Props) {
                 </div>
               )}
               {notationError && (
-                <p className="font-display-italic text-sm text-[color:var(--margin-red)]">
-                  {notationError}
-                </p>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <p className="font-display-italic text-sm text-[color:var(--margin-red)]">
+                    {notationError}
+                  </p>
+                  <Link
+                    href="/documentation/notation"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[5px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)]"
+                  >
+                    What notation is accepted?
+                  </Link>
+                </div>
               )}
             </div>
           )}
@@ -542,7 +553,7 @@ export function TrainingSession({ initialLines }: Props) {
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                 Annotation
               </p>
-              <p className="marginalia mt-4 text-[15px] leading-relaxed">
+              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
                 {step.annotation}
               </p>
             </section>

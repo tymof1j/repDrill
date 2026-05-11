@@ -115,7 +115,7 @@ export function AnnotationSearch({ positions, onSelect, alwaysOpen = false }: Pr
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
                   {r.item.fen.split(' ').slice(0, 2).join(' ')}
                 </span>
-                <span className="line-clamp-2 font-display-italic text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
+                <span data-no-translate className="line-clamp-2 font-display-italic text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
                   {r.item.annotation}
                 </span>
               </button>

@@ -10,6 +10,7 @@ export const users = sqliteTable('users', {
   googleId: text('google_id').unique(),
   lichessUsername: text('lichess_username'),
   chesscomUsername: text('chesscom_username'),
+  language: text('language', { enum: ['en', 'uk'] }).notNull().default('en'),
   emailVerified: integer('email_verified', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),

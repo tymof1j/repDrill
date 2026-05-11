@@ -20,11 +20,7 @@ export default async function TrainPage({
       <AppSurface>
         <PageHeader
           eyebrow="Part III — Training"
-          title={
-            <>
-              The <span className="font-display-italic">queue</span> is quiet.
-            </>
-          }
+          title="The queue is quiet."
           body="Nothing is due right now. The scheduler will surface lines when memory has had time to fade."
           action={
             <SecondaryButton href="/courses">Back to library</SecondaryButton>

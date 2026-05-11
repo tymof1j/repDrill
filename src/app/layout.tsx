@@ -3,6 +3,9 @@ import { Geist, Fraunces, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { AppShell } from '@/components/layout/AppShell';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { I18nProvider } from '@/components/i18n/I18nProvider';
+import { normalizeLanguage } from '@/lib/i18n/translations';
+import { cookies } from 'next/headers';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -28,19 +31,32 @@ export const metadata: Metadata = {
     'A self-hosted chess opening repertoire trainer for annotated lines, FSRS recall, and game review.',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const initialLanguage = normalizeLanguage(cookieStore.get('repdrill-language')?.value);
+
   return (
     <html
-      lang="en"
+      lang={initialLanguage}
       data-scroll-behavior="smooth"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem('repdrill-theme');var t=(s==='evening'||s==='morning')?s:(window.matchMedia('(prefers-color-scheme: dark)').matches?'evening':'morning');if(t==='evening')document.documentElement.setAttribute('data-theme','evening');}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="min-h-full text-[color:var(--ink)]">
-        <AppShell sidebar={<Sidebar />}>{children}</AppShell>
+        <I18nProvider initialLanguage={initialLanguage}>
+          <AppShell sidebar={<Sidebar />}>{children}</AppShell>
+        </I18nProvider>
       </body>
     </html>
   );

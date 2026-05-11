@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RepDrill
 
-## Getting Started
+A self-hosted chess opening repertoire trainer — annotated lines, FSRS-based recall, and game review against your prep.
 
-First, run the development server:
+Built with Next.js 16, SQLite (via Drizzle ORM + `better-sqlite3`), and Auth.js.
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). The dev server **must** run on port 3000 — if the port is busy, free it rather than falling back (see [AGENTS.md](AGENTS.md)).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## What's inside
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Courses** — annotated theory, organized in chapters of lines.
+- **Repertoires** — merged-view prep that pulls from one or more courses.
+- **Train** — FSRS-driven spaced-recall sessions on due lines.
+- **Analyze** — review your recent games against your prep and flag departures.
+- **FAQ** — `/documentation` (shortcuts, notation spec, why FSRS, why spaced repetition).
 
-## Learn More
+## Keyboard-first flow
 
-To learn more about Next.js, take a look at the following resources:
+RepDrill is built to be usable without reaching for the mouse. Pretty nice, honestly.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `C`, `R`, `T`, `A` jump between Courses, Repertoires, Train, and Analyze.
+- In repertoire trees, use arrow keys to move through lines, `1`-`9` for branches, `Home`/`End` for root/deepest move, `V` for arrows, and `/` for annotation search.
+- In training, `Tab` switches between board input and notation input, and `Enter` submits notation.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Roadmap & backlog
 
-## Deploy on Vercel
+- [docs/backlog.md](docs/backlog.md) — the running list of fixes and feature work (mirrored from the project-level backlog kept outside the repo).
+- [docs/plan.md](docs/plan.md) — sequencing for the backlog: what to build next, and why in that order.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Notation reference
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The keyboard-input notation rules (SAN + Short notation) are documented in [docs/notation-spec.md](docs/notation-spec.md) and rendered in-app at `/documentation/notation`.
+
+## License
+
+AGPL-3.0.

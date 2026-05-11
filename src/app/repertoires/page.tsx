@@ -21,11 +21,7 @@ export default async function RepertoiresListPage() {
     <AppSurface>
       <PageHeader
         eyebrow="Part II — Repertoires"
-        title={
-          <>
-            Bound <span className="font-display-italic">volumes</span>.
-          </>
-        }
+        title="Bound volumes."
         body="Combine courses across colors into a single preparation map. When two courses overlap on the same position, choose which line wins."
         action={<PremiumButton href="/repertoires/new">New repertoire</PremiumButton>}
       />
