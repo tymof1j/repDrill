@@ -35,3 +35,19 @@ export async function updateUsernamesAction(formData: FormData): Promise<void> {
   revalidatePath('/settings');
   revalidatePath('/analyze');
 }
+
+export async function updateLanguageAction(nextLanguage: string): Promise<void> {
+  const userId = await requireUserId();
+  const language: 'en' | 'uk' = nextLanguage === 'uk' ? 'uk' : 'en';
+
+  await db
+    .update(users)
+    .set({
+      language,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+
+  revalidatePath('/', 'layout');
+  revalidatePath('/settings');
+}

@@ -39,9 +39,11 @@ export function ThemeToggle({ variant = 'sidebar' }: { variant?: 'sidebar' | 'mo
 
   useEffect(() => {
     const initial = readStoredTheme();
-    setTheme(initial);
     applyTheme(initial);
-    setMounted(true);
+    const frame = window.requestAnimationFrame(() => {
+      setTheme(initial);
+      setMounted(true);
+    });
 
     const onChange = (next: Theme) => setTheme(next);
     subscribers.add(onChange);
@@ -55,6 +57,7 @@ export function ThemeToggle({ variant = 'sidebar' }: { variant?: 'sidebar' | 'mo
     window.addEventListener('storage', onStorage);
 
     return () => {
+      window.cancelAnimationFrame(frame);
       subscribers.delete(onChange);
       window.removeEventListener('storage', onStorage);
     };

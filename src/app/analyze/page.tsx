@@ -17,11 +17,7 @@ export default async function AnalyzePage() {
     <AppSurface>
       <PageHeader
         eyebrow="Part IV — Analysis"
-        title={
-          <>
-            The <span className="font-display-italic">post-mortem</span>.
-          </>
-        }
+        title="The post-mortem."
         body="Find the move where preparation became improvisation. Pull recent online games and let RepDrill mark each departure from the book."
         action={<PremiumButton href="/settings#accounts">Accounts</PremiumButton>}
       />

@@ -19,7 +19,15 @@ Open [http://localhost:3000](http://localhost:3000). The dev server **must** run
 - **Repertoires** — merged-view prep that pulls from one or more courses.
 - **Train** — FSRS-driven spaced-recall sessions on due lines.
 - **Analyze** — review your recent games against your prep and flag departures.
-- **Documentation** — `/documentation` (notation spec, why FSRS, why spaced repetition).
+- **FAQ** — `/documentation` (shortcuts, notation spec, why FSRS, why spaced repetition).
+
+## Keyboard-first flow
+
+RepDrill is built to be usable without reaching for the mouse. Pretty nice, honestly.
+
+- `C`, `R`, `T`, `A` jump between Courses, Repertoires, Train, and Analyze.
+- In repertoire trees, use arrow keys to move through lines, `1`-`9` for branches, `Home`/`End` for root/deepest move, `V` for arrows, and `/` for annotation search.
+- In training, `Tab` switches between board input and notation input, and `Enter` submits notation.
 
 ## Roadmap & backlog
 

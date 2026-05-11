@@ -553,7 +553,7 @@ export function TrainingSession({ initialLines }: Props) {
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                 Annotation
               </p>
-              <p className="marginalia mt-4 text-[15px] leading-relaxed">
+              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
                 {step.annotation}
               </p>
             </section>

@@ -1,14 +1,21 @@
 import Link from 'next/link';
 import { auth, signOut } from '@/auth';
+import { getUser } from '@/lib/user/queries';
+import { LanguageSync } from '@/components/i18n/LanguageSync';
+import { normalizeLanguage } from '@/lib/i18n/translations';
 import { MobileNav, SidebarNav } from './SidebarNav';
 import { ThemeToggle } from './ThemeToggle';
+import { SettingsPopover } from './SettingsPopover';
 
 export async function Sidebar() {
   const session = await auth();
+  const user = session?.user?.id ? await getUser(session.user.id) : null;
+  const language = normalizeLanguage(user?.language);
 
   return (
     <>
-      <MobileNav />
+      <LanguageSync language={language} />
+      <MobileNav language={language} />
       <aside className="relative z-30 hidden w-72 shrink-0 bg-[color:var(--surface)] md:block">
         <div className="sticky top-0 flex h-screen flex-col px-5 py-5">
           <div>
@@ -24,7 +31,7 @@ export async function Sidebar() {
                   RepDrill
                 </span>
                 <span className="mt-1 block text-xs text-[color:var(--ink-faint)]">
-                  Opening memory
+                  {language === 'uk' ? 'Памʼять дебютів' : 'Opening memory'}
                 </span>
               </span>
             </Link>
@@ -35,7 +42,7 @@ export async function Sidebar() {
             <span>Workspace</span>
           </div>
 
-          <SidebarNav />
+          <SidebarNav language={language} />
 
           <div className="mt-auto pt-6">
             <ThemeToggle />
@@ -64,10 +71,7 @@ export async function Sidebar() {
                 </span>
                 <span className="flex flex-col">
                   <span className="text-[13px] font-semibold leading-tight text-[color:var(--ink)]">
-                    Documentation
-                  </span>
-                  <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-                    Notation · method · FSRS
+                    FAQ
                   </span>
                 </span>
               </span>
@@ -76,45 +80,29 @@ export async function Sidebar() {
                 className="h-px w-3 bg-[color:var(--paper-edge)] transition-all duration-200 group-hover:w-5 group-hover:bg-[color:var(--library-green)]"
               />
             </Link>
-            <div className="mt-6 mb-4 flex items-center gap-2 px-2 font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--paper-edge)]" />
-              <span>Account</span>
-            </div>
-            {session?.user ? (
-              <div className="rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] p-3">
-                <p className="truncate text-sm text-[color:var(--ink-soft)]">
-                  {session.user.email}
-                </p>
-                <form
-                  action={async () => {
+            <div className="mt-4">
+              {session?.user ? (
+                <SettingsPopover
+                  email={session.user.email ?? null}
+                  language={language}
+                  signOutAction={async () => {
                     'use server';
                     await signOut({ redirectTo: '/' });
                   }}
-                >
-                  <button
-                    type="submit"
-                    className="group mt-3 inline-flex items-center gap-2 rounded-md font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
-                  >
-                    Sign out
-                    <span
-                      aria-hidden
-                      className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
-                    />
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                className="group inline-flex items-center gap-2 rounded-md font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
-              >
-                Sign in
-                <span
-                  aria-hidden
-                  className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
                 />
-              </Link>
-            )}
+              ) : (
+                <Link
+                  href="/login"
+                  className="group inline-flex items-center gap-2 rounded-md px-3 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
+                >
+                  Sign in
+                  <span
+                    aria-hidden
+                    className="h-px w-3 bg-current transition-all duration-200 group-hover:w-5"
+                  />
+                </Link>
+              )}
+            </div>
             <p className="mt-6 font-mono text-[9px] uppercase tracking-[0.24em] text-[color:var(--ink-ghost)]">
               Self-hosted repertoire trainer
             </p>
