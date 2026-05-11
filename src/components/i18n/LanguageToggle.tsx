@@ -47,7 +47,7 @@ export function LanguageToggle({
       aria-label={label}
       title={label}
       onClick={toggle}
-      className="inline-flex h-10 min-w-12 items-center justify-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-soft)] transition-colors duration-200 hover:border-[color:var(--library-green)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
+      className="inline-flex h-9 w-12 items-center justify-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-soft)] transition-colors duration-200 hover:border-[color:var(--library-green)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
     >
       {language === 'uk' ? 'UK' : 'EN'}
     </button>

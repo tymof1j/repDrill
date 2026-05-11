@@ -78,7 +78,7 @@ export function ThemeToggle({ variant = 'sidebar' }: { variant?: 'sidebar' | 'mo
         onClick={toggle}
         aria-label={label}
         title={label}
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] text-[color:var(--ink-soft)] transition-colors duration-200 hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
+        className="grid h-9 w-12 shrink-0 place-items-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] text-[color:var(--ink-soft)] transition-colors duration-200 hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]"
       >
         <ThemeGlyph dark={isDark} />
       </button>

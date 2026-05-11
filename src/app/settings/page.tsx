@@ -85,7 +85,7 @@ export default async function SettingsPage() {
               />
             </FieldLabel>
 
-            <div id="preferences" className="scroll-mt-24 pt-2">
+            <div id="preferences" className="hidden md:block scroll-mt-24 pt-2">
               <div className="mb-4 border-t border-[color:var(--paper-rule)] pt-6">
                 <h3 className="font-display text-lg font-semibold tracking-[-0.01em] text-[color:var(--ink)]">
                   Preferences
