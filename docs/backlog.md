@@ -17,6 +17,7 @@ Running list of fixes / improvements. Each entry: short title, description, stat
 ---
 
 ## Short-term, high-priority (work step by step)
+- [ ] **Audit Ukrainian translations** — check all labels/copy across the app and identify/fix missing Ukrainian translations.
 
 - [x] **Valid move input — short form + notation hints**
   - Accept short-form move notation in the move input.
