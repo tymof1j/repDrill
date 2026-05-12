@@ -114,7 +114,7 @@ export type TrainingLine = {
   dueCount: number;
 };
 
-const ROOT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const ROOT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 
 export const getTrainingLines = query({
   args: {
