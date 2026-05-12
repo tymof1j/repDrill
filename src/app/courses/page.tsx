@@ -1,25 +1,25 @@
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
+'use client';
+
+import { useEffect } from 'react';
+import { useQuery, useConvexAuth } from 'convex/react';
+import { useRouter } from 'next/navigation';
+import { api } from '@convex/_generated/api';
 import { CourseLibrarySearch, type CourseListItem } from './CourseLibrarySearch';
-import {
-  AppSurface,
-  PageHeader,
-  PremiumButton,
-  StatTile,
-} from '@/components/ui/Premium';
+import { AppSurface, PageHeader, PremiumButton, StatTile } from '@/components/ui/Premium';
 
-export default async function CoursesListPage() {
-  const token = await convexAuthNextjsToken();
-  if (!token) {
-    const { redirect } = await import('next/navigation');
-    redirect('/login');
-  }
+export default function CoursesListPage() {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const router = useRouter();
 
-  const [items, lineData] = await Promise.all([
-    fetchQuery(api.courses.list, {}, { token }),
-    fetchQuery(api.training.getTrainingLines, {}, { token }),
-  ]);
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) router.push('/login');
+  }, [isLoading, isAuthenticated, router]);
+
+  const items = useQuery(api.courses.list);
+  const lineData = useQuery(api.training.getTrainingLines, {});
+
+  if (!isAuthenticated || items === undefined || lineData === undefined) return null;
+
   const courses: CourseListItem[] = items.map((item) => ({
     id: item._id,
     name: item.name,

@@ -1,21 +1,24 @@
+'use client';
+
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
-import { redirect } from 'next/navigation';
-import {
-  AppSurface,
-  EmptyState,
-  PageHeader,
-  PremiumButton,
-} from '@/components/ui/Premium';
+import { useQuery, useConvexAuth } from 'convex/react';
+import { useRouter } from 'next/navigation';
+import { api } from '@convex/_generated/api';
+import { AppSurface, EmptyState, PageHeader, PremiumButton } from '@/components/ui/Premium';
 import { DeleteRepertoireButton } from './DeleteRepertoireButton';
 
-export default async function RepertoiresListPage() {
-  const token = await convexAuthNextjsToken();
-  if (!token) redirect('/login');
+export default function RepertoiresListPage() {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const router = useRouter();
 
-  const items = await fetchQuery(api.repertoires.list, {}, { token });
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) router.push('/login');
+  }, [isLoading, isAuthenticated, router]);
+
+  const items = useQuery(api.repertoires.list);
+
+  if (!isAuthenticated || items === undefined) return null;
 
   return (
     <AppSurface>

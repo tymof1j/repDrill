@@ -1,31 +1,45 @@
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery, fetchMutation } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
-import { redirect } from 'next/navigation';
-import { AppSurface, EmptyState, PageHeader, PremiumButton, SecondaryButton, StatTile } from '@/components/ui/Premium';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useQuery, useMutation, useConvexAuth } from 'convex/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { api } from '@convex/_generated/api';
+import {
+  AppSurface,
+  EmptyState,
+  PageHeader,
+  PremiumButton,
+  SecondaryButton,
+  StatTile,
+} from '@/components/ui/Premium';
 import { TrainingSession } from './TrainingSession';
-import type { Id } from "@convex/_generated/dataModel";
+import type { Id } from '@convex/_generated/dataModel';
 
-export default async function TrainPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ from?: string }>;
-}) {
-  const token = await convexAuthNextjsToken();
-  if (!token) redirect('/login');
+export default function TrainPage() {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromParam = searchParams.get('from') ?? undefined;
 
-  const params = await searchParams;
+  const [cardsReady, setCardsReady] = useState(false);
+  const ensureCards = useMutation(api.training.ensureCards);
 
-  // Ensure review cards exist before fetching lines
-  await fetchMutation(api.training.ensureCards, {}, { token });
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    ensureCards({}).then(() => setCardsReady(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isAuthenticated]);
 
-  const result = await fetchQuery(
+  const result = useQuery(
     api.training.getTrainingLines,
-    {
-      fromPositionId: params.from as Id<"positions"> | undefined,
-    },
-    { token }
+    cardsReady ? { fromPositionId: fromParam as Id<'positions'> | undefined } : 'skip',
   );
+
+  if (!isAuthenticated || !cardsReady || result === undefined) return null;
 
   if (result.lines.length === 0) {
     return (
@@ -34,9 +48,7 @@ export default async function TrainPage({
           eyebrow="Part III — Training"
           title="The queue is quiet."
           body="Nothing is due right now. The scheduler will surface lines when memory has had time to fade."
-          action={
-            <SecondaryButton href="/courses">Back to library</SecondaryButton>
-          }
+          action={<SecondaryButton href="/courses">Back to library</SecondaryButton>}
         />
 
         <div className="mb-12 grid grid-cols-3 gap-x-2 gap-y-6 border-y border-[color:var(--paper-edge)] py-8">
