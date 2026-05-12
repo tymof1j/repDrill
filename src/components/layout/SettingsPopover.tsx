@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuthActions } from '@convex-dev/auth/react';
 import { updateLanguageAction } from '@/app/settings/actions';
 
 interface SettingsPopoverProps {
   email: string | null;
   language: string;
-  signOutAction: () => Promise<void>;
 }
 
 const copy = {
@@ -36,7 +36,6 @@ function normalizeLanguage(value: string): 'en' | 'uk' {
 export function SettingsPopover({
   email,
   language,
-  signOutAction,
 }: SettingsPopoverProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -45,6 +44,7 @@ export function SettingsPopover({
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [optimisticLanguage, setOptimisticLanguage] = useState<'en' | 'uk' | null>(null);
+  const { signOut } = useAuthActions();
   const selectedLanguage = optimisticLanguage ?? normalizeLanguage(language);
   const text = copy[selectedLanguage];
 
@@ -196,14 +196,13 @@ export function SettingsPopover({
 
             {email && (
               <div className="mt-2 border-t border-[color:var(--paper-rule)] pt-3">
-                <form action={signOutAction}>
-                  <button
-                    type="submit"
-                    className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-[color:var(--ink-faint)] transition-colors duration-200 hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--margin-red)]"
-                  >
-                    {text.signOut}
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-[color:var(--ink-faint)] transition-colors duration-200 hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--margin-red)]"
+                >
+                  {text.signOut}
+                </button>
               </div>
             )}
           </div>

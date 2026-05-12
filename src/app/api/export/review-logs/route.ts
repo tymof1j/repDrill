@@ -1,15 +1,30 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
-import { exportReviewLogsCsv } from '@/lib/course/export';
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
+import { fetchQuery } from 'convex/nextjs';
+import { api } from '@convex/_generated/api';
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-  const csv = await exportReviewLogsCsv(session.user.id);
+  const token = await convexAuthNextjsToken();
+  if (!token) return new NextResponse('Unauthorized', { status: 401 });
+
+  const { logs } = await fetchQuery(api.training.exportReviewData, {}, { token });
+  const header = 'reviewedAt,cardId,rating,responseTimeMs,prevStability,prevDifficulty,prevState\n';
+  const rows = logs
+    .map((log) =>
+      [
+        new Date(log.reviewedAt).toISOString(),
+        log.cardId,
+        log.rating,
+        log.responseTimeMs ?? '',
+        log.prevStability ?? '',
+        log.prevDifficulty ?? '',
+        log.prevState ?? '',
+      ].join(','),
+    )
+    .join('\n');
   const stamp = new Date().toISOString().slice(0, 10);
-  return new NextResponse(csv, {
+
+  return new NextResponse(header + rows + (rows ? '\n' : ''), {
     status: 200,
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',

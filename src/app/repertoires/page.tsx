@@ -1,21 +1,21 @@
 import Link from 'next/link';
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
-import { listRepertoires } from '@/lib/repertoire/queries';
 import {
   AppSurface,
   EmptyState,
-  GhostButton,
   PageHeader,
   PremiumButton,
 } from '@/components/ui/Premium';
-import { deleteRepertoireAction } from './actions';
+import { DeleteRepertoireButton } from './DeleteRepertoireButton';
 
 export default async function RepertoiresListPage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  const token = await convexAuthNextjsToken();
+  if (!token) redirect('/login');
 
-  const items = await listRepertoires(session.user.id);
+  const items = await fetchQuery(api.repertoires.list, {}, { token });
 
   return (
     <AppSurface>
@@ -37,7 +37,7 @@ export default async function RepertoiresListPage() {
             const num = String(idx + 1).padStart(2, '0');
             return (
               <li
-                key={r.id}
+                key={r._id}
                 className="group relative grid grid-cols-[3rem_1fr_auto] items-baseline gap-x-5 gap-y-2 py-7 transition-colors duration-200 hover:bg-[color:var(--paper-shade)] md:grid-cols-[3.5rem_minmax(0,1fr)_auto] md:gap-x-8 md:py-8"
               >
                 <span
@@ -47,7 +47,7 @@ export default async function RepertoiresListPage() {
                   {num}
                 </span>
                 <Link
-                  href={`/repertoires/${r.id}`}
+                  href={`/repertoires/${r._id}`}
                   className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
                 >
                   <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
@@ -59,13 +59,7 @@ export default async function RepertoiresListPage() {
                     </p>
                   )}
                 </Link>
-                <form
-                  action={deleteRepertoireAction}
-                  className="col-start-2 md:col-start-3 md:justify-self-end"
-                >
-                  <input type="hidden" name="id" value={r.id} />
-                  <GhostButton type="submit">Delete</GhostButton>
-                </form>
+                <DeleteRepertoireButton id={r._id} />
               </li>
             );
           })}

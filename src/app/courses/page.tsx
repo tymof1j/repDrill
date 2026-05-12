@@ -1,7 +1,6 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
-import { listCourses } from '@/lib/course/queries';
-import { loadTrainingLines } from '@/app/train/actions';
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
 import { CourseLibrarySearch, type CourseListItem } from './CourseLibrarySearch';
 import {
   AppSurface,
@@ -11,18 +10,21 @@ import {
 } from '@/components/ui/Premium';
 
 export default async function CoursesListPage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  const token = await convexAuthNextjsToken();
+  if (!token) {
+    const { redirect } = await import('next/navigation');
+    redirect('/login');
+  }
 
   const [items, lineData] = await Promise.all([
-    listCourses(session.user.id),
-    loadTrainingLines(),
+    fetchQuery(api.courses.list, {}, { token }),
+    fetchQuery(api.training.getTrainingLines, {}, { token }),
   ]);
   const courses: CourseListItem[] = items.map((item) => ({
-    id: item.id,
+    id: item._id,
     name: item.name,
     color: item.color,
-    description: item.description,
+    description: item.description ?? null,
   }));
 
   return (

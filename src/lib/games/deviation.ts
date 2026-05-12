@@ -1,8 +1,4 @@
-import 'server-only';
 import { Chess } from 'chess.js';
-import { eq, inArray } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { courses, chapters, moves, positions } from '@/lib/db/schema';
 import { normalizeFen } from '@/lib/chess/fen';
 import { parsePgn } from '@/lib/chess/pgn-parser';
 
@@ -40,71 +36,6 @@ export type UserBook = {
   white: Map<string, { positionId: string; childFen: string; san: string }[]>;
   black: Map<string, { positionId: string; childFen: string; san: string }[]>;
 };
-
-export async function loadUserBook(userId: string): Promise<UserBook> {
-  const userCourses = await db
-    .select({ id: courses.id, color: courses.color })
-    .from(courses)
-    .where(eq(courses.userId, userId));
-  if (userCourses.length === 0) {
-    return { white: new Map(), black: new Map() };
-  }
-  const courseIds = userCourses.map((c) => c.id);
-  const chapterRows = await db
-    .select({ id: chapters.id, courseId: chapters.courseId })
-    .from(chapters)
-    .where(inArray(chapters.courseId, courseIds));
-  if (chapterRows.length === 0) {
-    return { white: new Map(), black: new Map() };
-  }
-
-  const courseColorById = new Map<string, 'white' | 'black'>(
-    userCourses.map((c) => [c.id, c.color as 'white' | 'black']),
-  );
-  const chapterColor = new Map<string, 'white' | 'black'>();
-  for (const ch of chapterRows) {
-    const color = courseColorById.get(ch.courseId);
-    if (color) chapterColor.set(ch.id, color);
-  }
-
-  const chapterIds = chapterRows.map((c) => c.id);
-  const moveRows = await db
-    .select()
-    .from(moves)
-    .where(inArray(moves.chapterId, chapterIds));
-  if (moveRows.length === 0) {
-    return { white: new Map(), black: new Map() };
-  }
-
-  const positionIds = new Set<string>();
-  for (const m of moveRows) {
-    positionIds.add(m.parentPositionId);
-    positionIds.add(m.childPositionId);
-  }
-  const positionRows = await db
-    .select()
-    .from(positions)
-    .where(inArray(positions.id, Array.from(positionIds)));
-  const fenById = new Map<string, string>();
-  for (const p of positionRows) fenById.set(p.id, p.fen);
-
-  const book: UserBook = { white: new Map(), black: new Map() };
-  for (const m of moveRows) {
-    const color = chapterColor.get(m.chapterId);
-    if (!color) continue;
-    const map = color === 'white' ? book.white : book.black;
-    const parentFen = fenById.get(m.parentPositionId);
-    const childFen = fenById.get(m.childPositionId);
-    if (!parentFen || !childFen) continue;
-    const arr = map.get(parentFen) ?? [];
-    if (!arr.some((e) => e.san === m.san)) {
-      arr.push({ positionId: m.parentPositionId, childFen, san: m.san });
-    }
-    map.set(parentFen, arr);
-  }
-
-  return book;
-}
 
 /** Detect where, in `pgn`, the user left their repertoire. */
 export function detectDeviation(

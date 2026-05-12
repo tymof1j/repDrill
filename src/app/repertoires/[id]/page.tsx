@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { auth } from '@/auth';
-import { listCourses } from '@/lib/course/queries';
-import { getRepertoire, loadRepertoireTree } from '@/lib/repertoire/queries';
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { normalizeFen } from '@/lib/chess/fen';
 import {
   MergedRepertoireViewer,
@@ -33,47 +34,47 @@ export default async function RepertoireDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  const token = await convexAuthNextjsToken();
+  if (!token) redirect('/login');
 
   const { id } = await params;
-  const repertoire = await getRepertoire(session.user.id, id);
+  const repertoire = await fetchQuery(api.repertoires.get, { id: id as Id<"repertoires"> }, { token });
   if (!repertoire) notFound();
 
-  const tree = await loadRepertoireTree(id);
-  const allUserCourses = await listCourses(session.user.id);
+  const tree = await fetchQuery(api.repertoires.loadTree, { repertoireId: repertoire._id }, { token });
+  const allUserCourses = await fetchQuery(api.courses.list, {}, { token });
 
-  const includedCourseIds = new Set(tree.courses.map((c) => c.course.id));
-  const availableCourses = allUserCourses.filter((c) => !includedCourseIds.has(c.id));
+  const includedCourseIds = new Set(tree.courses.map((c) => c.course._id));
+  const availableCourses = allUserCourses.filter((c) => !includedCourseIds.has(c._id));
 
-  const chaptersById = new Map(tree.chapters.map((c) => [c.id, c]));
-  const coursesById = new Map(tree.courses.map((c) => [c.course.id, c.course]));
+  const chaptersById = new Map(tree.chapters.map((c) => [c._id as string, c]));
+  const coursesById = new Map(tree.courses.map((c) => [c.course._id as string, c.course]));
 
   const viewerPositions: MergedPosition[] = tree.positions.map((p) => ({
-    id: p.id,
+    id: p._id as string,
     fen: p.fen,
-    annotation: p.annotation,
+    annotation: p.annotation ?? null,
   }));
 
   const viewerMoves: MergedMove[] = tree.moves.flatMap((m) => {
-    const chapter = chaptersById.get(m.chapterId);
+    const chapter = chaptersById.get(m.chapterId as string);
     if (!chapter) return [];
-    const course = coursesById.get(chapter.courseId);
+    const course = coursesById.get(chapter.courseId as string);
     if (!course) return [];
     return [
       {
-        id: m.id,
-        parentPositionId: m.parentPositionId,
-        childPositionId: m.childPositionId,
+        id: m._id as string,
+        parentPositionId: m.parentPositionId as string,
+        childPositionId: m.childPositionId as string,
         san: m.san,
         uci: m.uci,
         moveNumber: m.moveNumber,
         colorToMove: m.colorToMove,
         isMainLine: m.isMainLine,
         moveType: m.moveType,
-        chapterId: m.chapterId,
+        chapterId: m.chapterId as string,
         chapterName: chapter.name,
-        courseId: course.id,
+        courseId: course._id as string,
         courseName: course.name,
         courseColor: course.color as 'white' | 'black',
       },
@@ -83,8 +84,8 @@ export default async function RepertoireDetailPage({
   const rootPosition = tree.positions.find((p) => p.fen === STARTING_FEN_NORMALIZED);
 
   const viewerChoices: MergedChoice[] = tree.choices.map((c) => ({
-    positionId: c.positionId,
-    preferredMoveId: c.preferredMoveId,
+    positionId: c.positionId as string,
+    preferredMoveId: c.preferredMoveId as string,
   }));
 
   return (
@@ -114,7 +115,7 @@ export default async function RepertoireDetailPage({
           <ul className="divide-y divide-[color:var(--paper-rule)]">
             {tree.courses.map((c) => (
               <li
-                key={c.course.id}
+                key={c.course._id}
                 className="grid grid-cols-[1fr_auto] items-baseline gap-4 px-5 py-4 md:px-7"
               >
                 <div className="flex items-baseline gap-3">
@@ -127,7 +128,7 @@ export default async function RepertoireDetailPage({
                 </div>
                 <form action={removeCourseFromRepertoireAction}>
                   <input type="hidden" name="repertoireId" value={id} />
-                  <input type="hidden" name="courseId" value={c.course.id} />
+                  <input type="hidden" name="courseId" value={c.course._id} />
                   <GhostButton type="submit">Remove</GhostButton>
                 </form>
               </li>
@@ -144,7 +145,7 @@ export default async function RepertoireDetailPage({
             <FieldLabel label="Bind another course">
               <select name="courseId" required className={fieldClassName}>
                 {availableCourses.map((c) => (
-                  <option key={c.id} value={c.id}>
+                  <option key={c._id} value={c._id}>
                     {c.name} ({c.color})
                   </option>
                 ))}
@@ -168,7 +169,7 @@ export default async function RepertoireDetailPage({
       {tree.courses.length > 0 ? (
         <MergedRepertoireViewer
           repertoireId={id}
-          rootPositionId={rootPosition?.id ?? ''}
+          rootPositionId={(rootPosition?._id as string) ?? ''}
           positions={viewerPositions}
           moves={viewerMoves}
           choices={viewerChoices}
