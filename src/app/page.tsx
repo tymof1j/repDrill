@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { auth } from '@/auth';
+import { isAuthenticatedNextjs } from "@convex-dev/auth/nextjs/server";
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LandingReveal } from '@/components/landing/LandingReveal';
 
@@ -60,7 +60,7 @@ const benefits = [
   ['Position-first memory', 'Notes survive move-order changes and transpositions.'],
   ['Smaller daily queue', 'Review time is spent on weak lines, not everything you own.'],
   ['Clear post-game repair', 'Every surprise in a real game becomes a concrete study task.'],
-  ['Self-hosted library', 'Your repertoire lives with you: SQLite, exportable, open source.'],
+  ['Portable by design', 'Your prep is stored in Convex and can leave anytime as PGN or a full JSON archive.'],
 ];
 
 const reviewRows = [
@@ -70,13 +70,13 @@ const reviewRows = [
 ];
 
 export default async function Home() {
-  const session = await auth();
-  const ctaHref = session?.user ? '/courses' : '/login';
-  const ctaLabel = session?.user ? 'Open library' : 'Start studying';
+  const isLoggedIn = await isAuthenticatedNextjs();
+  const ctaHref = isLoggedIn ? '/courses' : '/login';
+  const ctaLabel = isLoggedIn ? 'Open library' : 'Start studying';
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[color:var(--paper)] text-[color:var(--ink)]">
-      <LandingNav ctaHref={ctaHref} ctaLabel={ctaLabel} isLoggedIn={!!session?.user} />
+      <LandingNav ctaHref={ctaHref} ctaLabel={ctaLabel} isLoggedIn={isLoggedIn} />
 
       <section className="relative mx-auto grid w-full max-w-7xl grid-cols-1 gap-12 px-5 pb-10 pt-24 md:px-10 md:pb-14 md:pt-28 lg:grid-cols-12 lg:gap-10 lg:px-14">
         <LandingReveal className="lg:col-span-6 xl:col-span-5">
@@ -88,7 +88,7 @@ export default async function Home() {
             Turn every game into opening memory.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[color:var(--ink-soft)] md:text-xl md:leading-8">
-            RepDrill is a self-hosted chess trainer for players who keep repertoire files,
+            RepDrill is a Convex-backed chess trainer for players who keep repertoire files,
             forget move orders, and need a daily plan for what to repair next.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -216,16 +216,16 @@ export default async function Home() {
               Ownership
             </p>
             <h2 className="mt-5 max-w-3xl font-display text-4xl font-semibold leading-[1.02] tracking-[-0.04em] md:text-6xl">
-              Keep the repertoire on your machine.
+              Own the repertoire, even when it syncs.
             </h2>
           </LandingReveal>
           <LandingReveal className="lg:col-span-5" delay={120}>
             <p className="max-w-md text-[15px] leading-7 text-[#d8ded2]">
-              RepDrill is open source and stores the library in SQLite. It is built for players
-              who want a private training system, not another cloud account holding their prep.
+              RepDrill stores your library in Convex for sync and deployment, while keeping
+              exits wide open: export single courses as PGN or download the full archive as JSON.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              {['Next.js 16', 'SQLite + Drizzle', 'FSRS', 'AGPL-3'].map((item) => (
+              {['Next.js 16', 'Convex', 'PGN export', 'JSON archive', 'FSRS'].map((item) => (
                 <span
                   key={item}
                   className="rounded-md border border-white/15 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#d8ded2]"

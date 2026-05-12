@@ -1,6 +1,8 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
-import { createCourseAction } from '../actions';
+'use client';
+
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { useRouter } from 'next/navigation';
 import {
   AppSurface,
   BackLink,
@@ -10,10 +12,26 @@ import {
   SecondaryButton,
   fieldClassName,
 } from '@/components/ui/Premium';
+import { FormEvent, useState } from 'react';
 
-export default async function NewCoursePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+export default function NewCoursePage() {
+  const router = useRouter();
+  const createCourse = useMutation(api.courses.create);
+  const [isCreating, setIsCreating] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setIsCreating(true);
+    const formData = new FormData(e.currentTarget);
+    const name = String(formData.get('name') ?? '').trim();
+    const color = String(formData.get('color') ?? '') as 'white' | 'black';
+    const description = String(formData.get('description') ?? '').trim() || undefined;
+
+    if (!name) return;
+
+    const courseId = await createCourse({ name, color, description });
+    router.push(`/courses/${courseId}`);
+  }
 
   return (
     <AppSurface>
@@ -28,7 +46,7 @@ export default async function NewCoursePage() {
         body="Name a body of opening theory and pick the side it covers. Import PGN chapters once the course exists."
       />
 
-      <form action={createCourseAction} className="max-w-2xl space-y-8 border-y border-[color:var(--paper-edge)] py-8">
+      <form onSubmit={handleSubmit} className="max-w-2xl space-y-8 border-y border-[color:var(--paper-edge)] py-8">
         <FieldLabel label="Name" required>
           <input
             name="name"
@@ -85,7 +103,9 @@ export default async function NewCoursePage() {
         </FieldLabel>
 
         <div className="flex flex-wrap gap-3 pt-4">
-          <PremiumButton type="submit">Create course</PremiumButton>
+          <PremiumButton type="submit" disabled={isCreating}>
+            {isCreating ? 'Creating...' : 'Create course'}
+          </PremiumButton>
           <SecondaryButton href="/courses">Cancel</SecondaryButton>
         </div>
       </form>

@@ -2,163 +2,75 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { nanoid } from 'nanoid';
-import { and, eq } from 'drizzle-orm';
-import { auth } from '@/auth';
-import { db } from '@/lib/db';
-import {
-  repertoires,
-  repertoireCourses,
-  repertoireChoices,
-  courses,
-} from '@/lib/db/schema';
-import { getRepertoire } from '@/lib/repertoire/queries';
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchMutation, fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 
-async function requireUserId(): Promise<string> {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login');
-  return session.user.id;
+async function requireToken() {
+  const token = await convexAuthNextjsToken();
+  if (!token) redirect('/login');
+  return token;
 }
 
 export async function createRepertoireAction(formData: FormData): Promise<void> {
-  const userId = await requireUserId();
+  const token = await requireToken();
   const name = String(formData.get('name') ?? '').trim();
-  const description = String(formData.get('description') ?? '').trim() || null;
+  const description = String(formData.get('description') ?? '').trim() || undefined;
   if (!name) throw new Error('Name is required');
 
-  const id = nanoid(12);
-  const now = new Date();
-  await db.insert(repertoires).values({
-    id,
-    userId,
-    name,
-    description,
-    createdAt: now,
-    updatedAt: now,
-  });
-
+  const id = await fetchMutation(api.repertoires.create, { name, description }, { token });
   revalidatePath('/repertoires');
   redirect(`/repertoires/${id}`);
 }
 
 export async function deleteRepertoireAction(formData: FormData): Promise<void> {
-  const userId = await requireUserId();
-  const id = String(formData.get('id') ?? '');
+  const token = await requireToken();
+  const id = String(formData.get('id') ?? '') as Id<"repertoires">;
   if (!id) throw new Error('Missing id');
 
-  await db
-    .delete(repertoires)
-    .where(and(eq(repertoires.id, id), eq(repertoires.userId, userId)));
+  await fetchMutation(api.repertoires.remove, { id }, { token });
   revalidatePath('/repertoires');
   redirect('/repertoires');
 }
 
 export async function addCourseToRepertoireAction(formData: FormData): Promise<void> {
-  const userId = await requireUserId();
-  const repertoireId = String(formData.get('repertoireId') ?? '');
-  const courseId = String(formData.get('courseId') ?? '');
+  const token = await requireToken();
+  const repertoireId = String(formData.get('repertoireId') ?? '') as Id<"repertoires">;
+  const courseId = String(formData.get('courseId') ?? '') as Id<"courses">;
   if (!repertoireId || !courseId) throw new Error('Missing ids');
 
-  // Verify ownership
-  const rep = await getRepertoire(userId, repertoireId);
-  if (!rep) throw new Error('Repertoire not found');
-  const course = await db
-    .select({ id: courses.id })
-    .from(courses)
-    .where(and(eq(courses.id, courseId), eq(courses.userId, userId)))
-    .limit(1);
-  if (!course[0]) throw new Error('Course not found');
-
-  // Determine next sort order
-  const existing = await db
-    .select({ sortOrder: repertoireCourses.sortOrder })
-    .from(repertoireCourses)
-    .where(eq(repertoireCourses.repertoireId, repertoireId));
-  const nextOrder = existing.reduce((max, r) => Math.max(max, r.sortOrder + 1), 0);
-
-  // Insert; rely on unique index to silently no-op if already linked
-  try {
-    await db.insert(repertoireCourses).values({
-      id: nanoid(12),
-      repertoireId,
-      courseId,
-      sortOrder: nextOrder,
-    });
-  } catch {
-    // Unique constraint — already added.
-  }
-
+  await fetchMutation(api.repertoires.addCourse, { repertoireId, courseId }, { token });
   revalidatePath(`/repertoires/${repertoireId}`);
 }
 
 export async function removeCourseFromRepertoireAction(formData: FormData): Promise<void> {
-  const userId = await requireUserId();
-  const repertoireId = String(formData.get('repertoireId') ?? '');
-  const courseId = String(formData.get('courseId') ?? '');
+  const token = await requireToken();
+  const repertoireId = String(formData.get('repertoireId') ?? '') as Id<"repertoires">;
+  const courseId = String(formData.get('courseId') ?? '') as Id<"courses">;
   if (!repertoireId || !courseId) throw new Error('Missing ids');
 
-  const rep = await getRepertoire(userId, repertoireId);
-  if (!rep) throw new Error('Repertoire not found');
-
-  await db
-    .delete(repertoireCourses)
-    .where(
-      and(
-        eq(repertoireCourses.repertoireId, repertoireId),
-        eq(repertoireCourses.courseId, courseId),
-      ),
-    );
-
+  await fetchMutation(api.repertoires.removeCourse, { repertoireId, courseId }, { token });
   revalidatePath(`/repertoires/${repertoireId}`);
 }
 
 export async function setRepertoireChoiceAction(formData: FormData): Promise<void> {
-  const userId = await requireUserId();
-  const repertoireId = String(formData.get('repertoireId') ?? '');
-  const positionId = String(formData.get('positionId') ?? '');
-  const moveId = String(formData.get('moveId') ?? '');
+  const token = await requireToken();
+  const repertoireId = String(formData.get('repertoireId') ?? '') as Id<"repertoires">;
+  const positionId = String(formData.get('positionId') ?? '') as Id<"positions">;
+  const moveId = String(formData.get('moveId') ?? '') as Id<"moves">;
   if (!repertoireId || !positionId || !moveId) throw new Error('Missing ids');
 
-  const rep = await getRepertoire(userId, repertoireId);
-  if (!rep) throw new Error('Repertoire not found');
-
-  // Upsert: delete existing choice for this position, insert new one
-  await db
-    .delete(repertoireChoices)
-    .where(
-      and(
-        eq(repertoireChoices.repertoireId, repertoireId),
-        eq(repertoireChoices.positionId, positionId),
-      ),
-    );
-
-  await db.insert(repertoireChoices).values({
-    id: nanoid(12),
-    repertoireId,
-    positionId,
-    preferredMoveId: moveId,
-  });
-
+  await fetchMutation(api.repertoires.setChoice, { repertoireId, positionId, moveId }, { token });
   revalidatePath(`/repertoires/${repertoireId}`);
 }
 
 export async function clearRepertoireChoiceAction(formData: FormData): Promise<void> {
-  const userId = await requireUserId();
-  const repertoireId = String(formData.get('repertoireId') ?? '');
-  const positionId = String(formData.get('positionId') ?? '');
+  const token = await requireToken();
+  const repertoireId = String(formData.get('repertoireId') ?? '') as Id<"repertoires">;
+  const positionId = String(formData.get('positionId') ?? '') as Id<"positions">;
   if (!repertoireId || !positionId) throw new Error('Missing ids');
 
-  const rep = await getRepertoire(userId, repertoireId);
-  if (!rep) throw new Error('Repertoire not found');
-
-  await db
-    .delete(repertoireChoices)
-    .where(
-      and(
-        eq(repertoireChoices.repertoireId, repertoireId),
-        eq(repertoireChoices.positionId, positionId),
-      ),
-    );
-
+  await fetchMutation(api.repertoires.clearChoice, { repertoireId, positionId }, { token });
   revalidatePath(`/repertoires/${repertoireId}`);
 }

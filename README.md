@@ -1,8 +1,8 @@
 # RepDrill
 
-A self-hosted chess opening repertoire trainer — annotated lines, FSRS-based recall, and game review against your prep.
+A Convex-backed chess opening repertoire trainer — annotated lines, FSRS-based recall, and game review against your prep.
 
-Built with Next.js 16, SQLite (via Drizzle ORM + `better-sqlite3`), and Auth.js.
+Built with Next.js 16, Convex, Convex Auth, and FSRS. You can export single courses as PGN or your full library as JSON, so your prep stays portable.
 
 ## Getting started
 
@@ -12,6 +12,9 @@ pnpm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The dev server **must** run on port 3000 — if the port is busy, free it rather than falling back (see [AGENTS.md](AGENTS.md)).
+
+For hosted data, point the app at a Convex deployment with `NEXT_PUBLIC_CONVEX_URL`,
+`NEXT_PUBLIC_CONVEX_SITE_URL`, and matching Convex Auth provider environment variables.
 
 ## What's inside
 

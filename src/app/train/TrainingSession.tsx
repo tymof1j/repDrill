@@ -16,8 +16,8 @@ import {
   StatTile,
   fieldClassName,
 } from '@/components/ui/Premium';
-import { submitLineRatings } from './actions';
-import type { TrainingLine, LineStep } from '@/lib/srs/lines';
+import { submitLineRatings } from './submitRatings';
+import type { TrainingLine, LineStep } from './types';
 
 type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 

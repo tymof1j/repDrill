@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { auth, signOut } from '@/auth';
-import { getUser } from '@/lib/user/queries';
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
 import { LanguageSync } from '@/components/i18n/LanguageSync';
 import { normalizeLanguage } from '@/lib/i18n/translations';
 import { MobileNav, SidebarNav } from './SidebarNav';
@@ -8,8 +9,8 @@ import { ThemeToggle } from './ThemeToggle';
 import { SettingsPopover } from './SettingsPopover';
 
 export async function Sidebar() {
-  const session = await auth();
-  const user = session?.user?.id ? await getUser(session.user.id) : null;
+  const token = await convexAuthNextjsToken();
+  const user = token ? await fetchQuery(api.users.current, {}, { token }) : null;
   const language = normalizeLanguage(user?.language);
 
   return (
@@ -17,13 +18,9 @@ export async function Sidebar() {
       <LanguageSync language={language} />
       <MobileNav
         language={language}
-        email={session?.user?.email ?? null}
+        email={user?.email ?? null}
         lichessUsername={user?.lichessUsername ?? null}
         chesscomUsername={user?.chesscomUsername ?? null}
-        signOutAction={async () => {
-          'use server';
-          await signOut({ redirectTo: '/' });
-        }}
       />
       <aside className="relative z-30 hidden w-72 shrink-0 bg-[color:var(--surface)] md:block">
         <div className="sticky top-0 flex h-screen flex-col px-5 py-5">
@@ -90,14 +87,10 @@ export async function Sidebar() {
               />
             </Link>
             <div className="mt-4">
-              {session?.user ? (
+              {user ? (
                 <SettingsPopover
-                  email={session.user.email ?? null}
+                  email={user.email ?? null}
                   language={language}
-                  signOutAction={async () => {
-                    'use server';
-                    await signOut({ redirectTo: '/' });
-                  }}
                 />
               ) : (
                 <Link

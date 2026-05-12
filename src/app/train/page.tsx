@@ -1,19 +1,31 @@
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery, fetchMutation } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
 import { AppSurface, EmptyState, PageHeader, PremiumButton, SecondaryButton, StatTile } from '@/components/ui/Premium';
-import { loadTrainingLines } from './actions';
 import { TrainingSession } from './TrainingSession';
+import type { Id } from "@convex/_generated/dataModel";
 
 export default async function TrainPage({
   searchParams,
 }: {
   searchParams: Promise<{ from?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect('/login');
+  const token = await convexAuthNextjsToken();
+  if (!token) redirect('/login');
 
   const params = await searchParams;
-  const result = await loadTrainingLines({ fromPositionId: params.from });
+
+  // Ensure review cards exist before fetching lines
+  await fetchMutation(api.training.ensureCards, {}, { token });
+
+  const result = await fetchQuery(
+    api.training.getTrainingLines,
+    {
+      fromPositionId: params.from as Id<"positions"> | undefined,
+    },
+    { token }
+  );
 
   if (result.lines.length === 0) {
     return (

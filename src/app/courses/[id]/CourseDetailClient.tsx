@@ -75,8 +75,13 @@ function buildChapterLines(
     }
 
     const chapterLines: ChapterLine[] = [];
+    // FENs are normalized (move counters stripped), so a chess maneuver like
+    // Nf3-Ng1 can revisit a prior position. Track the positions currently in
+    // the recursion path and treat re-entries as leaves to break cycles.
+    const inPath = new Set<string>();
     const walk = (positionId: string, path: ViewerMove[]) => {
-      const children = byParent.get(positionId) ?? [];
+      const isCycle = inPath.has(positionId);
+      const children = isCycle ? [] : (byParent.get(positionId) ?? []);
       const seen = new Set<string>();
       const uniqueChildren = children.filter((child) => {
         const key = branchKey(child);
@@ -97,9 +102,11 @@ function buildChapterLines(
         return;
       }
 
+      inPath.add(positionId);
       for (const child of uniqueChildren) {
         walk(child.childPositionId, [...path, child]);
       }
+      inPath.delete(positionId);
     };
 
     if (rootPositionId) {

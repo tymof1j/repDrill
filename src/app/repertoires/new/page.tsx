@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { isAuthenticatedNextjs } from "@convex-dev/auth/nextjs/server";
 import { createRepertoireAction } from '../actions';
 import {
   AppSurface,
@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/Premium';
 
 export default async function NewRepertoirePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  const isLoggedIn = await isAuthenticatedNextjs();
+  if (!isLoggedIn) redirect('/login');
 
   return (
     <AppSurface>

@@ -1,17 +1,20 @@
 import Link from 'next/link';
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
-import { getUser } from '@/lib/user/queries';
 import { AppSurface, PageHeader, PremiumButton } from '@/components/ui/Premium';
 import { AnalyzePanel } from './AnalyzePanel';
 
 export default async function AnalyzePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  const token = await convexAuthNextjsToken();
+  if (!token) redirect('/login');
 
-  const user = await getUser(session.user.id);
-  const hasLichess = !!user?.lichessUsername;
-  const hasChessCom = !!user?.chesscomUsername;
+  const user = await fetchQuery(api.users.current, {}, { token });
+  if (!user) redirect('/login');
+
+  const hasLichess = !!user.lichessUsername;
+  const hasChessCom = !!user.chesscomUsername;
 
   return (
     <AppSurface>
@@ -39,8 +42,8 @@ export default async function AnalyzePage() {
       ) : (
         <AnalyzePanel
           initialUsername={{
-            lichess: user?.lichessUsername ?? null,
-            chesscom: user?.chesscomUsername ?? null,
+            lichess: user.lichessUsername ?? null,
+            chesscom: user.chesscomUsername ?? null,
           }}
           hasLichess={hasLichess}
           hasChessCom={hasChessCom}

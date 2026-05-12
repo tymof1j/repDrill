@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useAuthActions } from '@convex-dev/auth/react';
 import { ThemeToggle } from './ThemeToggle';
 import { LanguageToggle } from '@/components/i18n/LanguageToggle';
 import { updateLanguageAction } from '@/app/settings/actions';
@@ -33,6 +34,24 @@ export type SupportedLanguage = keyof typeof navCopy;
 
 export function normalizeLanguage(language: string | null | undefined): SupportedLanguage {
   return language === 'uk' ? 'uk' : 'en';
+}
+
+function BurgerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18" /><path d="M6 6l12 12" />
+    </svg>
+  );
 }
 
 function isActive(pathname: string, href: string) {
@@ -92,7 +111,6 @@ interface MobileNavProps {
   email?: string | null;
   lichessUsername?: string | null;
   chesscomUsername?: string | null;
-  signOutAction?: () => Promise<void>;
 }
 
 export function MobileNav({
@@ -100,12 +118,12 @@ export function MobileNav({
   email,
   lichessUsername,
   chesscomUsername,
-  signOutAction,
 }: MobileNavProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const lang = normalizeLanguage(language);
   const items = navCopy[lang].items;
+  const { signOut } = useAuthActions();
 
   // Lock body scroll when open
   useEffect(() => {
@@ -122,20 +140,6 @@ export function MobileNav({
   }, [open]);
 
   const close = () => setOpen(false);
-
-  const BurgerIcon = () => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="4" y1="7" x2="20" y2="7" />
-      <line x1="4" y1="12" x2="20" y2="12" />
-      <line x1="4" y1="17" x2="20" y2="17" />
-    </svg>
-  );
-
-  const CloseIcon = () => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 6 6 18" /><path d="M6 6l12 12" />
-    </svg>
-  );
 
   return (
     <>
@@ -282,20 +286,19 @@ export function MobileNav({
               </span>
               Other settings and export
             </Link>
-            {signOutAction && (
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="mt-0.5 flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-[14px] text-[color:var(--ink-faint)] transition-colors duration-150 hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--margin-red)]"
-                >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] text-[color:var(--ink-faint)]">
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                  </span>
-                  Sign out
-                </button>
-              </form>
+            {email && (
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="mt-0.5 flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-[14px] text-[color:var(--ink-faint)] transition-colors duration-150 hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--margin-red)]"
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] text-[color:var(--ink-faint)]">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                </span>
+                Sign out
+              </button>
             )}
           </div>
 

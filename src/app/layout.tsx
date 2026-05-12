@@ -6,6 +6,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { I18nProvider } from '@/components/i18n/I18nProvider';
 import { normalizeLanguage } from '@/lib/i18n/translations';
 import { cookies } from 'next/headers';
+import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
+import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -28,7 +30,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'RepDrill — Chess Opening Memory',
   description:
-    'A self-hosted chess opening repertoire trainer for annotated lines, FSRS recall, and game review.',
+    'A Convex-backed chess opening repertoire trainer for annotated lines, FSRS recall, game review, and portable PGN/JSON exports.',
 };
 
 export default async function RootLayout({
@@ -40,24 +42,28 @@ export default async function RootLayout({
   const initialLanguage = normalizeLanguage(cookieStore.get('repdrill-language')?.value);
 
   return (
-    <html
-      lang={initialLanguage}
-      data-scroll-behavior="smooth"
-      suppressHydrationWarning
-      className={`${geistSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
-    >
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('repdrill-theme');var t=(s==='evening'||s==='morning')?s:(window.matchMedia('(prefers-color-scheme: dark)').matches?'evening':'morning');if(t==='evening')document.documentElement.setAttribute('data-theme','evening');}catch(e){}})();`,
-          }}
-        />
-      </head>
-      <body className="min-h-full text-[color:var(--ink)]">
-        <I18nProvider initialLanguage={initialLanguage}>
-          <AppShell sidebar={<Sidebar />}>{children}</AppShell>
-        </I18nProvider>
-      </body>
-    </html>
+    <ConvexAuthNextjsServerProvider>
+      <html
+        lang={initialLanguage}
+        data-scroll-behavior="smooth"
+        suppressHydrationWarning
+        className={`${geistSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      >
+        <head>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(){try{var s=localStorage.getItem('repdrill-theme');var t=(s==='evening'||s==='morning')?s:(window.matchMedia('(prefers-color-scheme: dark)').matches?'evening':'morning');if(t==='evening')document.documentElement.setAttribute('data-theme','evening');}catch(e){}})();`,
+            }}
+          />
+        </head>
+        <body className="min-h-full text-[color:var(--ink)]">
+          <ConvexClientProvider>
+            <I18nProvider initialLanguage={initialLanguage}>
+              <AppShell sidebar={<Sidebar />}>{children}</AppShell>
+            </I18nProvider>
+          </ConvexClientProvider>
+        </body>
+      </html>
+    </ConvexAuthNextjsServerProvider>
   );
 }

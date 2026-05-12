@@ -1,12 +1,11 @@
 import Link from 'next/link';
+import { isAuthenticatedNextjs } from "@convex-dev/auth/nextjs/server";
 import { redirect } from 'next/navigation';
-import { auth, signIn } from '@/auth';
+import { SignInButton } from './SignInButton';
 
 export default async function LoginPage() {
-  const session = await auth();
-  if (session?.user) redirect('/courses');
-
-  const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
+  const isLoggedIn = await isAuthenticatedNextjs();
+  if (isLoggedIn) redirect('/courses');
 
   return (
     <div className="relative min-h-screen bg-[color:var(--paper)] text-[color:var(--ink)]">
@@ -41,7 +40,7 @@ export default async function LoginPage() {
           <div className="grid max-w-lg grid-cols-3 gap-3">
             {[
               ['FSRS', 'Recall'],
-              ['SQLite', 'Storage'],
+              ['Convex', 'Storage'],
               ['AGPL-3', 'License'],
             ].map(([value, label]) => (
               <div key={value} className="rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-3">
@@ -61,40 +60,15 @@ export default async function LoginPage() {
               Sign in
             </h2>
             <p className="mt-4 text-base leading-7 text-[color:var(--ink-soft)]">
-              RepDrill ties your library to your account. Nothing leaves the host you run it on.
+              RepDrill ties your library to your account. Your data is stored securely in the cloud.
             </p>
 
-            {googleConfigured ? (
-              <form
-                className="mt-10"
-                action={async () => {
-                  'use server';
-                  await signIn('google', { redirectTo: '/courses' });
-                }}
-              >
-                <button
-                  type="submit"
-                  className="group inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 text-sm font-semibold text-[color:var(--paper)] shadow-[0_14px_34px_rgba(23,26,23,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)]"
-                >
-                  Continue with Google
-                  <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
-                </button>
-              </form>
-            ) : (
-              <div className="mt-10 rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] p-5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--gilt)]">
-                  Configuration required
-                </p>
-                <p className="mt-3 text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
-                  Set <code className="notation text-[color:var(--ink)]">AUTH_GOOGLE_ID</code> and{' '}
-                  <code className="notation text-[color:var(--ink)]">AUTH_GOOGLE_SECRET</code> in{' '}
-                  <code className="notation text-[color:var(--ink)]">.env.local</code>, then restart the dev server.
-                </p>
-              </div>
-            )}
+            <div className="mt-10">
+              <SignInButton />
+            </div>
 
             <p className="mt-10 border-t border-[color:var(--paper-rule)] pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
-              Self-hosted · Open source · AGPL-3
+              Cloud-hosted · Open source · AGPL-3
             </p>
           </div>
         </div>

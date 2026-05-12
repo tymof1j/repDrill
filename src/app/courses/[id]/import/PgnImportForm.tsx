@@ -14,21 +14,19 @@ export function PgnImportForm({ courseId }: { courseId: string }) {
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = async (file: File) => {
-    const text = await file.text();
-    setPgn(text);
+  const handleFiles = async (files: FileList | File[]) => {
+    const texts = await Promise.all(Array.from(files).map((f) => f.text()));
+    setPgn(texts.join('\n\n'));
   };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
   };
 
   return (
@@ -78,6 +76,7 @@ export function PgnImportForm({ courseId }: { courseId: string }) {
           ref={fileRef}
           type="file"
           accept=".pgn"
+          multiple
           onChange={onFileChange}
           className="hidden"
         />
