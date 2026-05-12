@@ -110,7 +110,12 @@ export function ChessBoard({
       onMove: (orig, dest, captured) => onMoveRef.current?.(orig, dest, captured),
     });
     apiRef.current = Chessground(containerRef.current, config);
+
+    const ro = new ResizeObserver(() => apiRef.current?.redrawAll());
+    ro.observe(containerRef.current);
+
     return () => {
+      ro.disconnect();
       apiRef.current?.destroy();
       apiRef.current = null;
     };
