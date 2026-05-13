@@ -230,12 +230,12 @@ export function RepertoireViewer({
                     className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
                       i === path.length - 1
                         ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
-                        : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+                        : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
                     }`}
                   >
-                    {m.colorToMove === 'white' && (
+                    {i % 2 === 0 && (
                       <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
-                        {m.moveNumber}.
+                        {Math.floor(i / 2) + 1}.
                       </span>
                     )}{m.san}
                   </button>

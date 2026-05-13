@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useQuery, useConvexAuth } from 'convex/react';
+import { useConvex, useQuery, useConvexAuth } from 'convex/react';
 import { useRouter } from 'next/navigation';
 import { api } from '@convex/_generated/api';
 import { CourseLibrarySearch, type CourseListItem } from './CourseLibrarySearch';
@@ -11,13 +11,37 @@ import { AppSurface, PageHeader, SecondaryButton } from '@/components/ui/Premium
 export default function CoursesListPage() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const router = useRouter();
+  const convex = useConvex();
+  const [stats, setStats] = useState<{ totalLines: number; dueLines: number; newLines: number } | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/login');
   }, [isLoading, isAuthenticated, router]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!isAuthenticated) return;
+
+    (async () => {
+      try {
+        const lineStats = await convex.query(api.training.getLineStats, {});
+        if (!cancelled) setStats(lineStats);
+      } catch {
+        try {
+          const quick = await convex.query(api.training.getQuickStats, {});
+          if (!cancelled) setStats(quick);
+        } catch {
+          if (!cancelled) setStats(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, isAuthenticated]);
+
   const items = useQuery(api.courses.list);
-  const stats = useQuery(api.training.getLineStats);
   if (!isAuthenticated || items === undefined) return null;
 
   const courses: CourseListItem[] = items.map((item) => ({
