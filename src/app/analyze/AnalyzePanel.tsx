@@ -533,9 +533,10 @@ function DeviationViewer({
   >(null);
   const [loadingPlies, setLoadingPlies] = useState(false);
   const [chapterName, setChapterName] = useState('');
-  const [annotationDraft, setAnnotationDraft] = useState('');
+  const [annotationsByPly, setAnnotationsByPly] = useState<Record<number, string>>({});
   const [importPending, startImport] = useTransition();
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [annotationSaved, setAnnotationSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -578,6 +579,44 @@ function DeviationViewer({
       `${game.whiteUsername} vs ${game.blackUsername} · ${dateLabel}`,
     );
   }, [game.playedAt, game.whiteUsername, game.blackUsername]);
+
+  const annotationKey = `${game.source}:${game.gameId}:annotations`;
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(annotationKey);
+      if (!raw) {
+        setAnnotationsByPly({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      const next: Record<number, string> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        const idx = Number(k);
+        if (Number.isFinite(idx) && idx >= 0 && typeof v === 'string') next[idx] = v;
+      }
+      setAnnotationsByPly(next);
+    } catch {
+      setAnnotationsByPly({});
+    }
+  }, [annotationKey]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(annotationKey, JSON.stringify(annotationsByPly));
+        setAnnotationSaved(true);
+      } catch {
+        // no-op
+      }
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [annotationKey, annotationsByPly]);
+
+  useEffect(() => {
+    if (!annotationSaved) return;
+    const timer = window.setTimeout(() => setAnnotationSaved(false), 1100);
+    return () => window.clearTimeout(timer);
+  }, [annotationSaved]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -739,6 +778,33 @@ function DeviationViewer({
           <MoveList plies={pliesState} ply={ply} setPly={setPly} deviationPly={game.deviation.deviationPly} />
 
           <section className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-4">
+            <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Annotation
+              </p>
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+                {annotationSaved ? 'Saved' : 'Autosave'}
+              </span>
+            </div>
+            <textarea
+              value={annotationsByPly[ply] ?? ''}
+              onChange={(e) => {
+                const text = e.target.value;
+                setAnnotationSaved(false);
+                setAnnotationsByPly((prev) => {
+                  const next = { ...prev };
+                  if (text.trim()) next[ply] = text;
+                  else delete next[ply];
+                  return next;
+                });
+              }}
+              placeholder="Position annotation (auto-saved)"
+              rows={3}
+              className="mt-3 w-full border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
+            />
+          </section>
+
+          <section className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Import to course
             </p>
@@ -752,13 +818,6 @@ function DeviationViewer({
                 placeholder="Chapter name"
                 className="min-h-10 border border-[color:var(--paper-edge)] bg-transparent px-3 text-[15px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
               />
-              <textarea
-                value={annotationDraft}
-                onChange={(e) => setAnnotationDraft(e.target.value)}
-                placeholder="Optional annotation for current position"
-                rows={3}
-                className="border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
-              />
               <div className="flex flex-wrap items-center gap-3">
                 <PremiumButton
                   onClick={() => {
@@ -767,8 +826,7 @@ function DeviationViewer({
                     fd.set('pgn', game.pgn);
                     fd.set('playedAs', game.deviation.playedAs);
                     fd.set('chapterName', chapterName.trim());
-                    fd.set('annotation', annotationDraft.trim());
-                    fd.set('annotatedPly', String(ply));
+                    fd.set('annotationsByPly', JSON.stringify(annotationsByPly));
                     startImport(async () => {
                       try {
                         const r = await importAnalyzedGameToCourse(fd);

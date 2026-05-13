@@ -326,8 +326,7 @@ export async function importAnalyzedGameToCourse(formData: FormData): Promise<{ 
   const pgn = String(formData.get('pgn') ?? '').trim();
   const playedAs = String(formData.get('playedAs') ?? 'white') as 'white' | 'black';
   const chapterNameInput = String(formData.get('chapterName') ?? '').trim();
-  const annotation = String(formData.get('annotation') ?? '').trim();
-  const annotatedPly = Math.max(0, parseInt(String(formData.get('annotatedPly') ?? '0'), 10) || 0);
+  const annotationsRaw = String(formData.get('annotationsByPly') ?? '{}');
 
   if (!pgn) throw new Error('Missing PGN');
 
@@ -360,11 +359,19 @@ export async function importAnalyzedGameToCourse(formData: FormData): Promise<{ 
   const chapterCount = (await fetchQuery(api.courses.listChapters, { courseId: targetCourse._id }, { token })).length;
   const tree = buildTree(game);
 
-  // Attach manual annotation to the selected ply's resulting position.
-  if (annotation && annotatedPly > 0 && annotatedPly <= tree.moves.length) {
-    const idx = annotatedPly - 1;
-    const existing = tree.moves[idx]?.comment?.trim();
-    tree.moves[idx].comment = existing ? `${existing}\n\n${annotation}` : annotation;
+  // Attach per-position annotations gathered in Analyze viewer.
+  try {
+    const parsed = JSON.parse(annotationsRaw) as Record<string, string>;
+    for (const [k, text] of Object.entries(parsed)) {
+      const ply = Number(k);
+      if (!Number.isFinite(ply) || ply <= 0 || ply > tree.moves.length) continue;
+      if (typeof text !== 'string' || !text.trim()) continue;
+      const idx = ply - 1;
+      const existing = tree.moves[idx]?.comment?.trim();
+      tree.moves[idx].comment = existing ? `${existing}\n\n${text.trim()}` : text.trim();
+    }
+  } catch {
+    // ignore malformed local annotation payload
   }
 
   await fetchMutation(
