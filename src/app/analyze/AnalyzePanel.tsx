@@ -217,6 +217,9 @@ export function AnalyzePanel({
             Last sync: {new Date(lastSyncedAt).toLocaleString()}
           </p>
         )}
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+          Sync limit: once every 4 minutes.
+        </p>
         {error && (
           <p className="mt-4 border-l-2 border-[color:var(--margin-red)] pl-3 font-mono text-[11px] text-[color:var(--margin-red)]">
             {error}

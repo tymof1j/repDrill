@@ -31,6 +31,7 @@ type Props = {
     enabled?: boolean;
   };
   onMove?: (orig: string, dest: string, captured?: Piece) => void;
+  onPremoveSet?: (orig: string, dest: string) => void;
 };
 
 function buildConfig(props: {
@@ -42,6 +43,7 @@ function buildConfig(props: {
   movable?: Props['movable'];
   premovable?: Props['premovable'];
   onMove?: Props['onMove'];
+  onPremoveSet?: Props['onPremoveSet'];
 }): Config {
   const turnColor = props.fen.split(/\s+/)[1] === 'b' ? 'black' : 'white';
   const config: Config = {
@@ -68,6 +70,11 @@ function buildConfig(props: {
     },
     premovable: {
       enabled: props.premovable?.enabled ?? true,
+      events: props.onPremoveSet
+        ? {
+            set: (orig, dest) => props.onPremoveSet?.(orig as string, dest as string),
+          }
+        : undefined,
     },
   };
   if (props.onMove) {
@@ -88,6 +95,7 @@ export function ChessBoard({
   movable,
   premovable,
   onMove,
+  onPremoveSet,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<Api | null>(null);
@@ -108,6 +116,7 @@ export function ChessBoard({
       movable,
       premovable,
       onMove: (orig, dest, captured) => onMoveRef.current?.(orig, dest, captured),
+      onPremoveSet,
     });
     apiRef.current = Chessground(containerRef.current, config);
 
@@ -146,10 +155,15 @@ export function ChessBoard({
       },
       premovable: {
         enabled: premovable?.enabled ?? true,
+        events: onPremoveSet
+          ? {
+              set: (orig, dest) => onPremoveSet(orig as string, dest as string),
+            }
+          : undefined,
       },
     });
     apiRef.current.playPremove();
-  }, [fen, orientation, viewOnly, lastMove, arrows, movable, premovable]);
+  }, [fen, orientation, viewOnly, lastMove, arrows, movable, premovable, onPremoveSet]);
 
   return (
     <div className="mx-auto aspect-square w-full max-w-none md:max-w-[480px]">

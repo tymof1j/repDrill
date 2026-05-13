@@ -24,8 +24,10 @@ import {
   Stamp,
   StatTile,
 } from '@/components/ui/Premium';
-import { submitLineRatings } from './submitRatings';
 import type { TrainingLine, LineStep } from './types';
+import { useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 
 type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 
@@ -58,7 +60,9 @@ export function TrainingSession({ initialLines }: Props) {
   const [notationError, setNotationError] = useState<string | null>(null);
   const [needsManualNext, setNeedsManualNext] = useState(false);
   const [tracePreviewIndex, setTracePreviewIndex] = useState<number | null>(null);
+  const [queuedPremove, setQueuedPremove] = useState<{ from: string; to: string } | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
+  const submitRatings = useMutation(api.training.submitLineRatings);
 
   const [sessionStats, setSessionStats] = useState({
     linesCompleted: 0,
@@ -87,6 +91,7 @@ export function TrainingSession({ initialLines }: Props) {
     setNotationError(null);
     setNeedsManualNext(false);
     setTracePreviewIndex(null);
+    setQueuedPremove(null);
     setLinePhase(line.isNew ? 'learn' : 'drill');
   }, [line, lineIndex]);
 
@@ -147,14 +152,20 @@ export function TrainingSession({ initialLines }: Props) {
   useEffect(() => {
     if (linePhase !== 'line-done') return;
     if (lineResults.length > 0) {
-      submitLineRatings(lineResults);
+      submitRatings({
+        results: lineResults.map((r) => ({
+          cardId: r.cardId as Id<'reviewCards'>,
+          correct: r.correct,
+          responseTimeMs: r.responseTimeMs,
+        })),
+      }).catch(() => undefined);
     }
     setSessionStats((s) => ({
       ...s,
       linesCompleted: s.linesCompleted + 1,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linePhase]);
+  }, [linePhase, lineResults, submitRatings]);
 
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
@@ -272,6 +283,11 @@ export function TrainingSession({ initialLines }: Props) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === ' ' && needsManualNext && feedback?.type === 'wrong') {
+        e.preventDefault();
+        continueAfterWrong();
+        return;
+      }
       if (e.key === 'Tab' && waitingForUser) {
         e.preventDefault();
         setInputMode((m) => {
@@ -283,7 +299,19 @@ export function TrainingSession({ initialLines }: Props) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [waitingForUser]);
+  }, [waitingForUser, needsManualNext, feedback]);
+
+  useEffect(() => {
+    if (!queuedPremove || !waitingForUser || !step?.isUserMove || linePhase !== 'drill' || needsManualNext) {
+      return;
+    }
+    const { from, to } = queuedPremove;
+    setQueuedPremove(null);
+    const timer = window.setTimeout(() => {
+      tryMove(from, to);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [queuedPremove, waitingForUser, step, linePhase, needsManualNext, tryMove]);
 
   const nextLine = () => {
     const next = lineIndex + 1;
@@ -465,6 +493,9 @@ export function TrainingSession({ initialLines }: Props) {
                 }
                 premovable={{ enabled: true }}
                 onMove={onBoardMove}
+                onPremoveSet={(orig, dest) => {
+                  setQueuedPremove({ from: orig, to: dest });
+                }}
                 arrows={
                   feedback?.type === 'wrong' && step
                     ? [{ orig: step.uci.slice(0, 2), dest: step.uci.slice(2, 4), brush: 'green' }]
@@ -553,7 +584,8 @@ export function TrainingSession({ initialLines }: Props) {
 
           <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
             <kbd className="font-mono">tab</kbd> toggle input ·{' '}
-            <kbd className="font-mono">enter</kbd> submit
+            <kbd className="font-mono">enter</kbd> submit ·{' '}
+            <kbd className="font-mono">space</kbd> continue
           </p>
         </div>
 
@@ -638,11 +670,11 @@ export function TrainingSession({ initialLines }: Props) {
                 {traceTokens.map((token) => (
                   <li
                     key={token.key}
-                    className={`notation rounded-lg px-2.5 py-1 text-[16px] leading-none md:text-[17px] ${
+                    className={`notation rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 md:text-[17px] ${
                       tracePreviewIndex === token.index
                         ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
-                        : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)]'
-                    } ${needsManualNext && feedback?.type === 'wrong' ? 'cursor-pointer' : ''}`}
+                        : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+                    } ${needsManualNext && feedback?.type === 'wrong' ? 'cursor-pointer' : 'cursor-default'}`}
                     onClick={() => {
                       if (!(needsManualNext && feedback?.type === 'wrong')) return;
                       setTracePreviewIndex(token.index);

@@ -9,6 +9,7 @@ import { fetchChessComGames } from '@/lib/games/chesscom';
 import { detectDeviation } from '@/lib/games/deviation';
 import type { GameSource } from '@/lib/games/types';
 import type { UserBook } from '@/lib/games/deviation';
+import { Chess } from 'chess.js';
 
 export type GameAnalysisRow = {
   source: GameSource;
@@ -291,9 +292,27 @@ export async function getGameDeviationDetail(formData: FormData): Promise<{
   // TODO: Load actual user book from Convex
   const book: UserBook = { white: new Map(), black: new Map() };
   const dev = detectDeviation(pgn, book, usernameLower, whiteUsername, blackUsername);
+  const fallbackPlies =
+    dev.plies.length > 0
+      ? dev.plies
+      : (() => {
+          try {
+            const chess = new Chess();
+            chess.loadPgn(pgn, { strict: false });
+            const verbose = chess.history({ verbose: true });
+            return verbose.map((m) => ({
+              san: m.san,
+              uci: `${m.from}${m.to}${m.promotion ?? ''}`,
+              fenBefore: m.before.split(' ').slice(0, 4).join(' '),
+              fenAfter: m.after.split(' ').slice(0, 4).join(' '),
+            }));
+          } catch {
+            return [];
+          }
+        })();
   return {
     pgn,
-    plies: dev.plies,
+    plies: fallbackPlies,
     deviationPly: dev.deviationPly,
     expectedSans: dev.expectedSans,
     playedAs: dev.playedAs,
