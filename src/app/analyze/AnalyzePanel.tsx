@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   PremiumButton,
   SecondaryButton,
@@ -73,6 +74,8 @@ export function AnalyzePanel({
   hasLichess: boolean;
   hasChessCom: boolean;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const CACHE_KEY = 'repdrill-analyze-last-v1';
   const [source, setSource] = useState<Source>(hasLichess ? 'lichess' : 'chesscom');
   const [limit, setLimit] = useState<10 | 25 | 50>(10);
@@ -156,23 +159,56 @@ export function AnalyzePanel({
     });
   };
 
-  const onOpenGame = (g: GameAnalysisRow) => {
+  const onOpenGame = (g: GameAnalysisRow, plyOverride?: number) => {
+    const gameKey = `${g.source}:${g.gameId}`;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('game', gameKey);
+    const nextPly =
+      plyOverride ??
+      (g.deviation.kind === 'left_book' && g.deviation.deviationPly
+        ? g.deviation.deviationPly
+        : g.deviation.totalPlies);
+    params.set('ply', String(nextPly));
+    router.push(`/analyze?${params.toString()}`);
     setActiveGame(g);
-    // Jump to deviation if it exists; otherwise start at 0.
-    if (g.deviation.kind === 'left_book' && g.deviation.deviationPly) {
-      setActivePly(g.deviation.deviationPly);
-    } else {
-      setActivePly(g.deviation.totalPlies);
-    }
+    setActivePly(nextPly);
   };
+
+  useEffect(() => {
+    if (!result || result.rows.length === 0) return;
+    const gameParam = searchParams.get('game');
+    if (!gameParam) return;
+    const plyParam = parseInt(searchParams.get('ply') ?? '', 10);
+    const found = result.rows.find((r) => `${r.source}:${r.gameId}` === gameParam);
+    if (!found) return;
+    if (!activeGame || activeGame.gameId !== found.gameId || activeGame.source !== found.source) {
+      onOpenGame(found, Number.isFinite(plyParam) && plyParam >= 0 ? plyParam : undefined);
+      return;
+    }
+    if (Number.isFinite(plyParam) && plyParam >= 0 && plyParam !== activePly) {
+      setActivePly(plyParam);
+    }
+  }, [result, searchParams, activeGame, activePly]);
 
   if (activeGame) {
     return (
       <DeviationViewer
         game={activeGame}
         ply={activePly}
-        setPly={setActivePly}
-        onBack={() => setActiveGame(null)}
+        setPly={(p) => {
+          setActivePly(p);
+          const params = new URLSearchParams(searchParams.toString());
+          params.set('ply', String(p));
+          router.replace(`/analyze?${params.toString()}`);
+        }}
+        onBack={() => {
+          setActiveGame(null);
+          const params = new URLSearchParams(searchParams.toString());
+          params.delete('game');
+          params.delete('ply');
+          const qs = params.toString();
+          router.push(qs ? `/analyze?${qs}` : '/analyze');
+        }}
       />
     );
   }
@@ -501,8 +537,9 @@ function DeviationViewer({
   const [importPending, startImport] = useTransition();
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
-  // Lazily fetch full ply list (we don't include it in the batch result for size).
-  if (pliesState === null && !loadingPlies) {
+  useEffect(() => {
+    let cancelled = false;
+    setPliesState(null);
     setLoadingPlies(true);
     const fd = new FormData();
     fd.set('pgn', game.pgn);
@@ -512,18 +549,63 @@ function DeviationViewer({
     );
     fd.set('white', game.whiteUsername);
     fd.set('black', game.blackUsername);
-    import('./actions').then(async (m) => {
-      const detail = await m.getGameDeviationDetail(fd);
-      setPliesState(detail.plies);
+    import('./actions')
+      .then((m) => m.getGameDeviationDetail(fd))
+      .then((detail) => {
+        if (!cancelled) setPliesState(detail.plies);
+      })
+      .catch(() => {
+        if (!cancelled) setPliesState([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPlies(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [game.pgn, game.deviation.playedAs, game.whiteUsername, game.blackUsername]);
+
+  const totalPlies = pliesState?.length ?? 0;
+
+  useEffect(() => {
+    const date = new Date(game.playedAt);
+    const dateLabel = date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     });
-  }
+    setChapterName(
+      `${game.whiteUsername} vs ${game.blackUsername} · ${dateLabel}`,
+    );
+  }, [game.playedAt, game.whiteUsername, game.blackUsername]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setPly(Math.max(0, ply - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setPly(Math.min(totalPlies, ply + 1));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ply, setPly, totalPlies]);
+
+  useEffect(() => {
+    if (!pliesState) return;
+    if (ply < 0) setPly(0);
+    else if (ply > totalPlies) setPly(totalPlies);
+  }, [pliesState, ply, totalPlies, setPly]);
 
   if (!pliesState) {
     return (
       <section className="space-y-6">
         <GhostButton onClick={onBack}>← Back to games</GhostButton>
         <p className="font-display-italic text-[15px] text-[color:var(--ink-soft)]">
-          Loading game…
+          {loadingPlies ? 'Loading game…' : 'Could not load moves.'}
         </p>
       </section>
     );
@@ -555,34 +637,6 @@ function DeviationViewer({
   }
 
   const orientation = game.deviation.playedAs;
-  const totalPlies = pliesState.length;
-
-  useEffect(() => {
-    const date = new Date(game.playedAt);
-    const dateLabel = date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-    setChapterName(
-      `${game.whiteUsername} vs ${game.blackUsername} · ${dateLabel}`,
-    );
-  }, [game.playedAt, game.whiteUsername, game.blackUsername]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setPly(Math.max(0, ply - 1));
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setPly(Math.min(totalPlies, ply + 1));
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [ply, setPly, totalPlies]);
 
   return (
     <section className="space-y-6">
