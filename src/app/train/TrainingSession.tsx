@@ -57,6 +57,7 @@ export function TrainingSession({ initialLines }: Props) {
   const [notationInput, setNotationInput] = useState('');
   const [notationError, setNotationError] = useState<string | null>(null);
   const [needsManualNext, setNeedsManualNext] = useState(false);
+  const [tracePreviewIndex, setTracePreviewIndex] = useState<number | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
 
   const [sessionStats, setSessionStats] = useState({
@@ -85,6 +86,7 @@ export function TrainingSession({ initialLines }: Props) {
     setNotationInput('');
     setNotationError(null);
     setNeedsManualNext(false);
+    setTracePreviewIndex(null);
     setLinePhase(line.isNew ? 'learn' : 'drill');
   }, [line, lineIndex]);
 
@@ -131,7 +133,7 @@ export function TrainingSession({ initialLines }: Props) {
       const advance = setTimeout(() => {
         setShowAnnotation(false);
         setStepIndex((i) => i + 1);
-      }, s.annotation ? 700 : 0);
+      }, s.annotation ? 700 : 80);
       return () => clearTimeout(advance);
     }
 
@@ -156,21 +158,30 @@ export function TrainingSession({ initialLines }: Props) {
 
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
-      if (!step || linePhase !== 'drill' || (!waitingForUser && !step.isUserMove)) return;
+      if (!line || !step || linePhase !== 'drill') return;
+
+      let targetStep: LineStep | null = null;
+      if (waitingForUser && step.isUserMove) {
+        targetStep = step;
+      } else if (!waitingForUser && !step.isUserMove) {
+        const maybeNext = line.steps[stepIndex + 1] ?? null;
+        if (maybeNext?.isUserMove) targetStep = maybeNext;
+      }
+      if (!targetStep) return;
 
       try {
-        const chess = new Chess(step.parentFen + ' 0 1');
+        const chess = new Chess(targetStep.parentFen + ' 0 1');
         const result = chess.move({ from, to, promotion: promotion ?? 'q' });
         if (!result) return;
 
         const playedUci = from + to + (result.promotion ?? '');
-        const correct = playedUci === step.uci || result.san === step.san;
+        const correct = playedUci === targetStep.uci || result.san === targetStep.san;
 
         const responseTimeMs = Date.now() - moveStartTime;
-        if (step.cardId) {
+        if (targetStep.cardId) {
           setLineResults((prev) => [
             ...prev,
-            { cardId: step.cardId!, correct, responseTimeMs },
+            { cardId: targetStep.cardId!, correct, responseTimeMs },
           ]);
         }
         if (correct) setLineCorrect((c) => c + 1);
@@ -181,38 +192,42 @@ export function TrainingSession({ initialLines }: Props) {
           totalWrong: s.totalWrong + (correct ? 0 : 1),
         }));
 
-        setBoardFen(step.childFen + ' 0 1');
-        setLastMoveUci([step.uci.slice(0, 2), step.uci.slice(2, 4)]);
+        setBoardFen(targetStep.childFen + ' 0 1');
+        setLastMoveUci([targetStep.uci.slice(0, 2), targetStep.uci.slice(2, 4)]);
         setWaitingForUser(false);
         setNotationInput('');
         setNotationError(null);
+        setTracePreviewIndex(null);
 
         if (correct) {
-          setFeedback({ type: 'correct', text: step.san });
-          setShowAnnotation(!!step.annotation);
+          setFeedback({ type: 'correct', text: targetStep.san });
+          setShowAnnotation(!!targetStep.annotation);
           setNeedsManualNext(false);
         } else {
           setFeedback({
             type: 'wrong',
-            text: `You played ${result.san}. Correct: ${step.san}`,
+            text: `You played ${result.san}. Correct: ${targetStep.san}`,
           });
-          setShowAnnotation(!!step.annotation);
+          setShowAnnotation(!!targetStep.annotation);
           setNeedsManualNext(true);
         }
 
         if (correct) {
-          const delay = step.annotation ? 2000 : 800;
+          const delay = targetStep.annotation ? 2000 : 800;
           setTimeout(() => {
             setFeedback(null);
             setShowAnnotation(false);
-            setStepIndex((i) => i + 1);
+            setStepIndex((i) => {
+              if (targetStep === step) return i + 1;
+              return i + 2;
+            });
           }, delay);
         }
       } catch {
         // invalid
       }
     },
-    [step, waitingForUser, linePhase, moveStartTime],
+    [line, step, stepIndex, waitingForUser, linePhase, moveStartTime],
   );
 
   const onBoardMove = useCallback(
@@ -294,6 +309,7 @@ export function TrainingSession({ initialLines }: Props) {
     setNeedsManualNext(false);
     setFeedback(null);
     setShowAnnotation(false);
+    setTracePreviewIndex(null);
     setStepIndex((i) => i + 1);
   };
 
@@ -371,8 +387,14 @@ export function TrainingSession({ initialLines }: Props) {
       : Math.min(stepIndex + (waitingForUser ? 0 : 1), line.steps.length);
   const traceTokens = line.steps.slice(0, traceUpTo).map((s, i) => {
     const sideToMove = s.parentFen.split(/\s+/)[1] === 'w' ? 'white' : 'black';
-    const prefix = sideToMove === 'white' ? `${s.moveNumber}.` : `${s.moveNumber}...`;
-    return { key: `${i}-${s.uci}`, text: `${prefix}${s.san}` };
+    const prefix = sideToMove === 'white' ? `${s.moveNumber}.` : '';
+    return {
+      key: `${i}-${s.uci}`,
+      text: `${prefix}${s.san}`,
+      childFen: s.childFen,
+      uci: s.uci,
+      index: i,
+    };
   });
 
   return (
@@ -514,11 +536,12 @@ export function TrainingSession({ initialLines }: Props) {
                   </Link>
                 </div>
               )}
-              {needsManualNext && feedback?.type === 'wrong' && (
-                <div className="pt-1">
-                  <PremiumButton onClick={continueAfterWrong}>Next</PremiumButton>
-                </div>
-              )}
+            </div>
+          )}
+
+          {needsManualNext && feedback?.type === 'wrong' && (
+            <div className="mt-4">
+              <PremiumButton onClick={continueAfterWrong}>Continue</PremiumButton>
             </div>
           )}
 
@@ -615,7 +638,17 @@ export function TrainingSession({ initialLines }: Props) {
                 {traceTokens.map((token) => (
                   <li
                     key={token.key}
-                    className="notation rounded-xl bg-[color:var(--paper-deep)] px-3 py-1.5 text-[20px] leading-none text-[color:var(--ink)] md:text-[22px]"
+                    className={`notation rounded-lg px-2.5 py-1 text-[16px] leading-none md:text-[17px] ${
+                      tracePreviewIndex === token.index
+                        ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
+                        : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)]'
+                    } ${needsManualNext && feedback?.type === 'wrong' ? 'cursor-pointer' : ''}`}
+                    onClick={() => {
+                      if (!(needsManualNext && feedback?.type === 'wrong')) return;
+                      setTracePreviewIndex(token.index);
+                      setBoardFen(token.childFen + ' 0 1');
+                      setLastMoveUci([token.uci.slice(0, 2), token.uci.slice(2, 4)]);
+                    }}
                   >
                     {token.text}
                   </li>
