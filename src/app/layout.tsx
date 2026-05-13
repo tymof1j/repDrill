@@ -8,6 +8,7 @@ import { normalizeLanguage } from '@/lib/i18n/translations';
 import { cookies } from 'next/headers';
 import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -61,6 +62,7 @@ export default async function RootLayout({
             <I18nProvider initialLanguage={initialLanguage}>
               <AppShell sidebar={<Sidebar />}>{children}</AppShell>
             </I18nProvider>
+            <SpeedInsights />
           </ConvexClientProvider>
         </body>
       </html>
