@@ -201,19 +201,21 @@ export function RepertoireViewer({
           </div>
         </div>
 
-        <DiagramFrame
-          caption={selectedChapterName ? `Filtered to: ${selectedChapterName}` : `§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}
-        >
-          <ChessBoard
-            fen={currentFen + ' 0 1'}
-            orientation={repertoireColor}
-            lastMove={lastMove}
-            arrows={arrows}
-            viewOnly={false}
-            movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
-            onMove={onBoardMove}
-          />
-        </DiagramFrame>
+        <div className="-mx-5 md:mx-0">
+          <DiagramFrame
+            caption={selectedChapterName ? `Filtered to: ${selectedChapterName}` : `§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}
+          >
+            <ChessBoard
+              fen={currentFen + ' 0 1'}
+              orientation={repertoireColor}
+              lastMove={lastMove}
+              arrows={arrows}
+              viewOnly={false}
+              movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
+              onMove={onBoardMove}
+            />
+          </DiagramFrame>
+        </div>
 
         <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
           <button
@@ -243,7 +245,7 @@ export function RepertoireViewer({
         </div>
 
         {/* Keyboard hint */}
-        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
+        <p className="mt-3 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
           <kbd className="font-mono">v</kbd> arrows · <kbd className="font-mono">/</kbd> search annotations
         </p>
       </div>

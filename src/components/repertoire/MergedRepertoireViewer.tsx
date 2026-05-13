@@ -137,9 +137,11 @@ export function MergedRepertoireViewer({
           </p>
         </div>
 
-        <DiagramFrame caption={`§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}>
-          <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} />
-        </DiagramFrame>
+        <div className="-mx-5 md:mx-0">
+          <DiagramFrame caption={`§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}>
+            <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} />
+          </DiagramFrame>
+        </div>
 
         <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
           <button
