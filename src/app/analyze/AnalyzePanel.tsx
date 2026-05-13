@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import {
   PremiumButton,
   SecondaryButton,
@@ -23,6 +21,7 @@ const ChessBoard = dynamic(
 );
 import {
   analyzeRecentGames,
+  loadCachedAnalyze,
   type AnalyzeBatchResult,
   type GameAnalysisRow,
 } from './actions';
@@ -84,7 +83,8 @@ export function AnalyzePanel({
 
   const username =
     source === 'lichess' ? initialUsername.lichess : initialUsername.chesscom;
-  const cached = useQuery(api.analyze.getCached, { source, limit: 10 });
+  const [cached, setCached] = useState<AnalyzeBatchResult | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
@@ -106,34 +106,28 @@ export function AnalyzePanel({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await loadCachedAnalyze(source, 10);
+        if (cancelled || !loaded) return;
+        setCached(loaded.result);
+        setLastSyncedAt(loaded.lastSyncedAt);
+      } catch {
+        // no-op
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  useEffect(() => {
     if (result) return;
     if (!cached || cached.rows.length === 0) return;
-    const rows: GameAnalysisRow[] = cached.rows.map((row) => ({
-      source: row.source,
-      gameId: row.gameId,
-      url: row.url,
-      whiteUsername: row.whiteUsername,
-      blackUsername: row.blackUsername,
-      result: row.result,
-      playedAt: new Date(row.playedAt).toISOString(),
-      opening: row.opening,
-      timeControl: row.timeControl,
-      pgn: row.pgn,
-      deviation: {
-        kind: row.deviationKind,
-        playedAs: row.playedAs,
-        deviationMoveNumber: row.deviationMoveNumber,
-        deviationPly: row.deviationPly,
-        playedSan: row.playedSan,
-        expectedSans: row.expectedSans,
-        deviationFen: row.deviationFen,
-        totalPlies: row.totalPlies,
-      },
-    }));
-    setResult(summarizeRows(rows));
+    setResult(cached);
   }, [cached, result]);
 
-  const lastSyncedAt = cached?.lastSyncedAt ?? null;
   const nextSyncAt = lastSyncedAt ? lastSyncedAt + SYNC_COOLDOWN_MS : 0;
   const remainingMs = Math.max(0, nextSyncAt - nowMs);
   const syncBlocked = remainingMs > 0;
@@ -147,6 +141,8 @@ export function AnalyzePanel({
       try {
         const r = await analyzeRecentGames(fd);
         setResult(r);
+        setCached(r);
+        setLastSyncedAt(Date.now());
         try {
           window.localStorage.setItem(CACHE_KEY, JSON.stringify({ result: r, source, limit }));
         } catch {

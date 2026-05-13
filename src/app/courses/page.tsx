@@ -42,7 +42,6 @@ export default function CoursesListPage() {
   }, [convex, isAuthenticated]);
 
   const items = useQuery(api.courses.list);
-  const quickStats = useQuery(api.training.getQuickStats);
   if (!isAuthenticated || items === undefined) return null;
 
   const courses: CourseListItem[] = items.map((item) => ({
@@ -51,7 +50,7 @@ export default function CoursesListPage() {
     color: item.color,
     description: item.description ?? null,
   }));
-  const visibleStats = stats ?? quickStats ?? null;
+  const visibleStats = stats;
 
   return (
     <AppSurface>

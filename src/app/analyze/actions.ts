@@ -46,6 +46,41 @@ export type AnalyzeBatchResult = {
   topDeviations: { fen: string; moveNumber?: number; played?: string; count: number }[];
 };
 
+function summarizeRows(rows: GameAnalysisRow[]): AnalyzeBatchResult {
+  const totals = { inBook: 0, leftBook: 0, noRepertoire: 0, parseError: 0 };
+  const deviationCounts = new Map<
+    string,
+    { fen: string; moveNumber?: number; played?: string; count: number }
+  >();
+
+  for (const row of rows) {
+    if (row.deviation.kind === 'in_book') totals.inBook++;
+    else if (row.deviation.kind === 'left_book') totals.leftBook++;
+    else if (row.deviation.kind === 'no_repertoire_for_color') totals.noRepertoire++;
+    else totals.parseError++;
+
+    if (row.deviation.kind === 'left_book' && row.deviation.deviationFen) {
+      const key = `${row.deviation.deviationFen}::${row.deviation.playedSan ?? ''}`;
+      const existing = deviationCounts.get(key);
+      if (existing) existing.count++;
+      else {
+        deviationCounts.set(key, {
+          fen: row.deviation.deviationFen,
+          moveNumber: row.deviation.deviationMoveNumber,
+          played: row.deviation.playedSan,
+          count: 1,
+        });
+      }
+    }
+  }
+
+  const topDeviations = Array.from(deviationCounts.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  return { rows, totals, topDeviations };
+}
+
 async function requireToken() {
   const token = await convexAuthNextjsToken();
   if (!token) redirect('/login');
@@ -166,34 +201,77 @@ export async function analyzeRecentGames(formData: FormData): Promise<AnalyzeBat
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  await fetchMutation(
-    api.analyze.storeSync,
-    {
-      source,
-      rows: rows.map((row) => ({
-        gameId: row.gameId,
-        url: row.url,
-        whiteUsername: row.whiteUsername,
-        blackUsername: row.blackUsername,
-        result: row.result,
-        playedAt: new Date(row.playedAt).getTime(),
-        opening: row.opening,
-        timeControl: row.timeControl,
-        pgn: row.pgn,
-        playedAs: row.deviation.playedAs,
-        deviationKind: row.deviation.kind,
-        deviationMoveNumber: row.deviation.deviationMoveNumber,
-        deviationPly: row.deviation.deviationPly,
-        playedSan: row.deviation.playedSan,
-        expectedSans: row.deviation.expectedSans,
-        deviationFen: row.deviation.deviationFen,
-        totalPlies: row.deviation.totalPlies,
-      })),
-    },
-    { token },
-  );
+  try {
+    await fetchMutation(
+      api.analyze.storeSync,
+      {
+        source,
+        rows: rows.map((row) => ({
+          gameId: row.gameId,
+          url: row.url,
+          whiteUsername: row.whiteUsername,
+          blackUsername: row.blackUsername,
+          result: row.result,
+          playedAt: new Date(row.playedAt).getTime(),
+          opening: row.opening,
+          timeControl: row.timeControl,
+          pgn: row.pgn,
+          playedAs: row.deviation.playedAs,
+          deviationKind: row.deviation.kind,
+          deviationMoveNumber: row.deviation.deviationMoveNumber,
+          deviationPly: row.deviation.deviationPly,
+          playedSan: row.deviation.playedSan,
+          expectedSans: row.deviation.expectedSans,
+          deviationFen: row.deviation.deviationFen,
+          totalPlies: row.deviation.totalPlies,
+        })),
+      },
+      { token },
+    );
+  } catch {
+    // Keep analyze flow functional even if Convex analyze functions are not deployed yet.
+  }
 
   return { rows, totals, topDeviations };
+}
+
+export async function loadCachedAnalyze(
+  source: GameSource,
+  limit: number,
+): Promise<{ result: AnalyzeBatchResult; lastSyncedAt: number | null } | null> {
+  const token = await requireToken();
+  try {
+    const cached = await fetchQuery(api.analyze.getCached, { source, limit }, { token });
+    if (!cached || cached.rows.length === 0) return null;
+    const rows: GameAnalysisRow[] = cached.rows.map((row) => ({
+      source: row.source,
+      gameId: row.gameId,
+      url: row.url,
+      whiteUsername: row.whiteUsername,
+      blackUsername: row.blackUsername,
+      result: row.result,
+      playedAt: new Date(row.playedAt).toISOString(),
+      opening: row.opening,
+      timeControl: row.timeControl,
+      pgn: row.pgn,
+      deviation: {
+        kind: row.deviationKind,
+        playedAs: row.playedAs,
+        deviationMoveNumber: row.deviationMoveNumber,
+        deviationPly: row.deviationPly,
+        playedSan: row.playedSan,
+        expectedSans: row.expectedSans,
+        deviationFen: row.deviationFen,
+        totalPlies: row.totalPlies,
+      },
+    }));
+    return {
+      result: summarizeRows(rows),
+      lastSyncedAt: cached.lastSyncedAt ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Re-detect deviation for a single PGN */
