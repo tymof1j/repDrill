@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery } from "convex/nextjs";
+import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 import { fetchLichessGames } from '@/lib/games/lichess';
 import { fetchChessComGames } from '@/lib/games/chesscom';
@@ -165,6 +165,33 @@ export async function analyzeRecentGames(formData: FormData): Promise<AnalyzeBat
   const topDeviations = Array.from(deviationCounts.values())
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
+
+  await fetchMutation(
+    api.analyze.storeSync,
+    {
+      source,
+      rows: rows.map((row) => ({
+        gameId: row.gameId,
+        url: row.url,
+        whiteUsername: row.whiteUsername,
+        blackUsername: row.blackUsername,
+        result: row.result,
+        playedAt: new Date(row.playedAt).getTime(),
+        opening: row.opening,
+        timeControl: row.timeControl,
+        pgn: row.pgn,
+        playedAs: row.deviation.playedAs,
+        deviationKind: row.deviation.kind,
+        deviationMoveNumber: row.deviation.deviationMoveNumber,
+        deviationPly: row.deviation.deviationPly,
+        playedSan: row.deviation.playedSan,
+        expectedSans: row.deviation.expectedSans,
+        deviationFen: row.deviation.deviationFen,
+        totalPlies: row.deviation.totalPlies,
+      })),
+    },
+    { token },
+  );
 
   return { rows, totals, topDeviations };
 }

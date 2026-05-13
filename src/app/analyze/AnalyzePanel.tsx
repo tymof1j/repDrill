@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import {
   PremiumButton,
   SecondaryButton,
@@ -28,6 +30,39 @@ import {
 type Source = 'lichess' | 'chesscom';
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const SYNC_COOLDOWN_MS = 4 * 60 * 1000;
+
+function summarizeRows(rows: GameAnalysisRow[]): AnalyzeBatchResult {
+  const totals = { inBook: 0, leftBook: 0, noRepertoire: 0, parseError: 0 };
+  const deviationCounts = new Map<
+    string,
+    { fen: string; moveNumber?: number; played?: string; count: number }
+  >();
+  for (const row of rows) {
+    if (row.deviation.kind === 'in_book') totals.inBook++;
+    else if (row.deviation.kind === 'left_book') totals.leftBook++;
+    else if (row.deviation.kind === 'no_repertoire_for_color') totals.noRepertoire++;
+    else totals.parseError++;
+
+    if (row.deviation.kind === 'left_book' && row.deviation.deviationFen) {
+      const key = `${row.deviation.deviationFen}::${row.deviation.playedSan ?? ''}`;
+      const existing = deviationCounts.get(key);
+      if (existing) existing.count++;
+      else {
+        deviationCounts.set(key, {
+          fen: row.deviation.deviationFen,
+          moveNumber: row.deviation.deviationMoveNumber,
+          played: row.deviation.playedSan,
+          count: 1,
+        });
+      }
+    }
+  }
+  const topDeviations = Array.from(deviationCounts.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+  return { rows, totals, topDeviations };
+}
 
 export function AnalyzePanel({
   initialUsername,
@@ -49,6 +84,13 @@ export function AnalyzePanel({
 
   const username =
     source === 'lichess' ? initialUsername.lichess : initialUsername.chesscom;
+  const cached = useQuery(api.analyze.getCached, { source, limit: 10 });
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
 
   useEffect(() => {
     try {
@@ -62,6 +104,39 @@ export function AnalyzePanel({
       // no-op
     }
   }, []);
+
+  useEffect(() => {
+    if (result) return;
+    if (!cached || cached.rows.length === 0) return;
+    const rows: GameAnalysisRow[] = cached.rows.map((row) => ({
+      source: row.source,
+      gameId: row.gameId,
+      url: row.url,
+      whiteUsername: row.whiteUsername,
+      blackUsername: row.blackUsername,
+      result: row.result,
+      playedAt: new Date(row.playedAt).toISOString(),
+      opening: row.opening,
+      timeControl: row.timeControl,
+      pgn: row.pgn,
+      deviation: {
+        kind: row.deviationKind,
+        playedAs: row.playedAs,
+        deviationMoveNumber: row.deviationMoveNumber,
+        deviationPly: row.deviationPly,
+        playedSan: row.playedSan,
+        expectedSans: row.expectedSans,
+        deviationFen: row.deviationFen,
+        totalPlies: row.totalPlies,
+      },
+    }));
+    setResult(summarizeRows(rows));
+  }, [cached, result]);
+
+  const lastSyncedAt = cached?.lastSyncedAt ?? null;
+  const nextSyncAt = lastSyncedAt ? lastSyncedAt + SYNC_COOLDOWN_MS : 0;
+  const remainingMs = Math.max(0, nextSyncAt - nowMs);
+  const syncBlocked = remainingMs > 0;
 
   const onAnalyze = () => {
     setError(null);
@@ -123,9 +198,9 @@ export function AnalyzePanel({
             <PremiumButton
               type="button"
               onClick={onAnalyze}
-              disabled={pending || !username}
+              disabled={pending || !username || syncBlocked}
             >
-              {pending ? 'Analyzing…' : 'Analyze'}
+              {pending ? 'Analyzing…' : syncBlocked ? `Wait ${Math.ceil(remainingMs / 1000)}s` : 'Analyze'}
             </PremiumButton>
             {!username && (
               <SecondaryButton href="/settings">Add username</SecondaryButton>
@@ -139,6 +214,11 @@ export function AnalyzePanel({
               {username}
             </span>{' '}
             on {source === 'lichess' ? 'Lichess' : 'Chess.com'}.
+          </p>
+        )}
+        {lastSyncedAt && (
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
+            Last sync: {new Date(lastSyncedAt).toLocaleString()}
           </p>
         )}
         {error && (

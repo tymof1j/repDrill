@@ -250,39 +250,6 @@ export function RepertoireViewer({
 
       {/* ── Right page: line + branches + annotation + search ─ */}
       <div className="space-y-10">
-        {/* Line */}
-        <section>
-          <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-            Line
-          </p>
-          {path.length === 0 ? (
-            <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
-              Starting position. Pick a continuation below.
-            </p>
-          ) : (
-            <ol className="notation mt-4 flex flex-wrap gap-2 text-[15px] leading-relaxed text-[color:var(--ink)]">
-              {path.map((m, i) => (
-                <li key={m.id}>
-                  <button
-                    onClick={() => goToIndex(i)}
-                    className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
-                      i === path.length - 1
-                        ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
-                        : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
-                    }`}
-                  >
-                    {i % 2 === 0 && (
-                      <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
-                        {Math.floor(i / 2) + 1}.
-                      </span>
-                    )}{m.san}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-
         {/* Annotation (mobile first to keep it visible while browsing) */}
         <section className="md:hidden">
           <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
@@ -323,6 +290,39 @@ export function RepertoireViewer({
                 </button>
               )}
             </p>
+          )}
+        </section>
+
+        {/* Line */}
+        <section>
+          <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+            Line
+          </p>
+          {path.length === 0 ? (
+            <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+              Starting position. Pick a continuation below.
+            </p>
+          ) : (
+            <ol className="notation mt-4 flex flex-wrap gap-2 text-[15px] leading-relaxed text-[color:var(--ink)]">
+              {path.map((m, i) => (
+                <li key={m.id}>
+                  <button
+                    onClick={() => goToIndex(i)}
+                    className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
+                      i === path.length - 1
+                        ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
+                        : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+                    }`}
+                  >
+                    {i % 2 === 0 && (
+                      <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
+                        {Math.floor(i / 2) + 1}.
+                      </span>
+                    )}{m.san}
+                  </button>
+                </li>
+              ))}
+            </ol>
           )}
         </section>
 
