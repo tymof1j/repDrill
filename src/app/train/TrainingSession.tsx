@@ -3,8 +3,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Chess } from 'chess.js';
-import { ChessBoard } from '@/components/board/ChessBoard';
+
+const ChessBoard = dynamic(
+  () => import('@/components/board/ChessBoard').then((m) => ({ default: m.ChessBoard })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="mx-auto aspect-square w-full max-w-[480px] animate-pulse rounded bg-[color:var(--paper-rule)]" />
+    ),
+  },
+);
 import {
   AppSurface,
   DiagramFrame,
@@ -42,6 +52,8 @@ export function TrainingSession({ initialLines }: Props) {
   const [feedback, setFeedback] = useState<{ type: 'correct' | 'wrong'; text: string } | null>(null);
   const [lineResults, setLineResults] = useState<MoveResult[]>([]);
   const [moveStartTime, setMoveStartTime] = useState(0);
+  const [lineCorrect, setLineCorrect] = useState(0);
+  const [lineWrong, setLineWrong] = useState(0);
 
   const [inputMode, setInputMode] = useState<'mouse' | 'keyboard'>('mouse');
   const [notationInput, setNotationInput] = useState('');
@@ -69,6 +81,8 @@ export function TrainingSession({ initialLines }: Props) {
     setShowAnnotation(false);
     setFeedback(null);
     setLineResults([]);
+    setLineCorrect(0);
+    setLineWrong(0);
     setNotationInput('');
     setNotationError(null);
     setLinePhase(line.isNew ? 'learn' : 'drill');
@@ -144,8 +158,6 @@ export function TrainingSession({ initialLines }: Props) {
     setSessionStats((s) => ({
       ...s,
       linesCompleted: s.linesCompleted + 1,
-      totalCorrect: s.totalCorrect + lineResults.filter((r) => r.correct).length,
-      totalWrong: s.totalWrong + lineResults.filter((r) => !r.correct).length,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linePhase]);
@@ -169,6 +181,13 @@ export function TrainingSession({ initialLines }: Props) {
             { cardId: step.cardId!, correct, responseTimeMs },
           ]);
         }
+        if (correct) setLineCorrect((c) => c + 1);
+        else setLineWrong((c) => c + 1);
+        setSessionStats((s) => ({
+          ...s,
+          totalCorrect: s.totalCorrect + (correct ? 1 : 0),
+          totalWrong: s.totalWrong + (correct ? 0 : 1),
+        }));
 
         setBoardFen(step.childFen + ' 0 1');
         setLastMoveUci([step.uci.slice(0, 2), step.uci.slice(2, 4)]);
@@ -314,9 +333,7 @@ export function TrainingSession({ initialLines }: Props) {
   if (!line) return null;
 
   const userMovesInLine = line.steps.filter((s) => s.isUserMove).length;
-  const correctInLine = lineResults.filter((r) => r.correct).length;
-  const wrongInLine = lineResults.filter((r) => !r.correct).length;
-  const playedUserMoves = correctInLine + wrongInLine;
+  const playedUserMoves = lineCorrect + lineWrong;
   const lineProgress =
     linePhase === 'learn'
       ? Math.round((Math.min(stepIndex, line.steps.length) / Math.max(line.steps.length, 1)) * 100)
@@ -498,13 +515,13 @@ export function TrainingSession({ initialLines }: Props) {
                   Watch <span className="font-display-italic">once</span>, then drill from memory.
                 </>
               ) : linePhase === 'line-done' ? (
-                wrongInLine === 0 ? (
+                lineWrong === 0 ? (
                   <>
                     A <span className="font-display-italic">perfect</span> line.
                   </>
                 ) : (
                   <>
-                    {correctInLine}/{correctInLine + wrongInLine} <span className="font-display-italic">correct</span>.
+                    {lineCorrect}/{lineCorrect + lineWrong} <span className="font-display-italic">correct</span>.
                   </>
                 )
               ) : waitingForUser ? (
@@ -580,8 +597,8 @@ export function TrainingSession({ initialLines }: Props) {
           {linePhase === 'line-done' && (
             <section>
               <div className="grid grid-cols-2 gap-x-2 gap-y-6 border-y border-[color:var(--paper-edge)] py-6">
-                <StatTile label="Correct" value={correctInLine} tone="green" />
-                <StatTile label="Wrong" value={wrongInLine} tone={wrongInLine === 0 ? 'green' : 'red'} />
+                <StatTile label="Correct" value={lineCorrect} tone="green" />
+                <StatTile label="Wrong" value={lineWrong} tone={lineWrong === 0 ? 'green' : 'red'} />
               </div>
               <div className="mt-6">
                 <PremiumButton onClick={nextLine}>
@@ -593,25 +610,24 @@ export function TrainingSession({ initialLines }: Props) {
 
           {/* Session running totals */}
           <section className="border-t border-[color:var(--paper-rule)] pt-6">
-            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-              Session totals
-            </p>
-            <div className="grid grid-cols-3 gap-x-2">
-              <StatTile
-                label="Lines"
-                value={sessionStats.linesCompleted}
-                hint="completed"
-              />
-              <StatTile
-                label="Correct"
-                value={sessionStats.totalCorrect + correctInLine}
-                tone="green"
-              />
-              <StatTile
-                label="Wrong"
-                value={sessionStats.totalWrong + wrongInLine}
-                tone="red"
-              />
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-[2rem] font-semibold leading-none tabular-nums text-[color:var(--ink)]">
+                {sessionStats.linesCompleted}
+              </span>
+              <span className="text-[13px] text-[color:var(--ink-soft)]">done</span>
+              <span className="text-[color:var(--ink-ghost)]">/</span>
+              <span className="text-[15px] tabular-nums text-[color:var(--ink-faint)]">
+                {lines.length}
+              </span>
+              <span className="text-[13px] text-[color:var(--ink-ghost)]">lines</span>
+              {lines.length - sessionStats.linesCompleted > 0 && (
+                <>
+                  <span className="ml-1 text-[color:var(--ink-ghost)]">·</span>
+                  <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--margin-red)]">
+                    {lines.length - sessionStats.linesCompleted} left
+                  </span>
+                </>
+              )}
             </div>
           </section>
         </div>

@@ -8,7 +8,17 @@ import {
   StatTile,
   EmptyState,
 } from '@/components/ui/Premium';
-import { ChessBoard } from '@/components/board/ChessBoard';
+import dynamic from 'next/dynamic';
+
+const ChessBoard = dynamic(
+  () => import('@/components/board/ChessBoard').then((m) => ({ default: m.ChessBoard })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="aspect-square w-full animate-pulse rounded bg-[color:var(--paper-rule)]" />
+    ),
+  },
+);
 import {
   analyzeRecentGames,
   type AnalyzeBatchResult,

@@ -1,17 +1,28 @@
+'use client';
+
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
-import { redirect } from 'next/navigation';
+import { useQuery, useConvexAuth } from 'convex/react';
+import { useRouter } from 'next/navigation';
+import { api } from '@convex/_generated/api';
 import { AppSurface, PageHeader, PremiumButton } from '@/components/ui/Premium';
 import { AnalyzePanel } from './AnalyzePanel';
 
-export default async function AnalyzePage() {
-  const token = await convexAuthNextjsToken();
-  if (!token) redirect('/login');
+export default function AnalyzePage() {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const router = useRouter();
 
-  const user = await fetchQuery(api.users.current, {}, { token });
-  if (!user) redirect('/login');
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) router.push('/login');
+  }, [isLoading, isAuthenticated, router]);
+
+  const user = useQuery(api.users.current);
+
+  useEffect(() => {
+    if (user === null && !isLoading) router.push('/login');
+  }, [user, isLoading, router]);
+
+  if (!isAuthenticated || user === undefined || user === null) return null;
 
   const hasLichess = !!user.lichessUsername;
   const hasChessCom = !!user.chesscomUsername;

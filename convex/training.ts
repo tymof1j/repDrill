@@ -162,17 +162,11 @@ export const getTrainingLines = query({
     if (allMoves.length === 0)
       return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
 
-    // Load positions
-    const posIds = new Set<string>();
-    for (const m of allMoves) {
-      posIds.add(m.parentPositionId as string);
-      posIds.add(m.childPositionId as string);
-    }
-    const allPositions: Doc<"positions">[] = [];
-    for (const id of posIds) {
-      const pos = await ctx.db.get(id as Id<"positions">);
-      if (pos) allPositions.push(pos);
-    }
+    // Load all positions for this user in one batch query (replaces O(n) individual gets)
+    const allPositions = await ctx.db
+      .query("positions")
+      .withIndex("by_user_fen", (q) => q.eq("userId", userId))
+      .collect();
     const posById = new Map(allPositions.map((p) => [p._id as string, p]));
 
     // Load review cards
@@ -230,10 +224,19 @@ export const getTrainingLines = query({
 
       const chapterLines: LineStep[][] = [];
 
+      // Track positions in current path to break transposition cycles
+      const onPath = new Set<string>();
+
       function dfs(posId: string, path: LineStep[]) {
+        if (onPath.has(posId)) {
+          if (path.length > 0) chapterLines.push([...path]);
+          return;
+        }
+        onPath.add(posId);
         const children = movesByParent.get(posId);
         if (!children || children.length === 0) {
           if (path.length > 0) chapterLines.push([...path]);
+          onPath.delete(posId);
           return;
         }
         for (const m of children) {
@@ -260,6 +263,7 @@ export const getTrainingLines = query({
           dfs(m.childPositionId as string, path);
           path.pop();
         }
+        onPath.delete(posId);
       }
 
       dfs(rootPos._id as string, []);
@@ -313,6 +317,147 @@ export const getTrainingLines = query({
     });
 
     return { lines: limited, totalLines, dueLines, newLines: newLinesCount };
+  },
+});
+
+// --- Quick stats (single index scan, no N+1) ---
+export const getQuickStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const now = Date.now();
+    const cards = await ctx.db
+      .query("reviewCards")
+      .withIndex("by_user_due", (q) => q.eq("userId", userId))
+      .collect();
+
+    return {
+      totalLines: cards.length,
+      dueLines: cards.filter((c) => c.due <= now || c.state === 0).length,
+      newLines: cards.filter((c) => c.state === 0).length,
+    };
+  },
+});
+
+// --- Line-level stats (DFS path count, not card count) ---
+export const getLineStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const userCourses = await ctx.db
+      .query("courses")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    if (userCourses.length === 0)
+      return { totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const allChapters: Doc<"chapters">[] = [];
+    for (const course of userCourses) {
+      const chs = await ctx.db
+        .query("chapters")
+        .withIndex("by_course", (q) => q.eq("courseId", course._id))
+        .collect();
+      allChapters.push(...chs);
+    }
+    if (allChapters.length === 0)
+      return { totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const allMoves: Doc<"moves">[] = [];
+    for (const ch of allChapters) {
+      const chMoves = await ctx.db
+        .query("moves")
+        .withIndex("by_chapter", (q) => q.eq("chapterId", ch._id))
+        .collect();
+      allMoves.push(...chMoves);
+    }
+    if (allMoves.length === 0)
+      return { totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const rootPos = await ctx.db
+      .query("positions")
+      .withIndex("by_user_fen", (q) =>
+        q.eq("userId", userId).eq("fen", ROOT_FEN)
+      )
+      .first();
+    if (!rootPos) return { totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const allCards = await ctx.db
+      .query("reviewCards")
+      .withIndex("by_user_due", (q) => q.eq("userId", userId))
+      .collect();
+    const cardByMoveId = new Map(allCards.map((c) => [c.moveId as string, c]));
+    const now = Date.now();
+
+    const movesByParentByChapter = new Map<
+      string,
+      Map<string, Doc<"moves">[]>
+    >();
+    for (const m of allMoves) {
+      const chId = m.chapterId as string;
+      let chMap = movesByParentByChapter.get(chId);
+      if (!chMap) {
+        chMap = new Map();
+        movesByParentByChapter.set(chId, chMap);
+      }
+      const parentId = m.parentPositionId as string;
+      const arr = chMap.get(parentId) ?? [];
+      arr.push(m);
+      chMap.set(parentId, arr);
+    }
+
+    let totalLines = 0;
+    let dueLines = 0;
+    let newLinesCount = 0;
+
+    for (const [, movesByParent] of movesByParentByChapter) {
+      const onPath = new Set<string>();
+
+      function countPaths(
+        posId: string,
+        hasRep: boolean,
+        hasDue: boolean,
+        hasNew: boolean
+      ) {
+        if (onPath.has(posId)) {
+          if (hasRep) {
+            totalLines++;
+            if (hasDue || hasNew) dueLines++;
+            if (hasNew) newLinesCount++;
+          }
+          return;
+        }
+        onPath.add(posId);
+        const children = movesByParent.get(posId);
+        if (!children || children.length === 0) {
+          if (hasRep) {
+            totalLines++;
+            if (hasDue || hasNew) dueLines++;
+            if (hasNew) newLinesCount++;
+          }
+          onPath.delete(posId);
+          return;
+        }
+        for (const m of children) {
+          const isRep = m.moveType === "repertoire";
+          const card = isRep ? cardByMoveId.get(m._id as string) : null;
+          countPaths(
+            m.childPositionId as string,
+            hasRep || isRep,
+            hasDue || (card ? card.due <= now : false),
+            hasNew || (card ? card.state === 0 : false)
+          );
+        }
+        onPath.delete(posId);
+      }
+
+      countPaths(rootPos._id as string, false, false, false);
+    }
+
+    return { totalLines, dueLines, newLines: newLinesCount };
   },
 });
 
