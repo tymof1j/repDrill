@@ -162,17 +162,11 @@ export const getTrainingLines = query({
     if (allMoves.length === 0)
       return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
 
-    // Load positions
-    const posIds = new Set<string>();
-    for (const m of allMoves) {
-      posIds.add(m.parentPositionId as string);
-      posIds.add(m.childPositionId as string);
-    }
-    const allPositions: Doc<"positions">[] = [];
-    for (const id of posIds) {
-      const pos = await ctx.db.get(id as Id<"positions">);
-      if (pos) allPositions.push(pos);
-    }
+    // Load all positions for this user in one batch query (replaces O(n) individual gets)
+    const allPositions = await ctx.db
+      .query("positions")
+      .withIndex("by_user_fen", (q) => q.eq("userId", userId))
+      .collect();
     const posById = new Map(allPositions.map((p) => [p._id as string, p]));
 
     // Load review cards
@@ -313,6 +307,27 @@ export const getTrainingLines = query({
     });
 
     return { lines: limited, totalLines, dueLines, newLines: newLinesCount };
+  },
+});
+
+// --- Quick stats (single index scan, no N+1) ---
+export const getQuickStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const now = Date.now();
+    const cards = await ctx.db
+      .query("reviewCards")
+      .withIndex("by_user_due", (q) => q.eq("userId", userId))
+      .collect();
+
+    return {
+      totalLines: cards.length,
+      dueLines: cards.filter((c) => c.due <= now || c.state === 0).length,
+      newLines: cards.filter((c) => c.state === 0).length,
+    };
   },
 });
 

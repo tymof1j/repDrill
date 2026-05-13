@@ -3,8 +3,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Chess } from 'chess.js';
-import { ChessBoard } from '@/components/board/ChessBoard';
+
+const ChessBoard = dynamic(
+  () => import('@/components/board/ChessBoard').then((m) => ({ default: m.ChessBoard })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="mx-auto aspect-square w-full max-w-[480px] animate-pulse rounded bg-[color:var(--paper-rule)]" />
+    ),
+  },
+);
 import {
   AppSurface,
   DiagramFrame,
