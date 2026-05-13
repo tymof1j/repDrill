@@ -224,10 +224,19 @@ export const getTrainingLines = query({
 
       const chapterLines: LineStep[][] = [];
 
+      // Track positions in current path to break transposition cycles
+      const onPath = new Set<string>();
+
       function dfs(posId: string, path: LineStep[]) {
+        if (onPath.has(posId)) {
+          if (path.length > 0) chapterLines.push([...path]);
+          return;
+        }
+        onPath.add(posId);
         const children = movesByParent.get(posId);
         if (!children || children.length === 0) {
           if (path.length > 0) chapterLines.push([...path]);
+          onPath.delete(posId);
           return;
         }
         for (const m of children) {
@@ -254,6 +263,7 @@ export const getTrainingLines = query({
           dfs(m.childPositionId as string, path);
           path.pop();
         }
+        onPath.delete(posId);
       }
 
       dfs(rootPos._id as string, []);

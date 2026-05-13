@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { useQuery, useConvexAuth } from 'convex/react';
 import { useRouter } from 'next/navigation';
 import { api } from '@convex/_generated/api';
 import { CourseLibrarySearch, type CourseListItem } from './CourseLibrarySearch';
-import { AppSurface, PageHeader, PremiumButton, StatTile } from '@/components/ui/Premium';
+import { AppSurface, PageHeader, PremiumButton } from '@/components/ui/Premium';
 
 export default function CoursesListPage() {
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -37,25 +38,35 @@ export default function CoursesListPage() {
       />
 
       {lineData.totalLines > 0 && (
-        <section className="mb-12 border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)]">
-          <div className="flex items-center justify-between gap-4 border-b border-[color:var(--paper-edge)] px-5 py-3 md:px-7">
-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-              Training queue · today
-            </p>
-            {lineData.dueLines > 0 && (
-              <PremiumButton href="/train">Train now</PremiumButton>
+        <section className="mb-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-y border-[color:var(--paper-edge)] py-4">
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-[2rem] font-semibold leading-none tabular-nums text-[color:var(--margin-red)]">
+              {lineData.dueLines}
+            </span>
+            <span className="text-[13px] text-[color:var(--ink-soft)]">due</span>
+            <span className="text-[color:var(--ink-ghost)]">/</span>
+            <span className="text-[15px] tabular-nums text-[color:var(--ink-faint)]">
+              {lineData.totalLines}
+            </span>
+            <span className="text-[13px] text-[color:var(--ink-ghost)]">total</span>
+            {lineData.newLines > 0 && (
+              <>
+                <span className="ml-1 text-[color:var(--ink-ghost)]">·</span>
+                <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--gold,#b39a5b)]">
+                  {lineData.newLines} new
+                </span>
+              </>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-x-2 gap-y-6 px-5 py-7 md:px-7 md:py-8">
-            <StatTile
-              label="Due moves"
-              value={lineData.dueLines}
-              tone={lineData.dueLines > 0 ? 'red' : 'cream'}
-              hint={lineData.dueLines > 0 ? 'awaiting recall' : 'none scheduled'}
-            />
-            <StatTile label="New moves" value={lineData.newLines} tone="gold" hint="never seen" />
-            <StatTile label="Total moves" value={lineData.totalLines} hint="across all courses" />
-          </div>
+          {lineData.dueLines > 0 && (
+            <Link
+              href="/train"
+              className="inline-flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[6px] transition-colors duration-200 hover:text-[color:var(--margin-red)] hover:decoration-[color:var(--margin-red)]"
+            >
+              Train now
+              <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
+            </Link>
+          )}
         </section>
       )}
 
