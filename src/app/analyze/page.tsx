@@ -18,12 +18,11 @@ export default function AnalyzePage() {
 
   const user = useQuery(api.users.current);
 
-  if (!isAuthenticated || user === undefined) return null;
+  useEffect(() => {
+    if (user === null && !isLoading) router.push('/login');
+  }, [user, isLoading, router]);
 
-  if (user === null) {
-    router.push('/login');
-    return null;
-  }
+  if (!isAuthenticated || user === undefined || user === null) return null;
 
   const hasLichess = !!user.lichessUsername;
   const hasChessCom = !!user.chesscomUsername;

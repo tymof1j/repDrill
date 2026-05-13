@@ -48,13 +48,13 @@ export default function CoursesListPage() {
           </div>
           <div className="grid grid-cols-3 gap-x-2 gap-y-6 px-5 py-7 md:px-7 md:py-8">
             <StatTile
-              label="Due lines"
+              label="Due moves"
               value={lineData.dueLines}
               tone={lineData.dueLines > 0 ? 'red' : 'cream'}
               hint={lineData.dueLines > 0 ? 'awaiting recall' : 'none scheduled'}
             />
-            <StatTile label="New lines" value={lineData.newLines} tone="gold" hint="never seen" />
-            <StatTile label="Total lines" value={lineData.totalLines} hint="across all courses" />
+            <StatTile label="New moves" value={lineData.newLines} tone="gold" hint="never seen" />
+            <StatTile label="Total moves" value={lineData.totalLines} hint="across all courses" />
           </div>
         </section>
       )}

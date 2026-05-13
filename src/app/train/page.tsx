@@ -30,7 +30,9 @@ export default function TrainPage() {
       router.push('/login');
       return;
     }
-    ensureCards({}).then(() => setCardsReady(true));
+    ensureCards({})
+      .then(() => setCardsReady(true))
+      .catch(() => setCardsReady(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isAuthenticated]);
 
