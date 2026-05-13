@@ -10,6 +10,8 @@ import { detectDeviation } from '@/lib/games/deviation';
 import type { GameSource } from '@/lib/games/types';
 import type { UserBook } from '@/lib/games/deviation';
 import { Chess } from 'chess.js';
+import { parsePgn } from '@/lib/chess/pgn-parser';
+import { buildTree } from '@/lib/chess/tree';
 
 export type GameAnalysisRow = {
   source: GameSource;
@@ -317,4 +319,75 @@ export async function getGameDeviationDetail(formData: FormData): Promise<{
     expectedSans: dev.expectedSans,
     playedAs: dev.playedAs,
   };
+}
+
+export async function importAnalyzedGameToCourse(formData: FormData): Promise<{ courseId: string; chapterName: string }> {
+  const token = await requireToken();
+  const pgn = String(formData.get('pgn') ?? '').trim();
+  const playedAs = String(formData.get('playedAs') ?? 'white') as 'white' | 'black';
+  const chapterNameInput = String(formData.get('chapterName') ?? '').trim();
+  const annotation = String(formData.get('annotation') ?? '').trim();
+  const annotatedPly = Math.max(0, parseInt(String(formData.get('annotatedPly') ?? '0'), 10) || 0);
+
+  if (!pgn) throw new Error('Missing PGN');
+
+  const games = parsePgn(pgn);
+  if (games.length === 0) throw new Error('Could not parse game PGN');
+  const game = games[0];
+
+  const defaultChapterName =
+    chapterNameInput ||
+    game.headers.Event ||
+    `${game.headers.White ?? 'White'} vs ${game.headers.Black ?? 'Black'}`;
+
+  const courses = await fetchQuery(api.courses.list, {}, { token });
+  let targetCourse: Awaited<ReturnType<typeof fetchQuery<typeof api.courses.get>>> =
+    courses.find((c) => c.name.trim().toLowerCase() === 'game analysis') ?? null;
+  if (!targetCourse) {
+    const created = await fetchMutation(
+      api.courses.create,
+      {
+        name: 'Game analysis',
+        color: playedAs,
+        description: 'Auto-imported games from Analyze tab',
+      },
+      { token },
+    );
+    targetCourse = await fetchQuery(api.courses.get, { id: created }, { token });
+  }
+  if (!targetCourse) throw new Error('Could not create or load Game analysis course');
+
+  const chapterCount = (await fetchQuery(api.courses.listChapters, { courseId: targetCourse._id }, { token })).length;
+  const tree = buildTree(game);
+
+  // Attach manual annotation to the selected ply's resulting position.
+  if (annotation && annotatedPly > 0 && annotatedPly <= tree.moves.length) {
+    const idx = annotatedPly - 1;
+    const existing = tree.moves[idx]?.comment?.trim();
+    tree.moves[idx].comment = existing ? `${existing}\n\n${annotation}` : annotation;
+  }
+
+  await fetchMutation(
+    api.import.importTreeIntoChapter,
+    {
+      courseId: targetCourse._id,
+      chapterName: defaultChapterName,
+      sortOrder: chapterCount,
+      courseColor: targetCourse.color,
+      rootFen: tree.rootFen,
+      moves: tree.moves.map((m) => ({
+        parentFen: m.parentFen,
+        fen: m.fen,
+        san: m.san,
+        uci: m.uci,
+        moveNumber: m.moveNumber,
+        colorToMove: m.colorToMove,
+        comment: m.comment,
+        isMainLine: m.isMainLine,
+      })),
+    },
+    { token },
+  );
+
+  return { courseId: targetCourse._id, chapterName: defaultChapterName };
 }

@@ -21,6 +21,7 @@ const ChessBoard = dynamic(
 );
 import {
   analyzeRecentGames,
+  importAnalyzedGameToCourse,
   loadCachedAnalyze,
   type AnalyzeBatchResult,
   type GameAnalysisRow,
@@ -495,6 +496,10 @@ function DeviationViewer({
     { san: string; uci: string; fenAfter: string; fenBefore: string }[] | null
   >(null);
   const [loadingPlies, setLoadingPlies] = useState(false);
+  const [chapterName, setChapterName] = useState('');
+  const [annotationDraft, setAnnotationDraft] = useState('');
+  const [importPending, startImport] = useTransition();
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   // Lazily fetch full ply list (we don't include it in the batch result for size).
   if (pliesState === null && !loadingPlies) {
@@ -551,6 +556,33 @@ function DeviationViewer({
 
   const orientation = game.deviation.playedAs;
   const totalPlies = pliesState.length;
+
+  useEffect(() => {
+    const date = new Date(game.playedAt);
+    const dateLabel = date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    setChapterName(
+      `${game.whiteUsername} vs ${game.blackUsername} · ${dateLabel}`,
+    );
+  }, [game.playedAt, game.whiteUsername, game.blackUsername]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setPly(Math.max(0, ply - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setPly(Math.min(totalPlies, ply + 1));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ply, setPly, totalPlies]);
 
   return (
     <section className="space-y-6">
@@ -651,6 +683,62 @@ function DeviationViewer({
           )}
 
           <MoveList plies={pliesState} ply={ply} setPly={setPly} deviationPly={game.deviation.deviationPly} />
+
+          <section className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Import to course
+            </p>
+            <p className="mt-2 font-display-italic text-[14px] text-[color:var(--ink-soft)]">
+              Saved to course <span className="font-display not-italic text-[color:var(--ink)]">Game analysis</span> as a new chapter.
+            </p>
+            <div className="mt-4 grid gap-3">
+              <input
+                value={chapterName}
+                onChange={(e) => setChapterName(e.target.value)}
+                placeholder="Chapter name"
+                className="min-h-10 border border-[color:var(--paper-edge)] bg-transparent px-3 text-[15px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
+              />
+              <textarea
+                value={annotationDraft}
+                onChange={(e) => setAnnotationDraft(e.target.value)}
+                placeholder="Optional annotation for current position"
+                rows={3}
+                className="border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <PremiumButton
+                  onClick={() => {
+                    setImportMessage(null);
+                    const fd = new FormData();
+                    fd.set('pgn', game.pgn);
+                    fd.set('playedAs', game.deviation.playedAs);
+                    fd.set('chapterName', chapterName.trim());
+                    fd.set('annotation', annotationDraft.trim());
+                    fd.set('annotatedPly', String(ply));
+                    startImport(async () => {
+                      try {
+                        const r = await importAnalyzedGameToCourse(fd);
+                        setImportMessage(`Imported as chapter “${r.chapterName}”.`);
+                      } catch (e) {
+                        setImportMessage(e instanceof Error ? e.message : 'Import failed.');
+                      }
+                    });
+                  }}
+                  disabled={importPending || !chapterName.trim()}
+                >
+                  {importPending ? 'Importing…' : 'Import game'}
+                </PremiumButton>
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+                  Use ← / → to navigate moves
+                </span>
+              </div>
+              {importMessage && (
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+                  {importMessage}
+                </p>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </section>
@@ -676,13 +764,13 @@ function MoveList({
   });
 
   return (
-    <div className="border border-[color:var(--paper-edge)]">
-      <div className="border-b border-[color:var(--paper-edge)] px-4 py-2">
+    <div className="border-y border-[color:var(--paper-edge)]">
+      <div className="border-b border-[color:var(--paper-edge)] px-0 py-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
           Line
         </p>
       </div>
-      <div className="max-h-[400px] overflow-y-auto px-4 py-3 font-mono text-[12px] tabular-nums">
+      <div className="max-h-[400px] overflow-y-auto px-0 py-3 font-mono text-[12px] tabular-nums">
         <div className="flex flex-wrap gap-2">
           {tokens.map((t) => (
             <PlyButton
@@ -719,8 +807,8 @@ function PlyButton({
         active
           ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
           : deviation
-            ? 'bg-[color:var(--paper-deep)] text-[color:var(--margin-red)] hover:bg-[color:var(--paper-edge)]'
-            : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+            ? 'bg-transparent text-[color:var(--margin-red)] hover:bg-[color:var(--paper-edge)]'
+            : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
       }`}
     >
       {children}
