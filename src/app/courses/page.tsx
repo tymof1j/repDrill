@@ -42,6 +42,7 @@ export default function CoursesListPage() {
   }, [convex, isAuthenticated]);
 
   const items = useQuery(api.courses.list);
+  const quickStats = useQuery(api.training.getQuickStats);
   if (!isAuthenticated || items === undefined) return null;
 
   const courses: CourseListItem[] = items.map((item) => ({
@@ -50,6 +51,7 @@ export default function CoursesListPage() {
     color: item.color,
     description: item.description ?? null,
   }));
+  const visibleStats = stats ?? quickStats ?? null;
 
   return (
     <AppSurface>
@@ -60,23 +62,23 @@ export default function CoursesListPage() {
         action={<SecondaryButton href="/courses/new">New course</SecondaryButton>}
       />
 
-      {stats && stats.totalLines > 0 && (
+      {visibleStats && visibleStats.totalLines > 0 && (
         <section className="mb-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-y border-[color:var(--paper-edge)] py-4">
           <div className="flex items-baseline gap-2">
             <span className="font-display text-[2.9rem] font-semibold leading-none tabular-nums text-[color:var(--margin-red)]">
-              {stats.dueLines}
+              {visibleStats.dueLines}
             </span>
             <span className="text-[32px] leading-none text-[color:var(--ink-soft)]">due</span>
             <span className="text-[color:var(--ink-ghost)]">/</span>
             <span className="text-[32px] leading-none tabular-nums text-[color:var(--ink-faint)]">
-              {stats.totalLines}
+              {visibleStats.totalLines}
             </span>
             <span className="text-[32px] leading-none text-[color:var(--ink-ghost)]">total</span>
-            {stats.newLines > 0 && (
+            {visibleStats.newLines > 0 && (
               <>
                 <span className="ml-1 text-[color:var(--ink-ghost)]">·</span>
                 <span className="font-mono text-[20px] font-medium uppercase tracking-[0.18em] text-[color:var(--gilt)]">
-                  {stats.newLines} new
+                  {visibleStats.newLines} new
                 </span>
               </>
             )}

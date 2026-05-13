@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Chess } from 'chess.js';
 import { ChessBoard, type BoardArrow } from '@/components/board/ChessBoard';
 import { useTreeNavigation } from '@/lib/hooks/useTreeNavigation';
 import { AnnotationSearch } from './AnnotationSearch';
@@ -108,6 +109,40 @@ export function RepertoireViewer({
     }));
   }, [showArrows, nextMoves]);
 
+  const legalDests = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const m of nextMoves) {
+      const orig = m.uci.slice(0, 2);
+      const dest = m.uci.slice(2, 4);
+      const arr = map.get(orig) ?? [];
+      if (!arr.includes(dest)) arr.push(dest);
+      map.set(orig, arr);
+    }
+    return map;
+  }, [nextMoves]);
+
+  const moveColor = useMemo<'white' | 'black'>(() => {
+    const side = currentFen.split(/\s+/)[1];
+    return side === 'b' ? 'black' : 'white';
+  }, [currentFen]);
+
+  const onBoardMove = (orig: string, dest: string) => {
+    const exact = nextMoves.find((m) => m.uci.slice(0, 2) === orig && m.uci.slice(2, 4) === dest);
+    if (exact) {
+      playMove(exact);
+      return;
+    }
+    try {
+      const chess = new Chess(currentFen + ' 0 1');
+      const result = chess.move({ from: orig, to: dest, promotion: 'q' });
+      if (!result) return;
+      const fallback = nextMoves.find((m) => m.san === result.san);
+      if (fallback) playMove(fallback);
+    } catch {
+      // invalid local drag
+    }
+  };
+
   const sourcesByBranch = useMemo(() => {
     const map = new Map<string, ViewerMove[]>();
     for (const move of rawNextMoves) {
@@ -174,6 +209,9 @@ export function RepertoireViewer({
             orientation={repertoireColor}
             lastMove={lastMove}
             arrows={arrows}
+            viewOnly={false}
+            movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
+            onMove={onBoardMove}
           />
         </DiagramFrame>
 
@@ -245,6 +283,49 @@ export function RepertoireViewer({
           )}
         </section>
 
+        {/* Annotation (mobile first to keep it visible while browsing) */}
+        <section className="md:hidden">
+          <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Annotation
+            </p>
+            {onAnnotationSave && !editingAnnotation && (
+              <GhostButton onClick={startEditAnnotation}>Edit</GhostButton>
+            )}
+          </div>
+          {editingAnnotation ? (
+            <div className="mt-4 space-y-3">
+              <textarea
+                value={annotationDraft}
+                onChange={(e) => setAnnotationDraft(e.target.value)}
+                rows={4}
+                className={fieldClassName}
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <SecondaryButton onClick={saveAnnotation}>Save</SecondaryButton>
+                <GhostButton onClick={() => setEditingAnnotation(false)}>Cancel</GhostButton>
+              </div>
+            </div>
+          ) : currentPosition?.annotation ? (
+            <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
+              {currentPosition.annotation}
+            </p>
+          ) : (
+            <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+              No annotation.{' '}
+              {onAnnotationSave && (
+                <button
+                  onClick={startEditAnnotation}
+                  className="book-link text-[color:var(--ink)] hover:text-[color:var(--margin-red)]"
+                >
+                  Add one.
+                </button>
+              )}
+            </p>
+          )}
+        </section>
+
         {/* Branches */}
         <section>
           <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
@@ -268,32 +349,31 @@ export function RepertoireViewer({
                 const moveTypeStamp =
                   m.moveType === 'repertoire' ? 'green' : m.moveType === 'alternative' ? 'gold' : 'ink';
                 return (
-                  <li
-                    key={`${m.parentPositionId}-${m.childPositionId}-${m.uci}`}
-                    className="group grid grid-cols-[2.25rem_1fr_auto] items-baseline gap-4 px-2 py-3 transition-colors duration-200 hover:bg-[color:var(--paper-shade)]"
-                  >
-                    <span
-                      className="font-display text-base italic text-[color:var(--ink-faint)]"
-                      style={{ fontFeatureSettings: '"onum"' }}
-                    >
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
+                  <li key={`${m.parentPositionId}-${m.childPositionId}-${m.uci}`}>
                     <button
                       onClick={() => playMove(m)}
-                      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+                      className="group grid w-full grid-cols-[2.25rem_1fr_auto] items-baseline gap-4 px-2 py-3 text-left transition-colors duration-200 hover:bg-[color:var(--paper-shade)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
                     >
-                      <span className="notation text-base font-medium text-[color:var(--ink)]">
-                        {m.san}
+                      <span
+                        className="font-display text-base italic text-[color:var(--ink-faint)]"
+                        style={{ fontFeatureSettings: '"onum"' }}
+                      >
+                        {String(i + 1).padStart(2, '0')}
                       </span>
-                      <Stamp tone={moveTypeStamp}>{m.moveType}</Stamp>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
-                        {m.chapterName}
-                      </span>
-                      {uniqueChapterNames.length > 1 && (
-                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">
-                          +{uniqueChapterNames.length - 1} chapters
+                      <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="notation text-base font-medium text-[color:var(--ink)]">
+                          {m.san}
                         </span>
-                      )}
+                        <Stamp tone={moveTypeStamp}>{m.moveType}</Stamp>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+                          {m.chapterName}
+                        </span>
+                        {uniqueChapterNames.length > 1 && (
+                          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">
+                            +{uniqueChapterNames.length - 1} chapters
+                          </span>
+                        )}
+                      </span>
                     </button>
                   </li>
                 );
@@ -303,7 +383,7 @@ export function RepertoireViewer({
         </section>
 
         {/* Annotation */}
-        <section>
+        <section className="hidden md:block">
           <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Annotation
