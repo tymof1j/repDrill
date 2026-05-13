@@ -17,7 +17,7 @@ export default function CoursesListPage() {
   }, [isLoading, isAuthenticated, router]);
 
   const items = useQuery(api.courses.list);
-  const stats = useQuery(api.training.getQuickStats);
+  const stats = useQuery(api.training.getLineStats);
   if (!isAuthenticated || items === undefined) return null;
 
   const courses: CourseListItem[] = items.map((item) => ({
