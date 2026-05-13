@@ -427,28 +427,30 @@ export function TrainingSession({ initialLines }: Props) {
             </p>
           </div>
 
-          <DiagramFrame caption={`Move ${stepIndex + 1} / ${line.steps.length}`}>
-            <ChessBoard
-              fen={boardFen}
-              orientation={playerColor}
-              viewOnly={linePhase === 'learn'}
-              lastMove={lastMoveUci}
-              movable={
-                linePhase === 'drill' && inputMode === 'mouse'
-                  ? waitingForUser
-                    ? { free: false, dests: legalDests, color: playerColor, showDests: true }
-                    : { free: false, color: playerColor, showDests: true }
-                  : undefined
-              }
-              premovable={{ enabled: true }}
-              onMove={onBoardMove}
-              arrows={
-                feedback?.type === 'wrong' && step
-                  ? [{ orig: step.uci.slice(0, 2), dest: step.uci.slice(2, 4), brush: 'green' }]
-                  : undefined
-              }
-            />
-          </DiagramFrame>
+          <div className="-mx-5 md:mx-0">
+            <DiagramFrame caption={`Move ${stepIndex + 1} / ${line.steps.length}`}>
+              <ChessBoard
+                fen={boardFen}
+                orientation={playerColor}
+                viewOnly={linePhase === 'learn'}
+                lastMove={lastMoveUci}
+                movable={
+                  linePhase === 'drill' && inputMode === 'mouse'
+                    ? waitingForUser
+                      ? { free: false, dests: legalDests, color: playerColor, showDests: true }
+                      : { free: false, color: playerColor, showDests: true }
+                    : undefined
+                }
+                premovable={{ enabled: true }}
+                onMove={onBoardMove}
+                arrows={
+                  feedback?.type === 'wrong' && step
+                    ? [{ orig: step.uci.slice(0, 2), dest: step.uci.slice(2, 4), brush: 'green' }]
+                    : undefined
+                }
+              />
+            </DiagramFrame>
+          </div>
 
           {/* Input controls */}
           {waitingForUser && (
