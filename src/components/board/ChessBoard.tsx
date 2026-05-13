@@ -50,7 +50,7 @@ function buildConfig(props: {
     turnColor,
     viewOnly: props.viewOnly,
     coordinates: true,
-    animation: { enabled: true, duration: 200 },
+    animation: { enabled: false, duration: 0 },
     lastMove: props.lastMove as Key[] | undefined,
     drawable: {
       enabled: true,
@@ -67,7 +67,7 @@ function buildConfig(props: {
       showDests: props.movable?.showDests ?? true,
     },
     premovable: {
-      enabled: props.premovable?.enabled ?? false,
+      enabled: props.premovable?.enabled ?? true,
     },
   };
   if (props.onMove) {
@@ -129,6 +129,7 @@ export function ChessBoard({
       orientation,
       turnColor: fen.split(/\s+/)[1] === 'b' ? 'black' : 'white',
       viewOnly,
+      animation: { enabled: false, duration: 0 },
       lastMove: lastMove as Key[] | undefined,
       drawable: {
         autoShapes: arrows?.map((a) => ({
@@ -144,9 +145,10 @@ export function ChessBoard({
         showDests: movable?.showDests ?? true,
       },
       premovable: {
-        enabled: premovable?.enabled ?? false,
+        enabled: premovable?.enabled ?? true,
       },
     });
+    apiRef.current.playPremove();
   }, [fen, orientation, viewOnly, lastMove, arrows, movable, premovable]);
 
   return (
