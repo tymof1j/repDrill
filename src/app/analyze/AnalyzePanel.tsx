@@ -589,15 +589,12 @@ function MoveList({
   setPly: (p: number) => void;
   deviationPly?: number;
 }) {
-  // Group into pairs.
-  const pairs: { number: number; white?: { san: string; ply: number }; black?: { san: string; ply: number } }[] = [];
-  for (let i = 0; i < plies.length; i++) {
+  const tokens = plies.map((p, i) => {
     const moveNumber = Math.floor(i / 2) + 1;
-    const slot = pairs[moveNumber - 1] ?? { number: moveNumber };
-    if (i % 2 === 0) slot.white = { san: plies[i].san, ply: i + 1 };
-    else slot.black = { san: plies[i].san, ply: i + 1 };
-    pairs[moveNumber - 1] = slot;
-  }
+    const isWhite = i % 2 === 0;
+    const prefix = isWhite ? `${moveNumber}.` : '';
+    return { key: `${i}-${p.san}`, text: `${prefix}${p.san}`, ply: i + 1 };
+  });
 
   return (
     <div className="border border-[color:var(--paper-edge)]">
@@ -607,29 +604,16 @@ function MoveList({
         </p>
       </div>
       <div className="max-h-[400px] overflow-y-auto px-4 py-3 font-mono text-[12px] tabular-nums">
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
-          {pairs.map((p) => (
-            <span key={p.number} className="inline-flex items-baseline gap-1.5">
-              <span className="text-[color:var(--ink-faint)]">{p.number}.</span>
-              {p.white && (
-                <PlyButton
-                  active={ply === p.white.ply}
-                  deviation={p.white.ply === deviationPly}
-                  onClick={() => setPly(p.white!.ply)}
-                >
-                  {p.white.san}
-                </PlyButton>
-              )}
-              {p.black && (
-                <PlyButton
-                  active={ply === p.black.ply}
-                  deviation={p.black.ply === deviationPly}
-                  onClick={() => setPly(p.black!.ply)}
-                >
-                  {p.black.san}
-                </PlyButton>
-              )}
-            </span>
+        <div className="flex flex-wrap gap-2">
+          {tokens.map((t) => (
+            <PlyButton
+              key={t.key}
+              active={ply === t.ply}
+              deviation={t.ply === deviationPly}
+              onClick={() => setPly(t.ply)}
+            >
+              {t.text}
+            </PlyButton>
           ))}
         </div>
       </div>
@@ -652,12 +636,12 @@ function PlyButton({
     <button
       type="button"
       onClick={onClick}
-      className={`px-1 py-0.5 transition-colors duration-150 ${
+      className={`rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 ${
         active
-          ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+          ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
           : deviation
-            ? 'text-[color:var(--margin-red)] hover:bg-[color:var(--paper-deep)]'
-            : 'text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'
+            ? 'bg-[color:var(--paper-deep)] text-[color:var(--margin-red)] hover:bg-[color:var(--paper-edge)]'
+            : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
       }`}
     >
       {children}

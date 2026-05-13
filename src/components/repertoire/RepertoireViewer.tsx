@@ -222,20 +222,22 @@ export function RepertoireViewer({
               Starting position. Pick a continuation below.
             </p>
           ) : (
-            <ol className="notation mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[15px] leading-relaxed text-[color:var(--ink)]">
+            <ol className="notation mt-4 flex flex-wrap gap-2 text-[15px] leading-relaxed text-[color:var(--ink)]">
               {path.map((m, i) => (
                 <li key={m.id}>
                   <button
                     onClick={() => goToIndex(i)}
-                    className="px-1 py-0.5 transition-colors duration-200 hover:bg-[color:var(--paper-deep)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+                    className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
+                      i === path.length - 1
+                        ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
+                        : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+                    }`}
                   >
-                    {m.colorToMove === 'black' && (
-                      <span className="text-[color:var(--ink-faint)]">{m.moveNumber}.</span>
-                    )}
                     {m.colorToMove === 'white' && (
-                      <span className="text-[color:var(--ink-faint)]">{m.moveNumber}…</span>
-                    )}{' '}
-                    {m.san}
+                      <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
+                        {m.moveNumber}.
+                      </span>
+                    )}{m.san}
                   </button>
                 </li>
               ))}

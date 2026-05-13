@@ -48,8 +48,8 @@ type ChapterLine = {
 };
 
 function formatMove(move: ViewerMove) {
-  const prefix = move.colorToMove === 'black' ? `${move.moveNumber}.` : `${move.moveNumber}…`;
-  return `${prefix} ${move.san}`;
+  const prefix = move.colorToMove === 'white' ? `${move.moveNumber}.` : '';
+  return `${prefix}${move.san}`;
 }
 
 function branchKey(move: ViewerMove) {
