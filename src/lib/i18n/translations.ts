@@ -1,5 +1,9 @@
 export type Language = 'en' | 'uk';
 
+// i18n rule for contributors:
+// Whenever a new English UI string is added to the product, add its Ukrainian
+// translation to `ukTranslations` in the same change.
+
 export const LANGUAGE_STORAGE_KEY = 'repdrill-language';
 
 export function normalizeLanguage(value: string | null | undefined): Language {

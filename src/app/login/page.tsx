@@ -10,7 +10,7 @@ export default async function LoginPage() {
   return (
     <div className="relative min-h-screen bg-[color:var(--paper)] text-[color:var(--ink)]">
       <div className="mx-auto grid min-h-screen w-full max-w-7xl grid-cols-1 lg:grid-cols-[1.05fr_1fr]">
-        <div className="relative flex flex-col justify-between border-b border-[color:var(--paper-rule)] px-6 py-12 md:px-12 md:py-16 lg:border-b-0 lg:border-r">
+        <div className="order-2 relative flex flex-col justify-between border-b border-[color:var(--paper-rule)] px-6 py-10 md:px-12 md:py-14 lg:order-1 lg:border-b-0 lg:border-r lg:py-16">
           <div className="flex items-center justify-between gap-4">
             <Link
               href="/"
@@ -25,7 +25,7 @@ export default async function LoginPage() {
               Self-hosted
             </p>
           </div>
-          <div className="my-14">
+          <div className="my-8 lg:my-14">
             <p className="inline-flex items-center gap-2 rounded-full border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--library-green)]" />
               Opening memory
@@ -51,7 +51,7 @@ export default async function LoginPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-center px-6 py-12 md:px-12 md:py-16">
+        <div className="order-1 flex items-center justify-center px-6 pb-8 pt-20 md:px-12 md:pb-12 md:pt-24 lg:order-2 lg:py-16">
           <div className="w-full max-w-md rounded-[1.25rem] border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-6 shadow-[0_24px_70px_rgba(47,58,50,0.10)] md:p-8">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)]">
               Authentication

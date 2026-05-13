@@ -109,7 +109,11 @@ export function LandingNav({ ctaHref, ctaLabel, isLoggedIn }: { ctaHref: string;
           open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <div className="flex min-h-[100dvh] flex-col justify-end px-6 pb-12 pt-24">
+        <div className="flex min-h-[100dvh] flex-col px-6 pb-12 pt-24">
+          <div className="mb-8 flex gap-2">
+            <LanguageToggle onPersist={persistLanguage} />
+            <ThemeToggle variant="mobile" />
+          </div>
           <div className="space-y-3">
             {navLinks.map((link, index) => (
               <a
@@ -139,10 +143,6 @@ export function LandingNav({ ctaHref, ctaLabel, isLoggedIn }: { ctaHref: string;
             {ctaLabel}
             <span aria-hidden>→</span>
           </Link>
-          <div className="mt-6 flex gap-2">
-            <LanguageToggle onPersist={persistLanguage} />
-            <ThemeToggle variant="mobile" />
-          </div>
         </div>
       </div>
     </>

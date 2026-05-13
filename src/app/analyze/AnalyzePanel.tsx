@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   PremiumButton,
   SecondaryButton,
@@ -38,6 +38,7 @@ export function AnalyzePanel({
   hasLichess: boolean;
   hasChessCom: boolean;
 }) {
+  const CACHE_KEY = 'repdrill-analyze-last-v1';
   const [source, setSource] = useState<Source>(hasLichess ? 'lichess' : 'chesscom');
   const [limit, setLimit] = useState<10 | 25 | 50>(10);
   const [result, setResult] = useState<AnalyzeBatchResult | null>(null);
@@ -49,6 +50,19 @@ export function AnalyzePanel({
   const username =
     source === 'lichess' ? initialUsername.lichess : initialUsername.chesscom;
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { result?: AnalyzeBatchResult; source?: Source; limit?: 10 | 25 | 50 };
+      if (parsed.source) setSource(parsed.source);
+      if (parsed.limit) setLimit(parsed.limit);
+      if (parsed.result) setResult(parsed.result);
+    } catch {
+      // no-op
+    }
+  }, []);
+
   const onAnalyze = () => {
     setError(null);
     const fd = new FormData();
@@ -58,6 +72,11 @@ export function AnalyzePanel({
       try {
         const r = await analyzeRecentGames(fd);
         setResult(r);
+        try {
+          window.localStorage.setItem(CACHE_KEY, JSON.stringify({ result: r, source, limit }));
+        } catch {
+          // no-op
+        }
         setActiveGame(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));

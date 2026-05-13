@@ -150,7 +150,7 @@ export function ChessBoard({
   }, [fen, orientation, viewOnly, lastMove, arrows, movable, premovable]);
 
   return (
-    <div className="mx-auto aspect-square w-full max-w-[480px]">
+    <div className="mx-auto aspect-square w-full max-w-none md:max-w-[480px]">
       <div ref={containerRef} className="cg-wrap h-full w-full" />
     </div>
   );

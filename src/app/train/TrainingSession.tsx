@@ -11,7 +11,7 @@ const ChessBoard = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="mx-auto aspect-square w-full max-w-[480px] animate-pulse rounded bg-[color:var(--paper-rule)]" />
+      <div className="mx-auto aspect-square w-full max-w-none animate-pulse rounded bg-[color:var(--paper-rule)] md:max-w-[480px]" />
     ),
   },
 );
@@ -37,6 +37,7 @@ type SessionPhase = 'playing' | 'done';
 type Props = { initialLines: TrainingLine[] };
 
 export function TrainingSession({ initialLines }: Props) {
+  const SETTINGS_KEY = 'repdrill-training-settings-v1';
   const [lines] = useState(initialLines);
   const [lineIndex, setLineIndex] = useState(0);
   const [linePhase, setLinePhase] = useState<LinePhase>(
@@ -56,8 +57,11 @@ export function TrainingSession({ initialLines }: Props) {
   const [lineWrong, setLineWrong] = useState(0);
 
   const [inputMode, setInputMode] = useState<'mouse' | 'keyboard'>('mouse');
+  const [opponentMoveDelayMs, setOpponentMoveDelayMs] = useState(400);
+  const [premoveEnabled, setPremoveEnabled] = useState(false);
   const [notationInput, setNotationInput] = useState('');
   const [notationError, setNotationError] = useState<string | null>(null);
+  const [needsManualNext, setNeedsManualNext] = useState(false);
   const notationRef = useRef<HTMLInputElement>(null);
 
   const [sessionStats, setSessionStats] = useState({
@@ -70,6 +74,33 @@ export function TrainingSession({ initialLines }: Props) {
   const line = lines[lineIndex] ?? null;
   const step: LineStep | null = line ? line.steps[stepIndex] ?? null : null;
   const playerColor = line?.courseColor ?? 'white';
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { opponentMoveDelayMs?: number; premoveEnabled?: boolean };
+      if (typeof parsed.opponentMoveDelayMs === 'number') {
+        setOpponentMoveDelayMs(Math.min(1600, Math.max(100, parsed.opponentMoveDelayMs)));
+      }
+      if (typeof parsed.premoveEnabled === 'boolean') {
+        setPremoveEnabled(parsed.premoveEnabled);
+      }
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({ opponentMoveDelayMs, premoveEnabled }),
+      );
+    } catch {
+      // no-op
+    }
+  }, [opponentMoveDelayMs, premoveEnabled]);
 
   useEffect(() => {
     if (!line) return;
@@ -85,6 +116,7 @@ export function TrainingSession({ initialLines }: Props) {
     setLineWrong(0);
     setNotationInput('');
     setNotationError(null);
+    setNeedsManualNext(false);
     setLinePhase(line.isNew ? 'learn' : 'drill');
   }, [line, lineIndex]);
 
@@ -137,9 +169,9 @@ export function TrainingSession({ initialLines }: Props) {
         const advance = setTimeout(() => {
           setShowAnnotation(false);
           setStepIndex((i) => i + 1);
-        }, s.annotation ? 1500 : 600);
+      }, s.annotation ? Math.max(opponentMoveDelayMs * 2, 1000) : opponentMoveDelayMs);
         return () => clearTimeout(advance);
-      }, 400);
+      }, opponentMoveDelayMs);
       return () => clearTimeout(timer);
     }
 
@@ -148,7 +180,7 @@ export function TrainingSession({ initialLines }: Props) {
     if (inputMode === 'keyboard') {
       setTimeout(() => notationRef.current?.focus(), 50);
     }
-  }, [linePhase, stepIndex, line, feedback, inputMode]);
+  }, [linePhase, stepIndex, line, feedback, inputMode, opponentMoveDelayMs]);
 
   useEffect(() => {
     if (linePhase !== 'line-done') return;
@@ -198,20 +230,24 @@ export function TrainingSession({ initialLines }: Props) {
         if (correct) {
           setFeedback({ type: 'correct', text: step.san });
           setShowAnnotation(!!step.annotation);
+          setNeedsManualNext(false);
         } else {
           setFeedback({
             type: 'wrong',
             text: `You played ${result.san}. Correct: ${step.san}`,
           });
           setShowAnnotation(!!step.annotation);
+          setNeedsManualNext(true);
         }
 
-        const delay = step.annotation ? 2000 : correct ? 800 : 1800;
-        setTimeout(() => {
-          setFeedback(null);
-          setShowAnnotation(false);
-          setStepIndex((i) => i + 1);
-        }, delay);
+        if (correct) {
+          const delay = step.annotation ? 2000 : 800;
+          setTimeout(() => {
+            setFeedback(null);
+            setShowAnnotation(false);
+            setStepIndex((i) => i + 1);
+          }, delay);
+        }
       } catch {
         // invalid
       }
@@ -291,6 +327,14 @@ export function TrainingSession({ initialLines }: Props) {
     setLastMoveUci(undefined);
     setShowAnnotation(false);
     setLinePhase('drill');
+  };
+
+  const continueAfterWrong = () => {
+    if (!needsManualNext) return;
+    setNeedsManualNext(false);
+    setFeedback(null);
+    setShowAnnotation(false);
+    setStepIndex((i) => i + 1);
   };
 
   // ─── Session done ───────────────────────────────────────
@@ -393,6 +437,14 @@ export function TrainingSession({ initialLines }: Props) {
         />
       </div>
 
+      {linePhase === 'line-done' && (
+        <div className="mb-6 flex justify-start">
+          <PremiumButton onClick={nextLine}>
+            {lineIndex + 1 < lines.length ? 'Next line' : 'Finish session'}
+          </PremiumButton>
+        </div>
+      )}
+
       <div className="grid gap-10 lg:grid-cols-[minmax(360px,520px)_1fr] lg:gap-14">
         {/* Diagram column */}
         <div>
@@ -416,6 +468,7 @@ export function TrainingSession({ initialLines }: Props) {
                   ? { free: false, dests: legalDests, color: playerColor, showDests: true }
                   : undefined
               }
+              premovable={{ enabled: premoveEnabled }}
               onMove={onBoardMove}
               arrows={
                 feedback?.type === 'wrong' && step
@@ -428,6 +481,32 @@ export function TrainingSession({ initialLines }: Props) {
           {/* Input controls */}
           {waitingForUser && (
             <div className="mt-6 space-y-4">
+              <div className="grid gap-3 border border-[color:var(--paper-edge)] p-3 md:grid-cols-2">
+                <label className="flex flex-col gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
+                    Opponent speed
+                  </span>
+                  <input
+                    type="range"
+                    min={100}
+                    max={1600}
+                    step={100}
+                    value={opponentMoveDelayMs}
+                    onChange={(e) => setOpponentMoveDelayMs(Number(e.target.value))}
+                  />
+                  <span className="font-mono text-[10px] text-[color:var(--ink-soft)]">{opponentMoveDelayMs}ms</span>
+                </label>
+                <label className="flex items-center gap-2 pt-4 md:pt-6">
+                  <input
+                    type="checkbox"
+                    checked={premoveEnabled}
+                    onChange={(e) => setPremoveEnabled(e.target.checked)}
+                  />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-soft)]">
+                    Allow premove (1)
+                  </span>
+                </label>
+              </div>
               <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 {(['mouse', 'keyboard'] as const).map((mode) => (
                   <button
@@ -485,6 +564,11 @@ export function TrainingSession({ initialLines }: Props) {
                   >
                     What notation is accepted?
                   </Link>
+                </div>
+              )}
+              {needsManualNext && feedback?.type === 'wrong' && (
+                <div className="pt-1">
+                  <PremiumButton onClick={continueAfterWrong}>Next</PremiumButton>
                 </div>
               )}
             </div>
