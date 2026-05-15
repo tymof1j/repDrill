@@ -248,6 +248,62 @@ export const setSharing = mutation({
   },
 });
 
+export const getPublicByToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const course = await ctx.db
+      .query("courses")
+      .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
+      .first();
+    if (!course || !course.isPublic) return null;
+
+    const chapters = await ctx.db
+      .query("chapters")
+      .withIndex("by_course", (q) => q.eq("courseId", course._id))
+      .collect();
+    chapters.sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.createdAt - b.createdAt;
+    });
+
+    return { course, chapters };
+  },
+});
+
+export const getPublicChapterTree = query({
+  args: { token: v.string(), chapterId: v.id("chapters") },
+  handler: async (ctx, args) => {
+    const course = await ctx.db
+      .query("courses")
+      .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
+      .first();
+    if (!course || !course.isPublic) return null;
+
+    const chapter = await ctx.db.get(args.chapterId);
+    if (!chapter || chapter.courseId !== course._id) return null;
+
+    const moves = await ctx.db
+      .query("moves")
+      .withIndex("by_chapter", (q) => q.eq("chapterId", args.chapterId))
+      .collect();
+    moves.sort((a, b) => a.sortOrder - b.sortOrder);
+
+    const positionIds = new Set<Id<"positions">>();
+    for (const move of moves) {
+      positionIds.add(move.parentPositionId);
+      positionIds.add(move.childPositionId);
+    }
+
+    const positions: Doc<"positions">[] = [];
+    for (const positionId of positionIds) {
+      const position = await ctx.db.get(positionId);
+      if (position && position.userId === course.userId) positions.push(position);
+    }
+
+    return { moves, positions };
+  },
+});
+
 export const updateAnnotation = mutation({
   args: { positionId: v.id("positions"), text: v.string() },
   handler: async (ctx, args) => {

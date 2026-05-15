@@ -10,6 +10,7 @@ type Props = {
 };
 
 const MIN_SIZE = 280;
+const DEFAULT_SIZE = 480;
 const STORAGE_KEY = 'repdrill:board-size';
 const LG_GUTTER_MAX = 56;
 const LG_GUTTER_MIN = 20;
@@ -25,26 +26,34 @@ export function ResizableDiagramFrame({
   className = '',
   storageKey = STORAGE_KEY,
 }: Props) {
-  const [size, setSize] = useState<number | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = Number(raw);
-      return Number.isFinite(parsed) && parsed >= MIN_SIZE ? parsed : null;
-    } catch {
-      return null;
-    }
-  });
+  const [size, setSize] = useState<number | null>(null);
   const [resizableEnabled, setResizableEnabled] = useState(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)');
-    const sync = () => setResizableEnabled(mediaQuery.matches);
+    const sync = () => {
+      const enabled = mediaQuery.matches;
+      setResizableEnabled(enabled);
+      if (!enabled) {
+        setSize(null);
+        return;
+      }
+      let initial: number | null = null;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) {
+          const parsed = Number(raw);
+          if (Number.isFinite(parsed) && parsed >= MIN_SIZE) initial = parsed;
+        }
+      } catch {
+        // ignore
+      }
+      setSize(initial ?? DEFAULT_SIZE);
+    };
     sync();
     mediaQuery.addEventListener('change', sync);
     return () => mediaQuery.removeEventListener('change', sync);
-  }, []);
+  }, [storageKey]);
 
   useEffect(() => {
     if (!resizableEnabled || !size) return;
@@ -107,7 +116,7 @@ export function ResizableDiagramFrame({
     <figure
       className={`relative ${className}`}
       style={
-        size
+        resizableEnabled && size
           ? {
               width: `${size}px`,
             }

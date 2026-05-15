@@ -6,7 +6,6 @@ import {
   type ViewerMove,
   type ViewerPosition,
 } from '@/components/repertoire/RepertoireViewer';
-import { AnnotationSearch } from '@/components/repertoire/AnnotationSearch';
 import {
   AppSurface,
   BackLink,
@@ -126,6 +125,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
   const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
   const [chaptersOpen, setChaptersOpen] = useState(true);
+  const [chapterQuery, setChapterQuery] = useState('');
 
   const linesByChapter = useMemo(
     () => buildChapterLines(rootPositionId, chapters, moves),
@@ -232,15 +232,15 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
             <>
               <PremiumButton href={`/courses/${course.id}/import`}>Import PGN</PremiumButton>
               <SecondaryButton href={`/api/export/course?id=${course.id}`}>Export PGN</SecondaryButton>
+              <SharePanel
+                courseId={course.id}
+                courseName={course.name}
+                isPublic={course.isPublic}
+                shareToken={course.shareToken}
+              />
             </>
           )
         }
-      />
-
-      <SharePanel
-        courseId={course.id}
-        isPublic={course.isPublic}
-        shareToken={course.shareToken}
       />
 
       {chapters.length > 0 && (
@@ -275,15 +275,25 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
           {chaptersOpen && (
             <>
               <div className="px-5 py-5 md:px-7">
-                <AnnotationSearch
-                  positions={positions}
-                  onSelect={(posId) => setJumpTarget(posId)}
-                  alwaysOpen
-                />
+                <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                    /
+                  </span>
+                  <input
+                    type="text"
+                    value={chapterQuery}
+                    onChange={(e) => setChapterQuery(e.target.value)}
+                    placeholder="Search chapters…"
+                    className="font-display flex-1 bg-transparent text-lg italic text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none"
+                  />
+                </div>
               </div>
 
               <ul className="divide-y divide-[color:var(--paper-rule)] border-t border-[color:var(--paper-rule)]">
-                {chapters.map((ch, idx) => {
+                {chapters.filter((ch) =>
+                  !chapterQuery.trim() || ch.name.toLowerCase().includes(chapterQuery.toLowerCase())
+                ).map((ch) => {
+                  const originalIdx = chapters.indexOf(ch);
                   const lineCount = linesByChapter.get(ch.id)?.length ?? 0;
                   const active = selectedChapterId === ch.id;
                   return (
@@ -318,7 +328,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                             className={`font-display text-base italic ${active ? 'text-[color:var(--margin-red)]' : 'text-[color:var(--ink-faint)]'}`}
                             style={{ fontFeatureSettings: '"onum"' }}
                           >
-                            {String(idx + 1).padStart(2, '0')}
+                            {String(originalIdx + 1).padStart(2, '0')}
                           </span>
                           <button
                             type="button"

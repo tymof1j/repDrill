@@ -15,12 +15,18 @@ export type BoardArrow = {
   brush?: string;
 };
 
+export type BoardSquareMark = {
+  orig: string;
+  brush?: string;
+};
+
 type Props = {
   fen: string;
   orientation?: 'white' | 'black';
   lastMove?: [string, string];
   viewOnly?: boolean;
   arrows?: BoardArrow[];
+  squareMarks?: BoardSquareMark[];
   movable?: {
     free?: boolean;
     dests?: Map<string, string[]>;
@@ -35,12 +41,27 @@ type Props = {
   size?: number; // explicit px size, overrides default max-w
 };
 
+function buildAutoShapes(
+  arrows?: BoardArrow[],
+  squareMarks?: BoardSquareMark[],
+) {
+  const shapes: { orig: Key; dest?: Key; brush: string }[] = [];
+  for (const m of squareMarks ?? []) {
+    shapes.push({ orig: m.orig as Key, brush: m.brush ?? 'paleGreen' });
+  }
+  for (const a of arrows ?? []) {
+    shapes.push({ orig: a.orig as Key, dest: a.dest as Key, brush: a.brush ?? 'green' });
+  }
+  return shapes;
+}
+
 function buildConfig(props: {
   fen: string;
   orientation: 'white' | 'black';
   viewOnly: boolean;
   lastMove?: [string, string];
   arrows?: BoardArrow[];
+  squareMarks?: BoardSquareMark[];
   movable?: Props['movable'];
   premovable?: Props['premovable'];
   onMove?: Props['onMove'];
@@ -57,11 +78,7 @@ function buildConfig(props: {
     lastMove: props.lastMove as Key[] | undefined,
     drawable: {
       enabled: true,
-      autoShapes: props.arrows?.map((a) => ({
-        orig: a.orig as Key,
-        dest: a.dest as Key,
-        brush: a.brush ?? 'green',
-      })) ?? [],
+      autoShapes: buildAutoShapes(props.arrows, props.squareMarks),
     },
     movable: {
       free: false,
@@ -93,6 +110,7 @@ export function ChessBoard({
   lastMove,
   viewOnly = true,
   arrows,
+  squareMarks,
   movable,
   premovable,
   onMove,
@@ -115,6 +133,7 @@ export function ChessBoard({
       viewOnly,
       lastMove,
       arrows,
+      squareMarks,
       movable,
       premovable,
       onMove: (orig, dest, captured) => onMoveRef.current?.(orig, dest, captured),
@@ -143,11 +162,7 @@ export function ChessBoard({
       animation: { enabled: false, duration: 0 },
       lastMove: lastMove as Key[] | undefined,
       drawable: {
-        autoShapes: arrows?.map((a) => ({
-          orig: a.orig as Key,
-          dest: a.dest as Key,
-          brush: a.brush ?? 'green',
-        })) ?? [],
+        autoShapes: buildAutoShapes(arrows, squareMarks),
       },
       movable: {
         free: false,
@@ -165,7 +180,7 @@ export function ChessBoard({
       },
     });
     apiRef.current.playPremove();
-  }, [fen, orientation, viewOnly, lastMove, arrows, movable, premovable, onPremoveSet]);
+  }, [fen, orientation, viewOnly, lastMove, arrows, squareMarks, movable, premovable, onPremoveSet]);
 
   return (
     <div

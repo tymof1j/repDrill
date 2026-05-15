@@ -31,6 +31,7 @@ const shortcutGroups = [
       ['1-9', 'Jump to a numbered branch'],
       ['Home / End', 'Jump to the root or deepest known move'],
       ['V', 'Show or hide branch arrows'],
+      ['H', 'Show or hide piece highlights'],
       ['/', 'Search annotations'],
     ],
   },

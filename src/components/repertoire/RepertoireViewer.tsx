@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Chess } from 'chess.js';
-import { ChessBoard, type BoardArrow } from '@/components/board/ChessBoard';
+import { ChessBoard, type BoardArrow, type BoardSquareMark } from '@/components/board/ChessBoard';
 import { useTreeNavigation } from '@/lib/hooks/useTreeNavigation';
 import { AnnotationSearch } from './AnnotationSearch';
 import {
@@ -86,6 +86,7 @@ export function RepertoireViewer({
   const currentFen = currentPosition?.fen ?? STARTING_FEN;
 
   const [showArrows, setShowArrows] = useState(true);
+  const [showHighlights, setShowHighlights] = useState(true);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -93,6 +94,10 @@ export function RepertoireViewer({
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setShowArrows((s) => !s);
+      }
+      if (e.key === 'h' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShowHighlights((s) => !s);
       }
     };
     window.addEventListener('keydown', handler);
@@ -108,6 +113,29 @@ export function RepertoireViewer({
       brush: brushes[i % brushes.length],
     }));
   }, [showArrows, nextMoves]);
+
+  // Highlight source squares of pieces with a continuation in the tree.
+  // Shown only when:
+  //   - it is the user's turn (any number of options), OR
+  //   - it is the opponent's turn and there is exactly one forced reply.
+  // When the opponent has multiple branches, arrows already disambiguate.
+  // Theory-mode only — when a "tactics" course category is introduced,
+  // skip this so the puzzle doesn't telegraph which piece to move.
+  const movablePieceMarks = useMemo<BoardSquareMark[]>(() => {
+    if (!showHighlights || nextMoves.length === 0) return [];
+    const turn = currentFen.split(/\s+/)[1] === 'b' ? 'black' : 'white';
+    const isUserTurn = turn === repertoireColor;
+    if (!isUserTurn && nextMoves.length !== 1) return [];
+    const seen = new Set<string>();
+    const marks: BoardSquareMark[] = [];
+    for (const m of nextMoves) {
+      const orig = m.uci.slice(0, 2);
+      if (seen.has(orig)) continue;
+      seen.add(orig);
+      marks.push({ orig, brush: 'green' });
+    }
+    return marks;
+  }, [showHighlights, nextMoves, currentFen, repertoireColor]);
 
   const legalDests = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -187,6 +215,19 @@ export function RepertoireViewer({
             </p>
             <button
               type="button"
+              onClick={() => setShowHighlights((s) => !s)}
+              aria-pressed={showHighlights}
+              className={`font-mono text-[10px] font-semibold uppercase tracking-[0.18em] underline decoration-1 underline-offset-[6px] transition-colors duration-200 ${
+                showHighlights
+                  ? 'text-[color:var(--margin-red)] decoration-[color:var(--margin-red)]'
+                  : 'text-[color:var(--ink-faint)] decoration-[color:var(--paper-edge)] hover:text-[color:var(--ink)]'
+              }`}
+              title="Toggle piece highlights (h)"
+            >
+              Hints {showHighlights ? 'on' : 'off'}
+            </button>
+            <button
+              type="button"
               onClick={() => setShowArrows((s) => !s)}
               aria-pressed={showArrows}
               className={`font-mono text-[10px] font-semibold uppercase tracking-[0.18em] underline decoration-1 underline-offset-[6px] transition-colors duration-200 ${
@@ -210,6 +251,7 @@ export function RepertoireViewer({
               orientation={repertoireColor}
               lastMove={lastMove}
               arrows={arrows}
+              squareMarks={movablePieceMarks}
               viewOnly={false}
               movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
               onMove={onBoardMove}

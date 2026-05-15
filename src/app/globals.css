@@ -308,6 +308,12 @@ input[type="search"]::-webkit-search-cancel-button {
   50%      { opacity: 0.55; }
 }
 
+@keyframes shareCopyPop {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.9); }
+  60%  { opacity: 1; transform: translateY(0) scale(1.06); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .pulse-due {
   animation: pulse-due 2.4s ease-in-out infinite;
 }
