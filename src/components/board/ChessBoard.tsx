@@ -32,6 +32,7 @@ type Props = {
   };
   onMove?: (orig: string, dest: string, captured?: Piece) => void;
   onPremoveSet?: (orig: string, dest: string) => void;
+  size?: number; // explicit px size, overrides default max-w
 };
 
 function buildConfig(props: {
@@ -96,6 +97,7 @@ export function ChessBoard({
   premovable,
   onMove,
   onPremoveSet,
+  size,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<Api | null>(null);
@@ -166,7 +168,10 @@ export function ChessBoard({
   }, [fen, orientation, viewOnly, lastMove, arrows, movable, premovable, onPremoveSet]);
 
   return (
-    <div className="mx-auto aspect-square w-full max-w-none md:max-w-[480px]">
+    <div
+      className="relative mx-auto aspect-square w-full max-w-none"
+      style={size ? { width: `${size}px` } : undefined}
+    >
       <div ref={containerRef} className="cg-wrap h-full w-full" />
     </div>
   );

@@ -6,13 +6,13 @@ import { ChessBoard, type BoardArrow } from '@/components/board/ChessBoard';
 import { useTreeNavigation } from '@/lib/hooks/useTreeNavigation';
 import { AnnotationSearch } from './AnnotationSearch';
 import {
-  DiagramFrame,
   EmptyState,
   GhostButton,
   SecondaryButton,
   Stamp,
   fieldClassName,
 } from '@/components/ui/Premium';
+import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 
 export type ViewerMove = {
   id: string;
@@ -174,7 +174,7 @@ export function RepertoireViewer({
   }
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(360px,500px)_1fr] lg:gap-14">
+    <div className="grid gap-10 lg:grid-cols-[auto_minmax(420px,1fr)] lg:gap-14">
       {/* ── Diagram ─────────────────────────────────────── */}
       <div>
         <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
@@ -202,7 +202,7 @@ export function RepertoireViewer({
         </div>
 
         <div className="-mx-5 md:mx-0">
-          <DiagramFrame
+          <ResizableDiagramFrame
             caption={selectedChapterName ? `Filtered to: ${selectedChapterName}` : `§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}
           >
             <ChessBoard
@@ -214,7 +214,7 @@ export function RepertoireViewer({
               movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
               onMove={onBoardMove}
             />
-          </DiagramFrame>
+          </ResizableDiagramFrame>
         </div>
 
         <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
@@ -306,24 +306,31 @@ export function RepertoireViewer({
             </p>
           ) : (
             <ol className="notation mt-4 flex flex-wrap gap-2 text-[15px] leading-relaxed text-[color:var(--ink)]">
-              {path.map((m, i) => (
-                <li key={m.id}>
-                  <button
-                    onClick={() => goToIndex(i)}
-                    className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
-                      i === path.length - 1
-                        ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
-                        : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
-                    }`}
-                  >
-                    {i % 2 === 0 && (
-                      <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
-                        {Math.floor(i / 2) + 1}.
-                      </span>
-                    )}{m.san}
-                  </button>
-                </li>
-              ))}
+              {path.map((m, i) => {
+                const hasAnnotation = Boolean(
+                  positionsById.get(m.childPositionId)?.annotation?.trim(),
+                );
+                return (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => goToIndex(i)}
+                      className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
+                        i === path.length - 1
+                          ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
+                          : hasAnnotation
+                            ? 'bg-[color:var(--library-green)]/15 text-[color:var(--library-green)] hover:bg-[color:var(--library-green)]/25'
+                            : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+                      }`}
+                    >
+                      {i % 2 === 0 && (
+                        <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
+                          {Math.floor(i / 2) + 1}.
+                        </span>
+                      )}{m.san}
+                    </button>
+                  </li>
+                );
+              })}
             </ol>
           )}
         </section>
@@ -367,14 +374,12 @@ export function RepertoireViewer({
                           {m.san}
                         </span>
                         <Stamp tone={moveTypeStamp}>{m.moveType}</Stamp>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+                        <span className="w-full font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden text-ellipsis leading-[1.45]">
                           {m.chapterName}
+                          {uniqueChapterNames.length > 1
+                            ? ` · +${uniqueChapterNames.length - 1} chapters`
+                            : ''}
                         </span>
-                        {uniqueChapterNames.length > 1 && (
-                          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">
-                            +{uniqueChapterNames.length - 1} chapters
-                          </span>
-                        )}
                       </span>
                     </button>
                   </li>

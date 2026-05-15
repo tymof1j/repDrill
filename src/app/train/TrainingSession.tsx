@@ -17,21 +17,25 @@ const ChessBoard = dynamic(
 );
 import {
   AppSurface,
-  DiagramFrame,
   PageHeader,
   PremiumButton,
   SecondaryButton,
   Stamp,
   StatTile,
 } from '@/components/ui/Premium';
+import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import type { TrainingLine, LineStep } from './types';
 import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
+import { normalizeNotation } from '@/lib/chess/notation';
 
 type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 
-type LinePhase = 'learn' | 'drill' | 'line-done';
+// browse → user freely navigates the line
+// drill → two consecutive quiz runs (drillRun 1 then 2)
+// line-done → both drills complete, FSRS submitted
+type LinePhase = 'browse' | 'drill' | 'line-done';
 type SessionPhase = 'playing' | 'done';
 
 type Props = { initialLines: TrainingLine[] };
@@ -39,14 +43,16 @@ type Props = { initialLines: TrainingLine[] };
 export function TrainingSession({ initialLines }: Props) {
   const [lines] = useState(initialLines);
   const [lineIndex, setLineIndex] = useState(0);
-  const [linePhase, setLinePhase] = useState<LinePhase>(
-    initialLines[0]?.isNew ? 'learn' : 'drill',
-  );
+  const [linePhase, setLinePhase] = useState<LinePhase>('browse');
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>('playing');
 
+  // Browse-phase state
+  const [browseIndex, setBrowseIndex] = useState(0); // 0 = start pos, k = after k moves
+
+  // Drill-phase state
+  const [drillRun, setDrillRun] = useState<1 | 2>(1);
+  const [drill1Stats, setDrill1Stats] = useState<{ correct: number; wrong: number } | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
-  const [boardFen, setBoardFen] = useState('');
-  const [lastMoveUci, setLastMoveUci] = useState<[string, string] | undefined>();
   const [waitingForUser, setWaitingForUser] = useState(false);
   const [showAnnotation, setShowAnnotation] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'correct' | 'wrong'; text: string } | null>(null);
@@ -55,6 +61,11 @@ export function TrainingSession({ initialLines }: Props) {
   const [lineCorrect, setLineCorrect] = useState(0);
   const [lineWrong, setLineWrong] = useState(0);
 
+  // Board state
+  const [boardFen, setBoardFen] = useState('');
+  const [lastMoveUci, setLastMoveUci] = useState<[string, string] | undefined>();
+
+  // Input state
   const [inputMode, setInputMode] = useState<'mouse' | 'keyboard'>('mouse');
   const [notationInput, setNotationInput] = useState('');
   const [notationError, setNotationError] = useState<string | null>(null);
@@ -75,10 +86,14 @@ export function TrainingSession({ initialLines }: Props) {
   const step: LineStep | null = line ? line.steps[stepIndex] ?? null : null;
   const playerColor = line?.courseColor ?? 'white';
 
+  // Reset all state when a new line starts — always begin in browse
   useEffect(() => {
     if (!line) return;
     const firstFen = line.steps[0]?.parentFen ?? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
     setBoardFen(firstFen + ' 0 1');
+    setBrowseIndex(0);
+    setDrillRun(1);
+    setDrill1Stats(null);
     setStepIndex(0);
     setLastMoveUci(undefined);
     setWaitingForUser(false);
@@ -92,41 +107,26 @@ export function TrainingSession({ initialLines }: Props) {
     setNeedsManualNext(false);
     setTracePreviewIndex(null);
     setQueuedPremove(null);
-    setLinePhase(line.isNew ? 'learn' : 'drill');
+    setLinePhase('browse');
   }, [line, lineIndex]);
 
-  // LEARN: auto-play through line
+  // BROWSE: sync board to browseIndex
   useEffect(() => {
-    if (linePhase !== 'learn' || !line) return;
-    if (stepIndex >= line.steps.length) {
-      setStepIndex(0);
-      const firstFen = line.steps[0]?.parentFen ?? '';
-      setBoardFen(firstFen + ' 0 1');
+    if (linePhase !== 'browse' || !line || line.steps.length === 0) return;
+    if (browseIndex === 0) {
+      setBoardFen(line.steps[0].parentFen + ' 0 1');
       setLastMoveUci(undefined);
-      setShowAnnotation(false);
-      setLinePhase('drill');
-      return;
+    } else {
+      const s = line.steps[browseIndex - 1];
+      setBoardFen(s.childFen + ' 0 1');
+      setLastMoveUci([s.uci.slice(0, 2), s.uci.slice(2, 4)]);
     }
+  }, [linePhase, browseIndex, line]);
 
-    const s = line.steps[stepIndex];
-    setBoardFen(s.childFen + ' 0 1');
-    setLastMoveUci([s.uci.slice(0, 2), s.uci.slice(2, 4)]);
-    setShowAnnotation(!!s.annotation);
-
-    const advanceTimer = setTimeout(() => {
-      setShowAnnotation(false);
-      setStepIndex((i) => i + 1);
-    }, s.annotation ? 800 : 100);
-    return () => clearTimeout(advanceTimer);
-  }, [linePhase, stepIndex, line]);
-
-  // DRILL
+  // DRILL: advance opponent moves automatically, set waitingForUser for user moves
   useEffect(() => {
     if (linePhase !== 'drill' || !line) return;
-    if (stepIndex >= line.steps.length) {
-      setLinePhase('line-done');
-      return;
-    }
+    if (stepIndex >= line.steps.length) return; // handled by completion effect below
 
     const s = line.steps[stepIndex];
     if (feedback) return;
@@ -149,6 +149,37 @@ export function TrainingSession({ initialLines }: Props) {
     }
   }, [linePhase, stepIndex, line, feedback, inputMode]);
 
+  // DRILL COMPLETION: handle end of drill-1 (start drill-2) and end of drill-2 (line-done)
+  useEffect(() => {
+    if (linePhase !== 'drill' || !line) return;
+    if (stepIndex < line.steps.length) return;
+    if (feedback) return; // wait for feedback to clear before transitioning
+
+    if (drillRun === 1) {
+      // Save drill-1 stats and start drill-2 after a short pause
+      setDrill1Stats({ correct: lineCorrect, wrong: lineWrong });
+      const t = setTimeout(() => {
+        setDrillRun(2);
+        setStepIndex(0);
+        const fen = line.steps[0]?.parentFen ?? '';
+        setBoardFen(fen + ' 0 1');
+        setLastMoveUci(undefined);
+        setLineCorrect(0);
+        setLineWrong(0);
+        setLineResults([]);
+        setFeedback(null);
+        setShowAnnotation(false);
+        setNeedsManualNext(false);
+        setWaitingForUser(false);
+        setTracePreviewIndex(null);
+      }, 1400);
+      return () => clearTimeout(t);
+    } else {
+      setLinePhase('line-done');
+    }
+  }, [linePhase, stepIndex, line, drillRun, feedback, lineCorrect, lineWrong]);
+
+  // LINE-DONE: submit drill-2 ratings and update session stats
   useEffect(() => {
     if (linePhase !== 'line-done') return;
     if (lineResults.length > 0) {
@@ -163,9 +194,11 @@ export function TrainingSession({ initialLines }: Props) {
     setSessionStats((s) => ({
       ...s,
       linesCompleted: s.linesCompleted + 1,
+      totalCorrect: s.totalCorrect + lineCorrect,
+      totalWrong: s.totalWrong + lineWrong,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linePhase, lineResults, submitRatings]);
+  }, [linePhase]);
 
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
@@ -197,11 +230,6 @@ export function TrainingSession({ initialLines }: Props) {
         }
         if (correct) setLineCorrect((c) => c + 1);
         else setLineWrong((c) => c + 1);
-        setSessionStats((s) => ({
-          ...s,
-          totalCorrect: s.totalCorrect + (correct ? 1 : 0),
-          totalWrong: s.totalWrong + (correct ? 0 : 1),
-        }));
 
         setBoardFen(targetStep.childFen + ' 0 1');
         setLastMoveUci([targetStep.uci.slice(0, 2), targetStep.uci.slice(2, 4)]);
@@ -235,7 +263,7 @@ export function TrainingSession({ initialLines }: Props) {
           }, delay);
         }
       } catch {
-        // invalid
+        // invalid move
       }
     },
     [line, step, stepIndex, waitingForUser, linePhase, moveStartTime],
@@ -252,8 +280,10 @@ export function TrainingSession({ initialLines }: Props) {
     if (!input) return;
 
     try {
-      const chess = new Chess(step.parentFen + ' 0 1');
-      const result = chess.move(input, { strict: false });
+      const fen = step.parentFen + ' 0 1';
+      const normalized = normalizeNotation(input, fen);
+      const chess = new Chess(fen);
+      const result = chess.move(normalized, { strict: false });
       if (!result) {
         setNotationError('Invalid move.');
         return;
@@ -280,9 +310,81 @@ export function TrainingSession({ initialLines }: Props) {
     }
   }, [step, waitingForUser, linePhase]);
 
+  // Start drilling from the browse phase
+  const startDrilling = useCallback(() => {
+    if (!line) return;
+    setLinePhase('drill');
+    setDrillRun(1);
+    setStepIndex(0);
+    const fen = line.steps[0]?.parentFen ?? '';
+    setBoardFen(fen + ' 0 1');
+    setLastMoveUci(undefined);
+    setFeedback(null);
+    setShowAnnotation(false);
+    setWaitingForUser(false);
+    setLineCorrect(0);
+    setLineWrong(0);
+    setLineResults([]);
+  }, [line]);
+
+  const continueAfterWrong = useCallback(() => {
+    if (!needsManualNext) return;
+    setNeedsManualNext(false);
+    setFeedback(null);
+    setShowAnnotation(false);
+    setTracePreviewIndex(null);
+    setStepIndex((i) => i + 1);
+  }, [needsManualNext]);
+
+  const nextLine = () => {
+    const next = lineIndex + 1;
+    if (next >= lines.length) {
+      setSessionPhase('done');
+    } else {
+      setLineIndex(next);
+    }
+  };
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Browse navigation
+      if (linePhase === 'browse' && line) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setBrowseIndex((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+          e.preventDefault();
+          const next = browseIndex + 1;
+          if (next <= line.steps.length) {
+            setBrowseIndex(next);
+          } else {
+            startDrilling();
+          }
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setBrowseIndex(0);
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setBrowseIndex(line.steps.length);
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          startDrilling();
+          return;
+        }
+      }
+
+      // Drill controls
       if (e.key === ' ' && needsManualNext && feedback?.type === 'wrong') {
         e.preventDefault();
         continueAfterWrong();
@@ -299,7 +401,7 @@ export function TrainingSession({ initialLines }: Props) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [waitingForUser, needsManualNext, feedback]);
+  }, [linePhase, browseIndex, line, waitingForUser, needsManualNext, feedback, startDrilling, continueAfterWrong]);
 
   useEffect(() => {
     if (!queuedPremove || !waitingForUser || !step?.isUserMove || linePhase !== 'drill' || needsManualNext) {
@@ -313,33 +415,19 @@ export function TrainingSession({ initialLines }: Props) {
     return () => window.clearTimeout(timer);
   }, [queuedPremove, waitingForUser, step, linePhase, needsManualNext, tryMove]);
 
-  const nextLine = () => {
-    const next = lineIndex + 1;
-    if (next >= lines.length) {
-      setSessionPhase('done');
-    } else {
-      setLineIndex(next);
-    }
-  };
-
-  const skipLearn = () => {
-    if (!line) return;
-    setStepIndex(0);
-    const firstFen = line.steps[0]?.parentFen ?? '';
-    setBoardFen(firstFen + ' 0 1');
-    setLastMoveUci(undefined);
-    setShowAnnotation(false);
-    setLinePhase('drill');
-  };
-
-  const continueAfterWrong = () => {
-    if (!needsManualNext) return;
-    setNeedsManualNext(false);
-    setFeedback(null);
-    setShowAnnotation(false);
-    setTracePreviewIndex(null);
-    setStepIndex((i) => i + 1);
-  };
+  // Lock scroll on large screens — content fits without scrolling
+  useEffect(() => {
+    const main = document.getElementById('main-content');
+    if (!main) return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const apply = () => { main.style.overflowY = mq.matches ? 'hidden' : ''; };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => {
+      mq.removeEventListener('change', apply);
+      main.style.overflowY = '';
+    };
+  }, []);
 
   // ─── Session done ───────────────────────────────────────
   if (sessionPhase === 'done') {
@@ -382,38 +470,44 @@ export function TrainingSession({ initialLines }: Props) {
 
   const userMovesInLine = line.steps.filter((s) => s.isUserMove).length;
   const playedUserMoves = lineCorrect + lineWrong;
+
+  // Detect between-drills transition window (drill-1 done, timer running for drill-2)
+  const betweenDrills =
+    linePhase === 'drill' &&
+    drillRun === 1 &&
+    stepIndex >= line.steps.length &&
+    !feedback;
+
   const lineProgress =
-    linePhase === 'learn'
-      ? Math.round((Math.min(stepIndex, line.steps.length) / Math.max(line.steps.length, 1)) * 100)
+    linePhase === 'browse'
+      ? Math.round((browseIndex / Math.max(line.steps.length, 1)) * 100)
       : linePhase === 'line-done'
         ? 100
         : Math.round((playedUserMoves / Math.max(userMovesInLine, 1)) * 100);
 
   const phaseLabel =
-    linePhase === 'learn'
-      ? 'Watch first'
+    linePhase === 'browse'
+      ? `Study · ${browseIndex}/${line.steps.length}`
       : linePhase === 'line-done'
         ? 'Line complete'
-        : waitingForUser
-          ? `Your move · ${playerColor}`
-          : 'Opponent';
+        : betweenDrills
+          ? 'Starting drill 2…'
+          : waitingForUser
+            ? `Your move · ${playerColor}`
+            : `Drill ${drillRun}/2`;
 
-  const promptCopy =
-    linePhase === 'learn'
-      ? 'Watch the line once, then drill it from memory.'
-      : linePhase === 'line-done'
-        ? 'Review the result, then continue.'
-        : waitingForUser
-          ? inputMode === 'keyboard'
-            ? 'Type the prepared move in algebraic notation.'
-            : 'Find the prepared move on the board.'
-          : 'The opponent is replying…';
+  // Browse: annotation for the current position (always visible)
+  const browseAnnotation =
+    linePhase === 'browse' && browseIndex > 0
+      ? line.steps[browseIndex - 1]?.annotation ?? null
+      : null;
 
+  // Drill trace tokens (played moves so far in current drill)
   const traceUpTo =
     linePhase === 'line-done'
       ? line.steps.length
       : Math.min(stepIndex + (waitingForUser ? 0 : 1), line.steps.length);
-  const traceTokens = line.steps.slice(0, traceUpTo).map((s, i) => {
+  const drillTraceTokens = line.steps.slice(0, traceUpTo).map((s, i) => {
     const sideToMove = s.parentFen.split(/\s+/)[1] === 'w' ? 'white' : 'black';
     const prefix = sideToMove === 'white' ? `${s.moveNumber}.` : '';
     return {
@@ -425,9 +519,23 @@ export function TrainingSession({ initialLines }: Props) {
     };
   });
 
+  // Browse trace tokens (full line, all steps)
+  const browseTraceTokens = line.steps.map((s, i) => {
+    const sideToMove = s.parentFen.split(/\s+/)[1] === 'w' ? 'white' : 'black';
+    const prefix = sideToMove === 'white' ? `${s.moveNumber}.` : '';
+    return {
+      key: `browse-${i}-${s.uci}`,
+      text: `${prefix}${s.san}`,
+      childFen: s.childFen,
+      uci: s.uci,
+      index: i, // browseIndex = i + 1 when this move is selected
+      hasAnnotation: Boolean(s.annotation?.trim()),
+    };
+  });
+
   return (
     <AppSurface>
-      {/* Header ribbon — book-style line meta */}
+      {/* Header ribbon */}
       <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
           Training · Line{' '}
@@ -440,12 +548,32 @@ export function TrainingSession({ initialLines }: Props) {
           {line.courseName} <span className="text-[color:var(--ink-ghost)]">·</span> {line.chapterName}
         </p>
         <div className="flex items-center gap-3">
-          <Stamp tone={linePhase === 'learn' ? 'gold' : linePhase === 'drill' ? 'red' : 'green'}>
-            {linePhase === 'learn' ? 'New · learn' : linePhase === 'drill' ? 'Drill' : 'Done'}
+          <Stamp
+            tone={
+              linePhase === 'browse'
+                ? 'gold'
+                : linePhase === 'line-done'
+                  ? 'green'
+                  : betweenDrills
+                    ? 'gold'
+                    : drillRun === 1
+                      ? 'red'
+                      : 'red'
+            }
+          >
+            {linePhase === 'browse'
+              ? 'Study'
+              : linePhase === 'line-done'
+                ? 'Done'
+                : betweenDrills
+                  ? 'Drill 1 done'
+                  : `Drill ${drillRun}/2`}
           </Stamp>
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)] tabular-nums">
-            {playedUserMoves}/{userMovesInLine}
-          </span>
+          {linePhase === 'drill' && !betweenDrills && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)] tabular-nums">
+              {playedUserMoves}/{userMovesInLine}
+            </span>
+          )}
         </div>
       </div>
 
@@ -465,8 +593,8 @@ export function TrainingSession({ initialLines }: Props) {
         </div>
       )}
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(360px,520px)_1fr] lg:gap-14">
-        {/* Diagram column */}
+      <div className="grid gap-10 lg:grid-cols-[auto_minmax(420px,1fr)] lg:gap-14">
+        {/* Board column */}
         <div>
           <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
@@ -478,20 +606,26 @@ export function TrainingSession({ initialLines }: Props) {
           </div>
 
           <div className="-mx-5 md:mx-0">
-            <DiagramFrame caption={`Move ${stepIndex + 1} / ${line.steps.length}`}>
+            <ResizableDiagramFrame
+              caption={
+                linePhase === 'browse'
+                  ? `Move ${browseIndex} / ${line.steps.length}`
+                  : `Move ${stepIndex + 1} / ${line.steps.length}`
+              }
+            >
               <ChessBoard
                 fen={boardFen}
                 orientation={playerColor}
-                viewOnly={linePhase === 'learn'}
+                viewOnly={linePhase === 'browse' || betweenDrills}
                 lastMove={lastMoveUci}
                 movable={
-                  linePhase === 'drill' && inputMode === 'mouse'
+                  linePhase === 'drill' && !betweenDrills && inputMode === 'mouse'
                     ? waitingForUser
                       ? { free: false, dests: legalDests, color: playerColor, showDests: true }
                       : { free: false, color: playerColor, showDests: true }
                     : undefined
                 }
-                premovable={{ enabled: true }}
+                premovable={{ enabled: linePhase === 'drill' && !betweenDrills }}
                 onMove={onBoardMove}
                 onPremoveSet={(orig, dest) => {
                   setQueuedPremove({ from: orig, to: dest });
@@ -502,11 +636,57 @@ export function TrainingSession({ initialLines }: Props) {
                     : undefined
                 }
               />
-            </DiagramFrame>
+            </ResizableDiagramFrame>
           </div>
 
-          {/* Input controls */}
-          {waitingForUser && (
+          {/* Browse navigation controls */}
+          {linePhase === 'browse' && (
+            <div className="mt-6">
+              <div className="grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
+                <button
+                  type="button"
+                  onClick={() => setBrowseIndex((i) => Math.max(0, i - 1))}
+                  disabled={browseIndex === 0}
+                  className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:opacity-30"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = browseIndex + 1;
+                    if (next <= line.steps.length) setBrowseIndex(next);
+                    else startDrilling();
+                  }}
+                  className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)]"
+                >
+                  {browseIndex >= line.steps.length ? 'Drill →' : 'Forward →'}
+                </button>
+                <button
+                  type="button"
+                  onClick={startDrilling}
+                  className="bg-[color:var(--ink)] px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--paper)] transition-colors duration-200 hover:opacity-90"
+                >
+                  Start drill
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Browse annotation — narrow screens only; lg+ sees it in the right column */}
+          {linePhase === 'browse' && browseAnnotation && (
+            <section className="mt-4 lg:hidden">
+              <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Annotation
+              </p>
+              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
+                {browseAnnotation}
+              </p>
+            </section>
+          )}
+
+          {/* Drill input controls */}
+          {linePhase === 'drill' && !betweenDrills && waitingForUser && (
             <div className="mt-6 space-y-4">
               <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 {(['mouse', 'keyboard'] as const).map((mode) => (
@@ -576,20 +756,23 @@ export function TrainingSession({ initialLines }: Props) {
             </div>
           )}
 
-          {linePhase === 'learn' && (
-            <div className="mt-6">
-              <SecondaryButton onClick={skipLearn}>Skip to drill</SecondaryButton>
-            </div>
-          )}
-
           <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
-            <kbd className="font-mono">tab</kbd> toggle input ·{' '}
-            <kbd className="font-mono">enter</kbd> submit ·{' '}
-            <kbd className="font-mono">space</kbd> continue
+            {linePhase === 'browse'
+              ? <>
+                  <kbd className="font-mono">↑↓</kbd> first/last ·{' '}
+                  <kbd className="font-mono">←→</kbd> navigate ·{' '}
+                  <kbd className="font-mono">enter</kbd> drill
+                </>
+              : <>
+                  <kbd className="font-mono">tab</kbd> toggle input ·{' '}
+                  <kbd className="font-mono">enter</kbd> submit ·{' '}
+                  <kbd className="font-mono">space</kbd> continue
+                </>
+            }
           </p>
         </div>
 
-        {/* Right column: prompt, feedback, marginalia, trace */}
+        {/* Right column: prompt, feedback, annotation, trace */}
         <div className="space-y-10">
           {/* Prompt */}
           <section>
@@ -597,10 +780,20 @@ export function TrainingSession({ initialLines }: Props) {
               Prompt
             </p>
             <p className="mt-5 font-display text-3xl font-medium leading-[1.15] tracking-[-0.01em] text-[color:var(--ink)] md:text-4xl">
-              {linePhase === 'learn' ? (
-                <>
-                  Watch <span className="font-display-italic">once</span>, then drill from memory.
-                </>
+              {linePhase === 'browse' ? (
+                browseIndex === 0 ? (
+                  <>
+                    Study this <span className="font-display-italic">line</span>.
+                  </>
+                ) : browseIndex >= line.steps.length ? (
+                  <>
+                    End of line — ready to <span className="font-display-italic">drill?</span>
+                  </>
+                ) : (
+                  <>
+                    Move {browseIndex} of {line.steps.length}.
+                  </>
+                )
               ) : linePhase === 'line-done' ? (
                 lineWrong === 0 ? (
                   <>
@@ -608,9 +801,14 @@ export function TrainingSession({ initialLines }: Props) {
                   </>
                 ) : (
                   <>
-                    {lineCorrect}/{lineCorrect + lineWrong} <span className="font-display-italic">correct</span>.
+                    {lineCorrect}/{lineCorrect + lineWrong}{' '}
+                    <span className="font-display-italic">correct</span>.
                   </>
                 )
+              ) : betweenDrills ? (
+                <>
+                  Drill 1 complete — <span className="font-display-italic">resetting…</span>
+                </>
               ) : waitingForUser ? (
                 <>
                   Your turn — move {playedUserMoves + 1} of {userMovesInLine}.
@@ -622,11 +820,21 @@ export function TrainingSession({ initialLines }: Props) {
               )}
             </p>
             <p className="mt-3 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
-              {promptCopy}
+              {linePhase === 'browse'
+                ? 'Navigate with ← → · read the annotations · press Enter or Start drill when ready.'
+                : linePhase === 'line-done'
+                  ? 'Review the result, then continue.'
+                  : betweenDrills
+                    ? `Drill 1: ${drill1Stats?.correct ?? 0}/${(drill1Stats?.correct ?? 0) + (drill1Stats?.wrong ?? 0)} correct. Starting drill 2…`
+                    : waitingForUser
+                      ? inputMode === 'keyboard'
+                        ? 'Type the prepared move in algebraic notation.'
+                        : 'Find the prepared move on the board.'
+                      : 'The opponent is replying…'}
             </p>
           </section>
 
-          {/* Feedback */}
+          {/* Feedback (drill only) */}
           {feedback && (
             <section
               className={`border-l-2 pl-4 ${feedback.type === 'correct'
@@ -648,8 +856,20 @@ export function TrainingSession({ initialLines }: Props) {
             </section>
           )}
 
-          {/* Annotation marginalia */}
-          {showAnnotation && step?.annotation && (
+          {/* Browse annotation — always visible, full text */}
+          {linePhase === 'browse' && browseAnnotation && (
+            <section>
+              <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Annotation
+              </p>
+              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
+                {browseAnnotation}
+              </p>
+            </section>
+          )}
+
+          {/* Drill annotation (brief) */}
+          {linePhase === 'drill' && showAnnotation && step?.annotation && (
             <section>
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                 Annotation
@@ -660,14 +880,45 @@ export function TrainingSession({ initialLines }: Props) {
             </section>
           )}
 
-          {/* Move trace — render played moves like a notation column */}
-          {linePhase === 'drill' && traceTokens.length > 0 && (
+          {/* Browse: full line trace — clickable */}
+          {linePhase === 'browse' && browseTraceTokens.length > 0 && (
+            <section>
+              <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Line
+              </p>
+              <ol className="mt-4 flex flex-wrap gap-2">
+                {browseTraceTokens.map((token) => (
+                  <li
+                    key={token.key}
+                    className={`notation cursor-pointer rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 md:text-[17px] ${
+                      browseIndex === token.index + 1
+                        ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+                        : line.steps[token.index]?.isUserMove
+                          ? 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+                          : token.hasAnnotation
+                            ? 'bg-[color:var(--library-green)]/15 text-[color:var(--library-green)] hover:bg-[color:var(--library-green)]/25'
+                            : 'bg-transparent text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-edge)]'
+                    }`}
+                    onClick={() => setBrowseIndex(token.index + 1)}
+                  >
+                    {token.text}
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-3 font-mono text-[10px] text-[color:var(--ink-ghost)]">
+                Your moves highlighted · green marks annotation · click to jump
+              </p>
+            </section>
+          )}
+
+          {/* Drill: move trace — clickable when reviewing wrong move */}
+          {linePhase === 'drill' && drillTraceTokens.length > 0 && (
             <section>
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                 Trace
               </p>
               <ol className="mt-4 flex flex-wrap gap-2">
-                {traceTokens.map((token) => (
+                {drillTraceTokens.map((token) => (
                   <li
                     key={token.key}
                     className={`notation rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 md:text-[17px] ${
@@ -689,12 +940,30 @@ export function TrainingSession({ initialLines }: Props) {
             </section>
           )}
 
-          {/* Line done */}
+          {/* Line done — both drill results */}
           {linePhase === 'line-done' && (
             <section>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-6 border-y border-[color:var(--paper-edge)] py-6">
-                <StatTile label="Correct" value={lineCorrect} tone="green" />
-                <StatTile label="Wrong" value={lineWrong} tone={lineWrong === 0 ? 'green' : 'red'} />
+              <div className="grid grid-cols-2 gap-x-2 gap-y-6 border-y border-[color:var(--paper-edge)] py-6 md:grid-cols-4">
+                {drill1Stats && (
+                  <>
+                    <StatTile
+                      label="Drill 1 correct"
+                      value={drill1Stats.correct}
+                      tone="green"
+                    />
+                    <StatTile
+                      label="Drill 1 wrong"
+                      value={drill1Stats.wrong}
+                      tone={drill1Stats.wrong === 0 ? 'green' : 'red'}
+                    />
+                  </>
+                )}
+                <StatTile label="Drill 2 correct" value={lineCorrect} tone="green" />
+                <StatTile
+                  label="Drill 2 wrong"
+                  value={lineWrong}
+                  tone={lineWrong === 0 ? 'green' : 'red'}
+                />
               </div>
               <div className="mt-6">
                 <PremiumButton onClick={nextLine}>

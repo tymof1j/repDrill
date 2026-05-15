@@ -7,7 +7,8 @@ import {
   setRepertoireChoiceAction,
   clearRepertoireChoiceAction,
 } from '@/app/repertoires/actions';
-import { DiagramFrame, GhostButton, SecondaryButton, Stamp } from '@/components/ui/Premium';
+import { GhostButton, SecondaryButton, Stamp } from '@/components/ui/Premium';
+import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 
 export type MergedMove = {
   id: string;
@@ -125,7 +126,7 @@ export function MergedRepertoireViewer({
   };
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(360px,500px)_1fr] lg:gap-14">
+    <div className="grid gap-10 lg:grid-cols-[auto_minmax(420px,1fr)] lg:gap-14">
       {/* ── Left page: the diagram ─────────────────────────── */}
       <div>
         <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
@@ -138,9 +139,9 @@ export function MergedRepertoireViewer({
         </div>
 
         <div className="-mx-5 md:mx-0">
-          <DiagramFrame caption={`§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}>
+          <ResizableDiagramFrame caption={`§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}>
             <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} />
-          </DiagramFrame>
+          </ResizableDiagramFrame>
         </div>
 
         <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
@@ -184,24 +185,31 @@ export function MergedRepertoireViewer({
             </p>
           ) : (
             <ol className="notation mt-4 flex flex-wrap gap-2 text-[15px] leading-relaxed text-[color:var(--ink)]">
-              {path.map((m, i) => (
-                <li key={`${m.id}-${i}`}>
-                  <button
-                    onClick={() => goToIndex(i)}
-                    className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
-                      i === path.length - 1
-                        ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
-                        : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
-                    }`}
-                  >
-                    {m.colorToMove === 'white' && (
-                      <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
-                        {m.moveNumber}.
-                      </span>
-                    )}{m.san}
-                  </button>
-                </li>
-              ))}
+              {path.map((m, i) => {
+                const hasAnnotation = Boolean(
+                  positionsById.get(m.childPositionId)?.annotation?.trim(),
+                );
+                return (
+                  <li key={`${m.id}-${i}`}>
+                    <button
+                      onClick={() => goToIndex(i)}
+                      className={`rounded-lg px-2.5 py-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)] ${
+                        i === path.length - 1
+                          ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
+                          : hasAnnotation
+                            ? 'bg-[color:var(--library-green)]/15 text-[color:var(--library-green)] hover:bg-[color:var(--library-green)]/25'
+                            : 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+                      }`}
+                    >
+                      {m.colorToMove === 'white' && (
+                        <span className={i === path.length - 1 ? 'text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)]'}>
+                          {m.moveNumber}.
+                        </span>
+                      )}{m.san}
+                    </button>
+                  </li>
+                );
+              })}
             </ol>
           )}
         </section>
@@ -258,9 +266,9 @@ export function MergedRepertoireViewer({
                       </span>
                       {isPreferred && <Stamp tone="green">preferred</Stamp>}
                       {isRepertoire && !isPreferred && <Stamp tone="ink">prep</Stamp>}
-                      <span className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+                      <span className="w-full font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden text-ellipsis leading-[1.45]">
                         {g.moves.map((m) => (
-                          <span key={m.id} title={`${m.courseName} · ${m.chapterName}`}>
+                          <span key={m.id} title={`${m.courseName} · ${m.chapterName}`} className="mr-3 inline">
                             {m.courseName}
                           </span>
                         ))}

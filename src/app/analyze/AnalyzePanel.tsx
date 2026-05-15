@@ -9,6 +9,7 @@ import {
   StatTile,
   EmptyState,
 } from '@/components/ui/Premium';
+import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import dynamic from 'next/dynamic';
 
 const ChessBoard = dynamic(
@@ -693,15 +694,17 @@ function DeviationViewer({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-[minmax(0,480px)_1fr]">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-[auto_minmax(280px,1fr)]">
         <div>
-          <ChessBoard
-            fen={fen}
-            orientation={orientation}
-            lastMove={lastMove}
-            viewOnly
-            arrows={arrows}
-          />
+          <ResizableDiagramFrame>
+            <ChessBoard
+              fen={fen}
+              orientation={orientation}
+              lastMove={lastMove}
+              viewOnly
+              arrows={arrows}
+            />
+          </ResizableDiagramFrame>
           <div className="mt-4 flex items-center justify-between gap-3">
             <SecondaryButton onClick={() => setPly(Math.max(0, ply - 1))}>
               ← Prev

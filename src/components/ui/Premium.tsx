@@ -23,9 +23,14 @@ export function AppSurface({
 }) {
   return (
     <div
-      className={`relative min-h-full bg-[color:var(--paper)] px-5 pb-16 pt-20 text-[color:var(--ink)] md:px-10 md:py-12 lg:px-14 ${className}`}
+      className={`relative min-h-full bg-[color:var(--paper)] pb-16 pt-20 text-[color:var(--ink)] [padding-inline:20px] md:py-12 md:[padding-inline:40px] lg:[padding-inline:var(--app-shell-gutter-lg,56px)] ${className}`}
     >
-      <div className="relative mx-auto w-full max-w-6xl">{children}</div>
+      <div
+        className="app-shell-inner relative mx-auto w-full max-w-[var(--app-shell-max-width,72rem)]"
+        style={{ transform: 'translateX(var(--content-shift-x, 0px))' }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
