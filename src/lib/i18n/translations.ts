@@ -15,8 +15,10 @@ export const ukTranslations: Record<string, string> = {
   'A self-hosted chess opening repertoire trainer for annotated lines, FSRS recall, and game review.':
     'Самохостинговий тренажер шахового дебютного репертуару для нотаток, FSRS-повторення та аналізу партій.',
   'Use cases': 'Сценарії',
+  Platform: 'Платформа',
   Workflow: 'Процес',
   Benefits: 'Переваги',
+  Compare: 'Порівняння',
   Ownership: 'Контроль',
   'Close menu': 'Закрити меню',
   'Open menu': 'Відкрити меню',
@@ -27,9 +29,40 @@ export const ukTranslations: Record<string, string> = {
   'Turn every game into opening memory.': 'Перетворюй кожну партію на дебютну памʼять.',
   'RepDrill is a self-hosted chess trainer for players who keep repertoire files, forget move orders, and need a daily plan for what to repair next.':
     'RepDrill — самохостинговий шаховий тренажер для гравців, які ведуть файли репертуару, забувають порядок ходів і хочуть щоденний план, що саме лагодити далі.',
+  'RepDrill is a Convex-backed chess trainer for players who keep repertoire files, forget move orders, and need a daily plan for what to repair next.':
+    'RepDrill — шаховий тренажер на Convex для гравців, які ведуть файли репертуару, забувають порядок ходів і хочуть щоденний план, що саме лагодити далі.',
   'Import your theory': 'Імпортуй теорію',
   'Review due positions': 'Повторюй позиції на сьогодні',
   'Patch lines from real games': 'Латай лінії з реальних партій',
+  'Chess flashcards': 'Шахові флешкартки',
+  'How to start': 'Як почати',
+  'How to start?': 'Як почати?',
+  'From resource to chess flashcards.': 'Від ресурсу до шахових флешкарток.',
+  'Select a good resource': 'Обери хороший ресурс',
+  'Book, course, coach file, or line.': 'Книга, курс, файл тренера або лінія.',
+  'Pick a book, course, coach file, or opening line you actually want to remember.':
+    'Обери книгу, курс, файл тренера або дебютну лінію, яку справді хочеш запамʼятати.',
+  'Create or download PGN': 'Створи або завантаж PGN',
+  'Keep chapters and model lines clean.': 'Чисті розділи й модельні лінії.',
+  'Turn the resource into a clean PGN with chapters, comments, or model lines.':
+    'Перетвори ресурс на чистий PGN із розділами, коментарями або модельними лініями.',
+  'Log in to RepDrill': 'Увійди в RepDrill',
+  'Open your synced web workspace.': 'Відкрий синхронізований простір.',
+  'Open the web platform and keep your opening workspace synced.':
+    'Відкрий вебплатформу й тримай дебютний робочий простір синхронізованим.',
+  'Check the tree and position notes.': 'Перевір дерево й нотатки.',
+  'Upload the file, review the move tree, and keep notes attached to positions.':
+    'Завантаж файл, переглянь дерево ходів і залишай нотатки привʼязаними до позицій.',
+  'Train chess flashcards': 'Тренуй шахові флешкартки',
+  'Review today’s due positions.': 'Повторюй позиції на сьогодні.',
+  'Let RepDrill serve the positions due today until the line sticks.':
+    'Дозволь RepDrill показувати позиції на сьогодні, доки лінія не закріпиться.',
+  'Short review': 'Відгук',
+  'Review note': 'Відгук',
+  'Like Anki flashcards, but for chess.': 'Як флешкартки Anki, але для шахів.',
+  '“Like Anki flashcards, but for chess.”': '«Як флешкартки Anki, але для шахів.»',
+  'You answer with moves instead of text. RepDrill schedules the next review, so opening knowledge comes back before it fades.':
+    'Ти відповідаєш ходами, а не текстом. RepDrill планує наступне повторення, тому дебютні знання повертаються до того, як зникнуть.',
   Build: 'Збірка',
   Connect: 'Звʼязки',
   Review: 'Повторення',
@@ -48,13 +81,59 @@ export const ukTranslations: Record<string, string> = {
     'Імпортуй нещодавні онлайн-партії, а RepDrill позначить перший хід, де підготовка перестала збігатися з репертуаром.',
   'Planned use': 'Запланований сценарій',
   'One loop for building, remembering, and repairing prep.':
-    'Один цикл для побудови, запамʼятовування й ремонту підготовки.',
+    'Побудова, памʼять і ремонт дебютів.',
+  'Web platform': 'Вебплатформа',
+  'Everything around the board stays connected.': 'Усе навколо дошки працює як одна система.',
+  'RepDrill is not a static course reader. It is a workspace for building theory, merging transpositions, scheduling recall, checking online games, and sharing the exact positions that matter.':
+    'RepDrill — не статична читалка курсів. Це робочий простір для побудови теорії, обʼєднання транспозицій, планування повторень, перевірки онлайн-партій і поширення саме тих позицій, які мають значення.',
+  'Keep opening files maintainable': 'Тримай дебютні файли придатними до підтримки',
+  'Build named courses from PGN chapters or manual lines. Each chapter remains a navigable move tree with inline annotations, branch controls, and readable line paths.':
+    'Створюй іменовані курси з PGN-розділів або власних ліній. Кожен розділ лишається навігаційним деревом ходів із нотатками, керуванням гілками й читабельними шляхами.',
+  'Chapter trees': 'Дерева розділів',
+  'Inline notes': 'Нотатки в лінії',
+  'Merge courses into one book': 'Обʼєднуй курси в одну книгу',
+  'Combine several courses into a single repertoire view. When move orders overlap, RepDrill works from the board position, so transpositions do not split your memory.':
+    'Поєднуй кілька курсів в один вигляд репертуару. Коли порядки ходів перетинаються, RepDrill працює від позиції на дошці, тож транспозиції не розбивають памʼять.',
+  'Merged tree': 'Обʼєднане дерево',
+  'Side filter': 'Фільтр сторони',
+  'Preferred choices': 'Обрані варіанти',
+  'Drill due positions instead of whole files': 'Тренуй позиції на сьогодні, а не цілі файли',
+  'The FSRS scheduler tracks stability and difficulty for review cards, then serves the positions that need recall today. Opponent moves play automatically.':
+    'Планувальник FSRS відстежує стабільність і складність карток, а потім дає позиції, які треба пригадати сьогодні. Ходи суперника програються автоматично.',
+  'FSRS queue': 'Черга FSRS',
+  'Board input': 'Ввід дошкою',
+  'SAN input': 'Ввід SAN',
+  'Repair prep from real games': 'Лагодь підготовку з реальних партій',
+  'Connect Lichess or Chess.com, pull recent games, and jump to the first move where the game left your repertoire. Save annotations per ply and convert gaps into study work.':
+    'Підключай Lichess або Chess.com, завантажуй останні партії й переходь до першого ходу, де партія вийшла з репертуару. Зберігай нотатки до кожного напівходу й перетворюй прогалини на навчання.',
+  'Deviation finder': 'Пошук відхилень',
+  'PGN navigation': 'Навігація PGN',
+  'Game notes': 'Нотатки партії',
+  Sharing: 'Поширення',
+  'Send useful prep, not screenshots': 'Надсилай корисну підготовку, а не скріншоти',
+  'Share a full course, one chapter, a single line, a merged repertoire, or an analyzed game with read-only or copy access through a public link or email invite.':
+    'Поширюй повний курс, один розділ, окрему лінію, обʼєднаний репертуар або проаналізовану партію з правами перегляду чи копіювання через публічне посилання або email-запрошення.',
+  'Share links': 'Посилання',
+  'Copy access': 'Доступ до копіювання',
+  'Read-only analysis': 'Аналіз лише для читання',
+  'Sync without trapping the library': 'Синхронізуй без пастки для бібліотеки',
+  'Convex keeps the workspace reactive while PGN and JSON exports keep your repertoire portable. Notes, review history, and shared resources stay organized around positions.':
+    'Convex робить робочий простір реактивним, а експорт PGN і JSON зберігає репертуар переносимим. Нотатки, історія повторень і спільні матеріали організовані навколо позицій.',
+  'Real-time sync': 'Синхронізація',
+  'JSON archive': 'JSON-архів',
   'Study starts from the game you just played.': 'Навчання починається з партії, яку ти щойно зіграв.',
   'The intended routine is simple: keep your opening files in RepDrill, train the lines that are due, then use online games to discover exactly which positions need attention.':
     'Рутина проста: тримай дебютні файли в RepDrill, тренуй лінії на сьогодні, а потім використовуй онлайн-партії, щоб точно знайти позиції, які потребують уваги.',
   'Why it matters': 'Чому це важливо',
   'The advantage is not more lines. It is knowing which line matters today.':
     'Перевага не в більшій кількості ліній. Перевага в тому, що ти знаєш, яка лінія важлива сьогодні.',
+  'Portable by design': 'Портативність у задумі',
+  'Your prep is stored in Convex and can leave anytime as PGN or a full JSON archive.':
+    'Підготовка зберігається в Convex і може будь-коли вийти як PGN або повний JSON-архів.',
+  'Own the repertoire, even when it syncs.': 'Контролюй репертуар, навіть коли він синхронізується.',
+  'RepDrill stores your library in Convex for sync and deployment, while keeping exits wide open: export single courses as PGN or download the full archive as JSON.':
+    'RepDrill зберігає бібліотеку в Convex для синхронізації й деплою, але залишає виходи відкритими: експортуй окремі курси як PGN або завантажуй повний архів JSON.',
+  'Feature comparison': 'Порівняння можливостей',
   'Keep the repertoire on your machine.': 'Тримай репертуар на своїй машині.',
   'RepDrill is open source and stores the library in SQLite. It is built for players who want a private training system, not another cloud account holding their prep.':
     'RepDrill має відкритий код і зберігає бібліотеку в SQLite. Він зроблений для гравців, яким потрібна приватна тренувальна система, а не ще один хмарний акаунт із підготовкою.',
@@ -91,6 +170,7 @@ export const ukTranslations: Record<string, string> = {
   'Step 02': 'Крок 02',
   'Step 03': 'Крок 03',
   'Step 04': 'Крок 04',
+  Step: 'Крок',
   'PGN import': 'Імпорт PGN',
   'Queen pawn repertoire': 'Репертуар ферзевого пішака',
   '18 chapters': '18 розділів',
@@ -109,6 +189,136 @@ export const ukTranslations: Record<string, string> = {
   'Move 12': 'Хід 12',
   'First deviation found. Add this position to review.':
     'Знайдено перше відхилення. Додай цю позицію до повторення.',
+  'Platform choice': 'Вибір платформи',
+  'RepDrill is compared with Chessable courses and Lichess Study across the opening-prep work people repeat every week.':
+    'RepDrill порівнюється з курсами Chessable і Lichess Study за тими задачами дебютної підготовки, які гравці повторюють щотижня.',
+  'Comparison features': 'Можливості',
+  Focused: 'Фокус',
+  'Chessable courses': 'Курси Chessable',
+  'Lichess Study': 'Lichess Study',
+  'Core study': 'Базове навчання',
+  'Build private opening courses': 'Створення приватних дебютних курсів',
+  'Create and maintain your own private opening library, not only consume published material.':
+    'Створюй і підтримуй власну приватну дебютну бібліотеку, а не лише споживай опубліковані матеріали.',
+  Yes: 'Так',
+  'Mostly consume published courses': 'Переважно готові опубліковані курси',
+  'Import and maintain PGN chapters': 'Імпорт і підтримка PGN-розділів',
+  'Bring PGN files into named chapters and keep them editable over time.':
+    'Імпортуй PGN-файли в іменовані розділи й залишай їх редагованими з часом.',
+  'Limited by course format': 'Обмежено форматом курсу',
+  'Inline position notes': 'Нотатки до позицій',
+  'Attach reminders and plans directly to positions in the move tree.':
+    'Привʼязуй нагадування й плани безпосередньо до позицій у дереві ходів.',
+  'Position notes': 'Нотатки',
+  'Yes, attached to positions': 'Так, привʼязані до позицій',
+  'Course-dependent': 'Залежить від курсу',
+  'Manual move-tree study': 'Ручне навчання з дерева ходів',
+  'Browse branches, variations, and move paths without entering drill mode.':
+    'Переглядай гілки, варіанти й шляхи ходів без переходу в режим тренування.',
+  'Keyboard-first workflow': 'Робота з клавіатури',
+  'Use shortcuts for navigation and review without relying on mouse-heavy flows.':
+    'Використовуй гарячі клавіші для навігації й повторення без залежності від миші.',
+  Limited: 'Обмежено',
+  'Memory and scheduling': 'Памʼять і планування',
+  'Automatically schedules reviews so lines return when memory is likely to fade.':
+    'Автоматично планує повторення так, щоб лінії повертались тоді, коли памʼять починає слабшати.',
+  FSRS: 'FSRS',
+  MoveTrainer: 'MoveTrainer',
+  'MoveTrainer style reviews': 'Повторення у стилі MoveTrainer',
+  'No built-in SRS': 'Немає вбудованого SRS',
+  'Daily due queue': 'Щоденна черга',
+  'Shows the study work due today instead of asking you to choose manually.':
+    'Показує навчальну роботу на сьогодні замість ручного вибору.',
+  'Yes, position cards': 'Так, картки позицій',
+  'Yes, course reviews': 'Так, повторення курсів',
+  No: 'Ні',
+  'Adaptive difficulty': 'Адаптивна складність',
+  'Updates future intervals from how well you answered each review.':
+    'Оновлює майбутні інтервали залежно від якості відповіді на кожному повторенні.',
+  'Per-card': 'По картках',
+  'Stability and difficulty per card': 'Стабільність і складність для кожної картки',
+  Proprietary: 'Закритий алгоритм',
+  'Review only weak positions': 'Повторення лише слабких позицій',
+  'Keeps daily work focused on positions that need recall.':
+    'Тримає щоденну роботу сфокусованою на позиціях, які потрібно пригадати.',
+  Partly: 'Частково',
+  'Avoid replaying whole files': 'Без перегравання цілих файлів',
+  'Lets you study weak points without replaying every variation in a course.':
+    'Дає вчити слабкі місця без перегравання кожного варіанту в курсі.',
+  'Depends on course settings': 'Залежить від налаштувань курсу',
+  'Manual only': 'Лише вручну',
+  'Repertoire structure': 'Структура репертуару',
+  'Transposition handling': 'Обробка транспозицій',
+  'Recognizes when different move orders reach the same board position.':
+    'Розпізнає, коли різні порядки ходів приводять до тієї самої позиції на дошці.',
+  'Position-first': 'Від позиції',
+  'Position-first model': 'Модель від позиції',
+  Manual: 'Вручну',
+  'Merge multiple courses': 'Обʼєднання кількох курсів',
+  'Combines separate courses into one coherent repertoire tree.':
+    'Обʼєднує окремі курси в одне цілісне дерево репертуару.',
+  'Repertoire view': 'Репертуар',
+  'Yes, repertoire view': 'Так, вигляд репертуару',
+  'No personal merged tree': 'Немає власного обʼєднаного дерева',
+  'Manual chapters': 'Ручні розділи',
+  'White and Black side filtering': 'Фільтр білої та чорної сторони',
+  'Keeps both-color preparation readable when one repertoire contains mixed material.':
+    'Зберігає підготовку за обидва кольори читабельною, коли репертуар містить змішані матеріали.',
+  'Course-level': 'Рівень курсу',
+  'Course-level only': 'Лише на рівні курсу',
+  'Preferred branch choices': 'Обрані варіанти',
+  'Marks your preferred move when overlapping lines offer more than one branch.':
+    'Позначає твій пріоритетний хід, коли лінії з перетинами дають кілька гілок.',
+  'Notes shared across transpositions': 'Нотатки спільні між транспозиціями',
+  'Reuses notes when the same position appears through another move order.':
+    'Повторно використовує нотатки, коли та сама позиція виникає через інший порядок ходів.',
+  'No automatic merge': 'Без автоматичного обʼєднання',
+  'Game repair': 'Ремонт партій',
+  'Pull recent Lichess games': 'Завантаження останніх партій Lichess',
+  'Imports recent online games for post-game opening checks.':
+    'Імпортує останні онлайн-партії для післяпартійної перевірки дебюту.',
+  separate: 'окремо',
+  'Native games exist separately': 'Партії існують окремо',
+  'Pull recent Chess.com games': 'Завантаження останніх партій Chess.com',
+  'Supports Chess.com game import alongside Lichess.':
+    'Підтримує імпорт партій Chess.com разом із Lichess.',
+  'Find first out-of-book move': 'Пошук першого виходу з книги',
+  'Highlights the first move where your game left known preparation.':
+    'Підсвічує перший хід, де твоя партія вийшла з відомої підготовки.',
+  'Annotate analyzed games per ply': 'Нотатки до проаналізованих партій по напівходах',
+  'Lets you write notes on exact moments in an analyzed game.':
+    'Дає писати нотатки до точних моментів у проаналізованій партії.',
+  'Study comments': 'Коментарі study',
+  'Study comments only': 'Лише коментарі в study',
+  'Turn deviation into study work': 'Перетворення відхилення на навчання',
+  'Converts a real-game surprise into a concrete position to repair.':
+    'Перетворює сюрприз із реальної партії на конкретну позицію для ремонту.',
+  'Sharing and ownership': 'Поширення й контроль',
+  'Share course, chapter, or line': 'Поширення курсу, розділу або лінії',
+  'Sends the exact study scope instead of a screenshot or pasted PGN.':
+    'Надсилає точний навчальний фрагмент замість скріншота або вставленого PGN.',
+  'Course access': 'Доступ курсу',
+  'Course access model': 'Модель доступу до курсу',
+  'Study link': 'Посилання на study',
+  'Share analyzed game': 'Поширення проаналізованої партії',
+  'Shares a reviewed game with deviation context and annotations.':
+    'Поширює розібрану партію з контекстом відхилення й нотатками.',
+  'Game link, not repertoire-aware': 'Посилання на партію без звʼязку з репертуаром',
+  'Copy shared material into own library': 'Копіювання спільного матеріалу у власну бібліотеку',
+  'Lets recipients keep useful shared prep in their own workspace.':
+    'Дає отримувачам зберегти корисну спільну підготовку у власному робочому просторі.',
+  'Yes, with copy access': 'Так, з доступом до копіювання',
+  'Buy/enroll': 'Купівля',
+  'Buy/enroll model': 'Модель купівлі або запису',
+  'Manual clone': 'Клон вручну',
+  'Clone study manually': 'Клонування study вручну',
+  'PGN export': 'Експорт PGN',
+  'Exports opening material back to a standard chess format.':
+    'Експортує дебютний матеріал назад у стандартний шаховий формат.',
+  'Full JSON archive': 'Повний JSON-архів',
+  'Downloads a broader structured archive for ownership and portability.':
+    'Завантажує ширший структурований архів для контролю й переносимості.',
+  Included: 'Включено',
 
   Courses: 'Курси',
   Repertoires: 'Репертуари',

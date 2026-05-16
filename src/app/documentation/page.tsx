@@ -9,8 +9,42 @@ export const metadata: Metadata = {
 };
 
 const sections = [
+  { id: 'advantages', label: 'Advantages' },
   { id: 'shortcuts', label: 'Keyboard shortcuts' },
   { id: 'topics', label: 'FAQ topics' },
+];
+
+const advantages = [
+  {
+    title: 'Position-first repertoire memory',
+    body:
+      'RepDrill stores learning around board positions, not only around a single move-order path. If a Catalan, Queen\'s Gambit, or Grunfeld line reaches the same FEN through a transposition, the note and review context stay attached to that position.',
+  },
+  {
+    title: 'FSRS review instead of fixed repetition',
+    body:
+      'Training uses the Free Spaced Repetition Scheduler through ts-fsrs. Each answer updates stability and difficulty, so daily practice focuses on weak positions instead of making you replay every line in a course.',
+  },
+  {
+    title: 'Real-game repair loop',
+    body:
+      'The Analyze workspace pulls Lichess or Chess.com games, walks through the PGN, and marks the first move where your play left the repertoire. That turns a surprise from an online game into a concrete position to annotate, import, or drill.',
+  },
+  {
+    title: 'Merged repertoires for both colors',
+    body:
+      'Courses can remain clean and separate, while repertoires combine them into a single tree. The side selector keeps White and Black preparation readable, and preferred choices resolve overlapping branches.',
+  },
+  {
+    title: 'Share exact study material',
+    body:
+      'You can share a course, chapter, line, repertoire, or analyzed game through a link or email invite. Viewers can receive read-only access or copy access, so collaboration does not require screenshots or pasted PGNs.',
+  },
+  {
+    title: 'Portable prep, synced workspace',
+    body:
+      'Convex gives the web app reactive sync and protected writes, while PGN and JSON exports keep the library portable. The goal is to keep prep usable inside RepDrill without locking it there.',
+  },
 ];
 
 const shortcutGroups = [
@@ -76,10 +110,37 @@ export default function DocumentationIndexPage() {
           How RepDrill works
         </h1>
         <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
-          The practical bits first: keyboard shortcuts, then short explainers on notation,
-          spaced repetition, and the scheduler behind training.
+          RepDrill is built around repertoire memory, not passive course watching. These notes
+          explain the practical advantages, keyboard shortcuts, notation input, spaced repetition,
+          and the scheduler behind training.
         </p>
       </header>
+
+      <section id="advantages" className="scroll-mt-20">
+        <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+          Advantages
+        </p>
+        <h2 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[color:var(--ink)]">
+          What RepDrill gives you
+        </h2>
+        <div className="mt-5 divide-y divide-[color:var(--paper-rule)] border-y border-[color:var(--paper-rule)]">
+          {advantages.map((item, index) => (
+            <article key={item.title} className="grid gap-4 py-5 md:grid-cols-[4rem_1fr]">
+              <p className="font-mono text-[11px] font-semibold text-[color:var(--library-green)]">
+                {String(index + 1).padStart(2, '0')}
+              </p>
+              <div>
+                <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-[color:var(--ink)]">
+                  {item.title}
+                </h3>
+                <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
+                  {item.body}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section id="shortcuts" className="scroll-mt-20">
         <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">

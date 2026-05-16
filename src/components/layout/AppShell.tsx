@@ -12,7 +12,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const isPublicPage =
-    pathname === '/' || pathname === '/login' || pathname.startsWith('/share/');
+    pathname === '/' || pathname === '/comparison' || pathname === '/login' || pathname.startsWith('/share/');
   const isFaqPage = pathname === '/documentation' || pathname.startsWith('/documentation/');
 
   if (isPublicPage) {

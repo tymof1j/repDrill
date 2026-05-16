@@ -18,6 +18,9 @@ const DOC_SEARCH_INDEX = [
       'Jump numbered branch 1-9 Home End root deepest',
       'Show hide branch arrows V Search annotations slash',
       'Move notation two styles SAN Short spaced repetition FSRS',
+      'RepDrill advantages position-first repertoire memory transpositions',
+      'FSRS review real-game repair Lichess Chess.com deviation finder',
+      'Merged repertoires sharing courses chapters lines analyzed games portable PGN JSON',
     ],
   },
   {
