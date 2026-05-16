@@ -145,9 +145,9 @@ const comparisonSections = [
   {
     label: 'Core study',
     rows: [
-      ['Build private opening courses', 'Create and maintain your own private opening library, not only consume published material.', 'check', 'limited', 'check'],
-      ['Import and maintain PGN chapters', 'Bring PGN files into named chapters and keep them editable over time.', 'check', 'limited', 'check'],
-      ['Inline position notes', 'Attach reminders and plans directly to positions in the move tree.', 'Position notes', 'limited', 'check'],
+      ['Build private opening courses', 'Create and maintain your own private opening library, not only consume published material.', 'check', 'check', 'check'],
+      ['Import and maintain PGN chapters', 'Bring PGN files into named chapters and keep them editable over time.', 'check', 'check', 'check'],
+      ['Inline position notes', 'Attach reminders and plans directly to positions in the move tree.', 'Position notes', 'check', 'check'],
       ['Manual move-tree study', 'Browse branches, variations, and move paths without entering drill mode.', 'check', 'check', 'check'],
       ['Keyboard-first workflow', 'Use shortcuts for navigation and review without relying on mouse-heavy flows.', 'check', 'limited', 'limited'],
     ],
