@@ -83,8 +83,9 @@ export const storeSync = mutation({
       await ctx.db.delete(row._id);
     }
 
+    const insertedRows = [];
     for (const row of args.rows) {
-      await ctx.db.insert("analyzedGames", {
+      const id = await ctx.db.insert("analyzedGames", {
         userId,
         source: args.source,
         gameId: row.gameId,
@@ -106,6 +107,7 @@ export const storeSync = mutation({
         totalPlies: row.totalPlies,
         analyzedAt: now,
       });
+      insertedRows.push({ gameId: row.gameId, id });
     }
 
     await ctx.db.patch(userId, {
@@ -114,6 +116,6 @@ export const storeSync = mutation({
         : { lastAnalyzeSyncChesscomAt: now }),
     });
 
-    return { syncedAt: now };
+    return { syncedAt: now, rows: insertedRows };
   },
 });

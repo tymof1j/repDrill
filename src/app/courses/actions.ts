@@ -131,16 +131,88 @@ export async function setSharingAction(formData: FormData): Promise<{ token: str
 }
 
 export async function copySharedCourseAction(formData: FormData): Promise<void> {
-  // TODO: Implement shared course copying for Convex
-  throw new Error('Shared course copying not yet implemented for Convex');
+  const token = await requireToken();
+  const shareToken = String(formData.get('shareToken') ?? '');
+  const newName = String(formData.get('newName') ?? '').trim();
+  if (!shareToken || !newName) throw new Error('Missing shared course or name');
+
+  const data = await fetchQuery(api.courses.getPublicByToken, { token: shareToken });
+  if (!data || data.access === 'view') throw new Error('This link does not allow copying.');
+
+  const chapterTrees = await Promise.all(
+    data.chapters.map((chapter) =>
+      fetchQuery(api.courses.getPublicChapterTree, { token: shareToken, chapterId: chapter._id }),
+    ),
+  );
+
+  const positionsById = new Map<string, { fen: string; annotation?: string }>();
+  for (const tree of chapterTrees) {
+    for (const position of tree?.positions ?? []) {
+      positionsById.set(position._id, {
+        fen: position.fen,
+        annotation: position.annotation,
+      });
+    }
+  }
+
+  await fetchMutation(
+    api.import.importBundle,
+    {
+      bundle: {
+        version: 1,
+        positions: Array.from(positionsById.values()),
+        courses: [
+          {
+            name: newName,
+            color: data.course.color,
+            description: data.course.description,
+            chapters: data.chapters.map((chapter, chapterIndex) => {
+              const tree = chapterTrees[chapterIndex];
+              return {
+                name: chapter.name,
+                sortOrder: chapter.sortOrder,
+                description: chapter.description,
+                moves: (tree?.moves ?? []).flatMap((move) => {
+                  const parent = positionsById.get(move.parentPositionId);
+                  const child = positionsById.get(move.childPositionId);
+                  if (!parent || !child) return [];
+                  return [
+                    {
+                      parentFen: parent.fen,
+                      childFen: child.fen,
+                      san: move.san,
+                      uci: move.uci,
+                      moveNumber: move.moveNumber,
+                      colorToMove: move.colorToMove,
+                      isMainLine: move.isMainLine,
+                      moveType: move.moveType,
+                      sortOrder: move.sortOrder,
+                    },
+                  ];
+                }),
+              };
+            }),
+          },
+        ],
+      },
+    },
+    { token },
+  );
+  revalidatePath('/courses');
+  redirect('/courses');
 }
 
 export async function updateAnnotationAction(formData: FormData): Promise<void> {
   const token = await requireToken();
+  const courseId = String(formData.get('courseId') ?? '') as Id<"courses">;
   const positionId = String(formData.get('positionId') ?? '') as Id<"positions">;
   const text = String(formData.get('text') ?? '');
   if (!positionId) throw new Error('Missing positionId');
 
-  await fetchMutation(api.courses.updateAnnotation, { positionId, text: text || '' }, { token });
-  revalidatePath('/courses');
+  await fetchMutation(
+    api.courses.updateAnnotation,
+    { positionId, text: text || '', courseId: courseId || undefined },
+    { token },
+  );
+  revalidatePath(courseId ? `/courses/${courseId}` : '/courses');
 }

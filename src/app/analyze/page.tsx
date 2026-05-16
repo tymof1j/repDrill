@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery, useConvexAuth } from 'convex/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@convex/_generated/api';
 import { AppSurface, PageHeader, PremiumButton } from '@/components/ui/Premium';
 import { AnalyzePanel } from './AnalyzePanel';
@@ -11,6 +11,7 @@ import { AnalyzePanel } from './AnalyzePanel';
 export default function AnalyzePage() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/login');
@@ -26,15 +27,18 @@ export default function AnalyzePage() {
 
   const hasLichess = !!user.lichessUsername;
   const hasChessCom = !!user.chesscomUsername;
+  const concreteGameOpen = Boolean(searchParams.get('game'));
 
   return (
     <AppSurface>
-      <PageHeader
-        eyebrow="Part IV — Analysis"
-        title="The post-mortem."
-        body="Find the move where preparation became improvisation. Pull recent online games and let RepDrill mark each departure from the book."
-        action={<PremiumButton href="/settings#accounts">Accounts</PremiumButton>}
-      />
+      {!concreteGameOpen && (
+        <PageHeader
+          eyebrow="Part IV — Analysis"
+          title="The post-mortem."
+          body="Find the move where preparation became improvisation. Pull recent online games and let RepDrill mark each departure from the book."
+          action={<PremiumButton href="/settings#accounts">Accounts</PremiumButton>}
+        />
+      )}
 
       {!hasLichess && !hasChessCom ? (
         <section className="border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-8 py-14 text-center">

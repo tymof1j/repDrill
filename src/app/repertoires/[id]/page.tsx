@@ -26,6 +26,7 @@ import {
   addCourseToRepertoireAction,
   removeCourseFromRepertoireAction,
 } from '../actions';
+import { ShareDialog } from '@/components/share/ShareDialog';
 
 const STARTING_FEN_NORMALIZED = normalizeFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
 
@@ -95,6 +96,13 @@ export default async function RepertoireDetailPage({
         eyebrow="Volume · merged repertoire"
         title={repertoire.name}
         body={repertoire.description ?? 'Resolve overlapping course theory and inspect the combined move tree as a single bound preparation.'}
+        action={
+          <ShareDialog
+            resourceType="repertoire"
+            resourceId={repertoire._id}
+            title={repertoire.name}
+          />
+        }
       />
 
       <section className="mb-12 border-y border-[color:var(--paper-edge)]">

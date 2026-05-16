@@ -14,6 +14,7 @@ import { parsePgn } from '@/lib/chess/pgn-parser';
 import { buildTree } from '@/lib/chess/tree';
 
 export type GameAnalysisRow = {
+  id?: string;
   source: GameSource;
   gameId: string;
   url?: string;
@@ -205,7 +206,7 @@ export async function analyzeRecentGames(formData: FormData): Promise<AnalyzeBat
     .slice(0, 5);
 
   try {
-    await fetchMutation(
+    const stored = await fetchMutation(
       api.analyze.storeSync,
       {
         source,
@@ -231,6 +232,10 @@ export async function analyzeRecentGames(formData: FormData): Promise<AnalyzeBat
       },
       { token },
     );
+    const idsByGameId = new Map(stored.rows.map((row) => [row.gameId, row.id]));
+    for (const row of rows) {
+      row.id = idsByGameId.get(row.gameId);
+    }
   } catch {
     // Keep analyze flow functional even if Convex analyze functions are not deployed yet.
   }
@@ -247,6 +252,7 @@ export async function loadCachedAnalyze(
     const cached = await fetchQuery(api.analyze.getCached, { source, limit }, { token });
     if (!cached || cached.rows.length === 0) return null;
     const rows: GameAnalysisRow[] = cached.rows.map((row) => ({
+      id: row._id,
       source: row.source,
       gameId: row.gameId,
       url: row.url,

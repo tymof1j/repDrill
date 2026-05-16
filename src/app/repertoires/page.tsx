@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useConvexAuth } from 'convex/react';
 import { useRouter } from 'next/navigation';
@@ -11,14 +11,25 @@ import { DeleteRepertoireButton } from './DeleteRepertoireButton';
 export default function RepertoiresListPage() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const router = useRouter();
+  const [tab, setTab] = useState<'mine' | 'shared'>('mine');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/login');
   }, [isLoading, isAuthenticated, router]);
 
   const items = useQuery(api.repertoires.list);
+  const sharedItems = useQuery(api.sharing.listSharedRepertoires);
 
-  if (!isAuthenticated || items === undefined) return null;
+  if (!isAuthenticated || items === undefined || sharedItems === undefined) return null;
+  const visibleItems =
+    tab === 'mine'
+      ? items.map((r) => ({ id: r._id, name: r.name, description: r.description ?? null, sharedMeta: null as string | null }))
+      : sharedItems.map((r) => ({
+          id: r.resource._id,
+          name: r.resource.name,
+          description: r.resource.description ?? null,
+          sharedMeta: `Shared by ${r.owner?.name ?? r.owner?.email ?? 'another RepDrill user'} · ${r.invitation.access}`,
+        }));
 
   return (
     <AppSurface>
@@ -29,18 +40,28 @@ export default function RepertoiresListPage() {
         action={<PremiumButton href="/repertoires/new">New repertoire</PremiumButton>}
       />
 
-      {items.length === 0 ? (
+      <div className="mb-6 flex flex-wrap gap-2 border-b border-[color:var(--paper-edge)] pb-3">
+        <TabButton active={tab === 'mine'} onClick={() => setTab('mine')}>
+          My repertoires
+        </TabButton>
+        <TabButton active={tab === 'shared'} onClick={() => setTab('shared')}>
+          Shared with you
+        </TabButton>
+      </div>
+
+      {visibleItems.length === 0 ? (
         <EmptyState>
-          No repertoires bound yet. Create one and add courses to combine your prep
-          into a single, conflict-resolved map.
+          {tab === 'mine'
+            ? 'No repertoires bound yet. Create one and add courses to combine your prep into a single, conflict-resolved map.'
+            : 'No shared repertoires yet.'}
         </EmptyState>
       ) : (
         <ol className="divide-y divide-[color:var(--paper-rule)] border-y border-[color:var(--paper-edge)]">
-          {items.map((r, idx) => {
+          {visibleItems.map((r, idx) => {
             const num = String(idx + 1).padStart(2, '0');
             return (
               <li
-                key={r._id}
+                key={r.id}
                 className="group relative grid grid-cols-[3rem_1fr_auto] items-baseline gap-x-5 gap-y-2 py-7 transition-colors duration-200 hover:bg-[color:var(--paper-shade)] md:grid-cols-[3.5rem_minmax(0,1fr)_auto] md:gap-x-8 md:py-8"
               >
                 <span
@@ -50,7 +71,7 @@ export default function RepertoiresListPage() {
                   {num}
                 </span>
                 <Link
-                  href={`/repertoires/${r._id}`}
+                  href={`/repertoires/${r.id}`}
                   className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
                 >
                   <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
@@ -61,13 +82,42 @@ export default function RepertoiresListPage() {
                       {r.description}
                     </p>
                   )}
+                  {r.sharedMeta && (
+                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
+                      {r.sharedMeta}
+                    </p>
+                  )}
                 </Link>
-                <DeleteRepertoireButton id={r._id} />
+                {tab === 'mine' ? <DeleteRepertoireButton id={r.id} /> : <span />}
               </li>
             );
           })}
         </ol>
       )}
     </AppSurface>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors ${
+        active
+          ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-[color:var(--paper)]'
+          : 'border-[color:var(--paper-edge)] text-[color:var(--ink-soft)] hover:border-[color:var(--ink)] hover:text-[color:var(--ink)]'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

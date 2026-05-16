@@ -3,9 +3,18 @@ import { isAuthenticatedNextjs } from "@convex-dev/auth/nextjs/server";
 import { redirect } from 'next/navigation';
 import { SignInButton } from './SignInButton';
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirectTo?: string }>;
+}) {
+  const { redirectTo: requestedRedirectTo } = await searchParams;
+  const redirectTo =
+    requestedRedirectTo && requestedRedirectTo.startsWith('/') && !requestedRedirectTo.startsWith('//')
+      ? requestedRedirectTo
+      : '/courses';
   const isLoggedIn = await isAuthenticatedNextjs();
-  if (isLoggedIn) redirect('/courses');
+  if (isLoggedIn) redirect(redirectTo);
 
   return (
     <div className="relative min-h-screen bg-[color:var(--paper)] text-[color:var(--ink)]">
@@ -64,7 +73,7 @@ export default async function LoginPage() {
             </p>
 
             <div className="mt-10">
-              <SignInButton />
+              <SignInButton redirectTo={redirectTo} />
             </div>
 
             <p className="mt-10 border-t border-[color:var(--paper-rule)] pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">

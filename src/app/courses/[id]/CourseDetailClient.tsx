@@ -22,7 +22,7 @@ import {
   deleteChapterAction,
   updateAnnotationAction,
 } from '../actions';
-import { SharePanel } from './SharePanel';
+import { ShareDialog } from '@/components/share/ShareDialog';
 
 type Props = {
   course: {
@@ -180,6 +180,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
 
   const handleAnnotationSave = (positionId: string, text: string) => {
     const fd = new FormData();
+    fd.set('courseId', course.id);
     fd.set('positionId', positionId);
     fd.set('text', text);
     startTransition(() => {
@@ -213,7 +214,6 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                 setEditingName(true);
               }}
               className="text-left transition-colors duration-200 hover:text-[color:var(--margin-red)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
-              title="Click to rename"
             >
               {course.name}
             </button>
@@ -232,11 +232,10 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
             <>
               <PremiumButton href={`/courses/${course.id}/import`}>Import PGN</PremiumButton>
               <SecondaryButton href={`/api/export/course?id=${course.id}`}>Export PGN</SecondaryButton>
-              <SharePanel
-                courseId={course.id}
-                courseName={course.name}
-                isPublic={course.isPublic}
-                shareToken={course.shareToken}
+              <ShareDialog
+                resourceType="course"
+                resourceId={course.id}
+                title={course.name}
               />
             </>
           )

@@ -14,6 +14,7 @@ import type * as courses from "../courses.js";
 import type * as http from "../http.js";
 import type * as import_ from "../import.js";
 import type * as repertoires from "../repertoires.js";
+import type * as sharing from "../sharing.js";
 import type * as training from "../training.js";
 import type * as users from "../users.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   import: typeof import_;
   repertoires: typeof repertoires;
+  sharing: typeof sharing;
   training: typeof training;
   users: typeof users;
 }>;

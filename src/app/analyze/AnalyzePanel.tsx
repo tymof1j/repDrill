@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import {
   PremiumButton,
   SecondaryButton,
@@ -11,6 +13,7 @@ import {
 } from '@/components/ui/Premium';
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import dynamic from 'next/dynamic';
+import { ShareDialog } from '@/components/share/ShareDialog';
 
 const ChessBoard = dynamic(
   () => import('@/components/board/ChessBoard').then((m) => ({ default: m.ChessBoard })),
@@ -85,6 +88,8 @@ export function AnalyzePanel({
   const [pending, start] = useTransition();
   const [activeGame, setActiveGame] = useState<GameAnalysisRow | null>(null);
   const [activePly, setActivePly] = useState<number>(0);
+  const [tab, setTab] = useState<'mine' | 'shared'>(searchParams.get('shared') ? 'shared' : 'mine');
+  const sharedGames = useQuery(api.sharing.listSharedAnalysis);
 
   const username =
     source === 'lichess' ? initialUsername.lichess : initialUsername.chesscom;
@@ -216,6 +221,49 @@ export function AnalyzePanel({
 
   return (
     <section className="space-y-8">
+      <div className="flex flex-wrap gap-2 border-b border-[color:var(--paper-edge)] pb-3">
+        <Pill active={tab === 'mine'} onClick={() => setTab('mine')}>
+          My analysis
+        </Pill>
+        <Pill active={tab === 'shared'} onClick={() => setTab('shared')}>
+          Shared with you
+        </Pill>
+      </div>
+
+      {tab === 'shared' ? (
+        sharedGames && sharedGames.length > 0 ? (
+          <GameList
+            rows={sharedGames.map((item) => ({
+              id: item.resource._id,
+              source: item.resource.source,
+              gameId: item.resource.gameId,
+              url: item.resource.url,
+              whiteUsername: item.resource.whiteUsername,
+              blackUsername: item.resource.blackUsername,
+              result: item.resource.result,
+              playedAt: new Date(item.resource.playedAt).toISOString(),
+              opening: item.resource.opening,
+              timeControl: item.resource.timeControl,
+              pgn: item.resource.pgn,
+              deviation: {
+                kind: item.resource.deviationKind,
+                playedAs: item.resource.playedAs,
+                deviationMoveNumber: item.resource.deviationMoveNumber,
+                deviationPly: item.resource.deviationPly,
+                playedSan: item.resource.playedSan,
+                expectedSans: item.resource.expectedSans,
+                deviationFen: item.resource.deviationFen,
+                deviationPositionId: item.resource.deviationPositionId,
+                totalPlies: item.resource.totalPlies,
+              },
+            }))}
+            onOpen={onOpenGame}
+          />
+        ) : (
+          <EmptyState>No shared analysis games yet.</EmptyState>
+        )
+      ) : (
+        <>
       <div className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-5 md:px-7 md:py-6">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
           Source · § 1
@@ -274,6 +322,8 @@ export function AnalyzePanel({
           No games returned. Confirm the username and that there are recent public games.
         </EmptyState>
       ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -628,6 +678,12 @@ function DeviationViewer({
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         setPly(Math.min(totalPlies, ply + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setPly(0);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setPly(totalPlies);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -682,16 +738,25 @@ function DeviationViewer({
     <section className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <GhostButton onClick={onBack}>← Back to games</GhostButton>
-        {game.url && (
-          <a
-            href={game.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:text-[color:var(--margin-red)]"
-          >
-            Open on {game.source === 'lichess' ? 'Lichess' : 'Chess.com'}
-          </a>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {game.url && (
+            <a
+              href={game.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:text-[color:var(--margin-red)]"
+            >
+              Open on {game.source === 'lichess' ? 'Lichess' : 'Chess.com'}
+            </a>
+          )}
+          {game.id && (
+            <ShareDialog
+              resourceType="analysis"
+              resourceId={game.id}
+              title={`${game.whiteUsername} vs ${game.blackUsername}`}
+            />
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-[auto_minmax(280px,1fr)]">

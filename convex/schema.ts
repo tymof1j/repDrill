@@ -31,6 +31,34 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_user", ["userId"]).index("by_share_token", ["shareToken"]),
 
+  shareLinks: defineTable({
+    ownerId: v.id("users"),
+    resourceType: v.union(v.literal("course"), v.literal("repertoire"), v.literal("analysis")),
+    resourceId: v.string(),
+    token: v.optional(v.string()),
+    access: v.union(v.literal("none"), v.literal("view"), v.literal("copy"), v.literal("collaborate")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_resource_type_and_resource_id", ["resourceType", "resourceId"])
+    .index("by_token", ["token"])
+    .index("by_owner", ["ownerId"]),
+
+  shareInvitations: defineTable({
+    ownerId: v.id("users"),
+    resourceType: v.union(v.literal("course"), v.literal("repertoire"), v.literal("analysis")),
+    resourceId: v.string(),
+    email: v.string(),
+    access: v.union(v.literal("view"), v.literal("copy"), v.literal("collaborate")),
+    notify: v.boolean(),
+    message: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_resource_type_and_resource_id", ["resourceType", "resourceId"])
+    .index("by_email", ["email"])
+    .index("by_owner", ["ownerId"]),
+
   chapters: defineTable({
     courseId: v.id("courses"),
     name: v.string(),

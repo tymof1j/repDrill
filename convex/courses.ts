@@ -2,6 +2,45 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
+async function canReadSharedCourse(ctx: QueryCtx, courseId: Id<"courses">, userId: Id<"users">) {
+  const user = await ctx.db.get(userId);
+  if (!user?.email) return false;
+  const invitations = await ctx.db
+    .query("shareInvitations")
+    .withIndex("by_email", (q) => q.eq("email", user.email!.trim().toLowerCase()))
+    .take(100);
+  return invitations.some((invite) => invite.resourceType === "course" && invite.resourceId === courseId);
+}
+
+async function getDirectCourseAccess(ctx: QueryCtx | MutationCtx, courseId: Id<"courses">, userId: Id<"users">) {
+  const user = await ctx.db.get(userId);
+  if (!user?.email) return null;
+  const invitations = await ctx.db
+    .query("shareInvitations")
+    .withIndex("by_email", (q) => q.eq("email", user.email!.trim().toLowerCase()))
+    .take(100);
+  const match = invitations.find((invite) => invite.resourceType === "course" && invite.resourceId === courseId);
+  return match?.access ?? null;
+}
+
+async function courseContainsPosition(ctx: QueryCtx | MutationCtx, courseId: Id<"courses">, positionId: Id<"positions">) {
+  const chapters = await ctx.db
+    .query("chapters")
+    .withIndex("by_course", (q) => q.eq("courseId", courseId))
+    .take(1000);
+  for (const chapter of chapters) {
+    const moves = await ctx.db
+      .query("moves")
+      .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+      .take(1000);
+    if (moves.some((move) => move.parentPositionId === positionId || move.childPositionId === positionId)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export const list = query({
   args: {},
@@ -22,7 +61,8 @@ export const get = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
     const course = await ctx.db.get(args.id);
-    if (!course || course.userId !== userId) return null;
+    if (!course) return null;
+    if (course.userId !== userId && !(await canReadSharedCourse(ctx, args.id, userId))) return null;
     return course;
   },
 });
@@ -30,6 +70,12 @@ export const get = query({
 export const listChapters = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const course = await ctx.db.get(args.courseId);
+    if (!course) return [];
+    if (course.userId !== userId && !(await canReadSharedCourse(ctx, args.courseId, userId))) return [];
+
     const chapters = await ctx.db
       .query("chapters")
       .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
@@ -53,7 +99,8 @@ export const getTree = query({
     if (!userId) return null;
 
     const course = await ctx.db.get(args.courseId);
-    if (!course || course.userId !== userId) return null;
+    if (!course) return null;
+    if (course.userId !== userId && !(await canReadSharedCourse(ctx, args.courseId, userId))) return null;
 
     const chapters = await ctx.db
       .query("chapters")
@@ -108,7 +155,8 @@ export const getChapterTree = query({
     const chapter = await ctx.db.get(args.chapterId);
     if (!chapter) return null;
     const course = await ctx.db.get(chapter.courseId);
-    if (!course || course.userId !== userId) return null;
+    if (!course) return null;
+    if (course.userId !== userId && !(await canReadSharedCourse(ctx, chapter.courseId, userId))) return null;
 
     const moves = await ctx.db
       .query("moves")
@@ -125,7 +173,7 @@ export const getChapterTree = query({
     const positions: Doc<"positions">[] = [];
     for (const positionId of positionIds) {
       const position = await ctx.db.get(positionId);
-      if (position && position.userId === userId) positions.push(position);
+      if (position && position.userId === course.userId) positions.push(position);
     }
 
     return { moves, positions };
@@ -251,11 +299,36 @@ export const setSharing = mutation({
 export const getPublicByToken = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    const course = await ctx.db
+    let course = await ctx.db
       .query("courses")
       .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
       .first();
-    if (!course || !course.isPublic) return null;
+    let access: "view" | "copy" | "collaborate" = "copy";
+    if (!course || !course.isPublic) {
+      const link = await ctx.db
+        .query("shareLinks")
+        .withIndex("by_token", (q) => q.eq("token", args.token))
+        .unique();
+      if (!link || link.resourceType !== "course" || link.access === "none") return null;
+      course = await ctx.db.get(link.resourceId as Id<"courses">);
+      if (!course) return null;
+      access = link.access;
+    }
+    const userId = await getAuthUserId(ctx);
+    if (userId) {
+      const user = await ctx.db.get(userId);
+      if (user?.email) {
+        const invitations = await ctx.db
+          .query("shareInvitations")
+          .withIndex("by_email", (q) => q.eq("email", user.email!.trim().toLowerCase()))
+          .take(100);
+        for (const invitation of invitations) {
+          if (invitation.resourceType !== "course" || invitation.resourceId !== course._id) continue;
+          if (invitation.access === "collaborate") access = "collaborate";
+          else if (invitation.access === "copy" && access === "view") access = "copy";
+        }
+      }
+    }
 
     const chapters = await ctx.db
       .query("chapters")
@@ -266,18 +339,26 @@ export const getPublicByToken = query({
       return a.createdAt - b.createdAt;
     });
 
-    return { course, chapters };
+    return { course, chapters, access };
   },
 });
 
 export const getPublicChapterTree = query({
   args: { token: v.string(), chapterId: v.id("chapters") },
   handler: async (ctx, args) => {
-    const course = await ctx.db
+    let course = await ctx.db
       .query("courses")
       .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
       .first();
-    if (!course || !course.isPublic) return null;
+    if (!course || !course.isPublic) {
+      const link = await ctx.db
+        .query("shareLinks")
+        .withIndex("by_token", (q) => q.eq("token", args.token))
+        .unique();
+      if (!link || link.resourceType !== "course" || link.access === "none") return null;
+      course = await ctx.db.get(link.resourceId as Id<"courses">);
+      if (!course) return null;
+    }
 
     const chapter = await ctx.db.get(args.chapterId);
     if (!chapter || chapter.courseId !== course._id) return null;
@@ -305,12 +386,24 @@ export const getPublicChapterTree = query({
 });
 
 export const updateAnnotation = mutation({
-  args: { positionId: v.id("positions"), text: v.string() },
+  args: {
+    positionId: v.id("positions"),
+    text: v.string(),
+    courseId: v.optional(v.id("courses")),
+  },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
     const position = await ctx.db.get(args.positionId);
-    if (!position || position.userId !== userId) throw new Error("Not found");
+    if (!position) throw new Error("Not found");
+    if (position.userId !== userId) {
+      if (!args.courseId) throw new Error("Not found");
+      const course = await ctx.db.get(args.courseId);
+      if (!course || course.userId !== position.userId) throw new Error("Not found");
+      const access = await getDirectCourseAccess(ctx, args.courseId, userId);
+      if (access !== "collaborate") throw new Error("Not found");
+      if (!(await courseContainsPosition(ctx, args.courseId, args.positionId))) throw new Error("Not found");
+    }
 
     await ctx.db.patch(args.positionId, { annotation: args.text || undefined });
   },

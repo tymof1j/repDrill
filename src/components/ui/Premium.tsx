@@ -179,7 +179,7 @@ export function PremiumButton({
 }
 
 const secondaryClasses =
-  `inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ink)] ${motion} hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+  `inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ink)] ${motion} hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 
 export function SecondaryButton({
   children,

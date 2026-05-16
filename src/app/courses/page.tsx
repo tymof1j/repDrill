@@ -13,6 +13,7 @@ export default function CoursesListPage() {
   const router = useRouter();
   const convex = useConvex();
   const [stats, setStats] = useState<{ totalLines: number; dueLines: number; newLines: number } | null>(null);
+  const [tab, setTab] = useState<'mine' | 'shared'>('mine');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/login');
@@ -42,13 +43,20 @@ export default function CoursesListPage() {
   }, [convex, isAuthenticated]);
 
   const items = useQuery(api.courses.list);
-  if (!isAuthenticated || items === undefined) return null;
+  const sharedItems = useQuery(api.sharing.listSharedCourses);
+  if (!isAuthenticated || items === undefined || sharedItems === undefined) return null;
 
   const courses: CourseListItem[] = items.map((item) => ({
     id: item._id,
     name: item.name,
     color: item.color,
     description: item.description ?? null,
+  }));
+  const sharedCourses: CourseListItem[] = sharedItems.map((item) => ({
+    id: item.resource._id,
+    name: item.resource.name,
+    color: item.resource.color,
+    description: `Shared by ${item.owner?.name ?? item.owner?.email ?? 'another RepDrill user'} · ${item.invitation.access}`,
   }));
   const visibleStats = stats;
 
@@ -92,7 +100,40 @@ export default function CoursesListPage() {
         </section>
       )}
 
-      <CourseLibrarySearch courses={courses} />
+      <div className="mb-6 flex flex-wrap gap-2 border-b border-[color:var(--paper-edge)] pb-3">
+        <TabButton active={tab === 'mine'} onClick={() => setTab('mine')}>
+          My courses
+        </TabButton>
+        <TabButton active={tab === 'shared'} onClick={() => setTab('shared')}>
+          Shared with you
+        </TabButton>
+      </div>
+
+      <CourseLibrarySearch courses={tab === 'mine' ? courses : sharedCourses} />
     </AppSurface>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors ${
+        active
+          ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-[color:var(--paper)]'
+          : 'border-[color:var(--paper-edge)] text-[color:var(--ink-soft)] hover:border-[color:var(--ink)] hover:text-[color:var(--ink)]'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

@@ -2,6 +2,17 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
+
+async function canReadSharedRepertoire(ctx: QueryCtx, repertoireId: Id<"repertoires">, userId: Id<"users">) {
+  const user = await ctx.db.get(userId);
+  if (!user?.email) return false;
+  const invitations = await ctx.db
+    .query("shareInvitations")
+    .withIndex("by_email", (q) => q.eq("email", user.email!.trim().toLowerCase()))
+    .take(100);
+  return invitations.some((invite) => invite.resourceType === "repertoire" && invite.resourceId === repertoireId);
+}
 
 export const list = query({
   args: {},
@@ -22,7 +33,8 @@ export const get = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
     const rep = await ctx.db.get(args.id);
-    if (!rep || rep.userId !== userId) return null;
+    if (!rep) return null;
+    if (rep.userId !== userId && !(await canReadSharedRepertoire(ctx, args.id, userId))) return null;
     return rep;
   },
 });
@@ -165,6 +177,12 @@ export const clearChoice = mutation({
 export const listCourses = query({
   args: { repertoireId: v.id("repertoires") },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const rep = await ctx.db.get(args.repertoireId);
+    if (!rep) return [];
+    if (rep.userId !== userId && !(await canReadSharedRepertoire(ctx, args.repertoireId, userId))) return [];
+
     const junctions = await ctx.db
       .query("repertoireCourses")
       .withIndex("by_repertoire", (q) => q.eq("repertoireId", args.repertoireId))
@@ -185,6 +203,14 @@ export const listCourses = query({
 export const loadTree = query({
   args: { repertoireId: v.id("repertoires") },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { courses: [], chapters: [], moves: [], positions: [], choices: [] };
+    const rep = await ctx.db.get(args.repertoireId);
+    if (!rep) return { courses: [], chapters: [], moves: [], positions: [], choices: [] };
+    if (rep.userId !== userId && !(await canReadSharedRepertoire(ctx, args.repertoireId, userId))) {
+      return { courses: [], chapters: [], moves: [], positions: [], choices: [] };
+    }
+
     const courseRows = await ctx.db
       .query("repertoireCourses")
       .withIndex("by_repertoire", (q) => q.eq("repertoireId", args.repertoireId))

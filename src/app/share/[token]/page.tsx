@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
+import { convexAuthNextjsToken, isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
 import { fetchQuery } from 'convex/nextjs';
 import { api } from '@convex/_generated/api';
 import { AppSurface, PageHeader, BackLink } from '@/components/ui/Premium';
@@ -11,7 +11,12 @@ export default async function SharedCoursePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const data = await fetchQuery(api.courses.getPublicByToken, { token });
+  const authToken = await convexAuthNextjsToken();
+  const data = await fetchQuery(
+    api.courses.getPublicByToken,
+    { token },
+    authToken ? { token: authToken } : undefined,
+  );
   if (!data) notFound();
 
   const { course, chapters } = data;
@@ -51,6 +56,7 @@ export default async function SharedCoursePage({
       />
       <SharePublicView
         course={{ id: course._id, name: course.name, color: course.color }}
+        shareToken={token}
         chapters={chapters.map((c) => ({ id: c._id, name: c.name }))}
         rootPositionId={rootPosition?._id ?? ''}
         positions={allPositions.map((position) => ({
@@ -72,6 +78,7 @@ export default async function SharedCoursePage({
           chapterName: chapterNameById.get(move.chapterId) ?? '',
         }))}
         viewerIsAuthed={isLoggedIn}
+        access={data.access ?? 'copy'}
       />
     </AppSurface>
   );
