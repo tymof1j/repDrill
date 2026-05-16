@@ -598,6 +598,8 @@ function DeviationViewer({
   const [annotationSaved, setAnnotationSaved] = useState(false);
   const [shareId, setShareId] = useState(game.id ?? null);
   const [sharePending, startShare] = useTransition();
+  const [showArrows, setShowArrows] = useState(true);
+  const [showHighlights, setShowHighlights] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -694,6 +696,12 @@ function DeviationViewer({
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         setPly(totalPlies);
+      } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShowArrows((s) => !s);
+      } else if (e.key === 'h' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShowHighlights((s) => !s);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -804,13 +812,49 @@ function DeviationViewer({
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-[auto_minmax(280px,1fr)]">
         <div>
+          <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Diagram
+            </p>
+            <div className="flex items-baseline gap-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
+                {ply === 0 ? 'starting' : `${ply} ply`}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowHighlights((s) => !s)}
+                aria-pressed={showHighlights}
+                className={`font-mono text-[10px] font-semibold uppercase tracking-[0.18em] underline decoration-1 underline-offset-[6px] transition-colors duration-200 ${
+                  showHighlights
+                    ? 'text-[color:var(--margin-red)] decoration-[color:var(--margin-red)]'
+                    : 'text-[color:var(--ink-faint)] decoration-[color:var(--paper-edge)] hover:text-[color:var(--ink)]'
+                }`}
+                title="Toggle move highlights (h)"
+              >
+                Hints {showHighlights ? 'on' : 'off'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowArrows((s) => !s)}
+                aria-pressed={showArrows}
+                className={`font-mono text-[10px] font-semibold uppercase tracking-[0.18em] underline decoration-1 underline-offset-[6px] transition-colors duration-200 ${
+                  showArrows
+                    ? 'text-[color:var(--margin-red)] decoration-[color:var(--margin-red)]'
+                    : 'text-[color:var(--ink-faint)] decoration-[color:var(--paper-edge)] hover:text-[color:var(--ink)]'
+                }`}
+                title="Toggle deviation arrows (v)"
+              >
+                Arrows {showArrows ? 'on' : 'off'}
+              </button>
+            </div>
+          </div>
           <ResizableDiagramFrame>
             <ChessBoard
               fen={fen}
               orientation={orientation}
-              lastMove={lastMove}
+              lastMove={showHighlights ? lastMove : undefined}
               viewOnly
-              arrows={arrows}
+              arrows={showArrows ? arrows : []}
             />
           </ResizableDiagramFrame>
           <div className="mt-4 flex items-center justify-between gap-3">
@@ -831,6 +875,9 @@ function DeviationViewer({
               </GhostButton>
             </div>
           )}
+          <p className="mt-3 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
+            <kbd className="font-mono">v</kbd> arrows · <kbd className="font-mono">h</kbd> hints
+          </p>
         </div>
 
         <div className="space-y-6">

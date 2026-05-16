@@ -36,7 +36,9 @@ export async function sendShareInvitationAction(formData: FormData) {
   const resourceId = String(formData.get('resourceId') ?? '');
   const scopeTypeRaw = String(formData.get('scopeType') ?? 'resource');
   const scopeType =
-    scopeTypeRaw === 'chapter' || scopeTypeRaw === 'line' ? scopeTypeRaw : 'resource';
+    scopeTypeRaw === 'course' || scopeTypeRaw === 'chapter' || scopeTypeRaw === 'line'
+      ? scopeTypeRaw
+      : 'resource';
   const scopeId = String(formData.get('scopeId') ?? '').trim();
   const scopeLabel = String(formData.get('scopeLabel') ?? '').trim();
   const emails = String(formData.get('email') ?? '')

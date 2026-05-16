@@ -9,9 +9,10 @@ import { sendShareInvitationAction } from '@/app/share/actions';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 
 export type ShareResourceType = 'course' | 'repertoire' | 'analysis';
-type ShareScopeType = 'resource' | 'chapter' | 'line';
+type ShareScopeType = 'resource' | 'course' | 'chapter' | 'line';
 type LinkAccess = 'none' | 'view' | 'copy' | 'collaborate';
 type InviteAccess = 'view' | 'copy' | 'collaborate';
+type ShareInvitation = { id: string; email: string; access: InviteAccess; notify: boolean };
 
 const accessCopy: Record<LinkAccess, { label: string; helper: string }> = {
   none: {
@@ -33,7 +34,13 @@ const accessCopy: Record<LinkAccess, { label: string; helper: string }> = {
 };
 
 const inviteLevels: InviteAccess[] = ['view', 'copy', 'collaborate'];
-const linkLevels: LinkAccess[] = ['none', 'view', 'copy', 'collaborate'];
+const linkRoleLevels: InviteAccess[] = ['view', 'copy', 'collaborate'];
+const shortAccessLabels: Record<LinkAccess, string> = {
+  none: 'Limited access',
+  view: 'View',
+  copy: 'Copy',
+  collaborate: 'Collaborate',
+};
 const defaultButtonClassName =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ink)] transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--paper)]';
 
@@ -65,6 +72,10 @@ export function ShareDialog({
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [scopeKey, setScopeKey] = useState('resource:');
+  const [localInvitations, setLocalInvitations] = useState<{
+    scopeKey: string;
+    rows: ShareInvitation[];
+  } | null>(null);
   const [pendingInvite, startInvite] = useTransition();
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -75,6 +86,7 @@ export function ShareDialog({
   );
   const selectedScope =
     scopeOptions.find((scope) => `${scope.type}:${scope.id ?? ''}` === scopeKey) ?? scopeOptions[0];
+  const selectedScopeKey = `${selectedScope.type}:${selectedScope.id ?? ''}`;
 
   const settings = useQuery(api.sharing.getSettings, {
     resourceType,
@@ -90,6 +102,9 @@ export function ShareDialog({
   const linkAccess = localLink?.access ?? settings?.linkAccess ?? 'none';
   const token = localLink?.token ?? settings?.token ?? null;
   const emailCount = splitEmails(email).length;
+  const invitations = localInvitations?.scopeKey === selectedScopeKey
+    ? localInvitations.rows
+    : settings?.invitations ?? [];
 
   const shareUrl = useMemo(() => {
     if (!token) return '';
@@ -111,7 +126,9 @@ export function ShareDialog({
       if (e.key === 'Escape') setOpen(false);
     };
     const onClick = (e: MouseEvent) => {
-      if (!dialogRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-custom-select-menu="true"]')) return;
+      if (!dialogRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onClick);
@@ -164,7 +181,31 @@ export function ShareDialog({
     fd.set('shareUrl', shareUrl || directUrl);
     startInvite(async () => {
       try {
+        const invitedEmails = splitEmails(email);
         const result = await sendShareInvitationAction(fd);
+        setLocalInvitations((current) => {
+          const next = [
+            ...(current?.scopeKey === selectedScopeKey ? current.rows : settings?.invitations ?? []),
+          ] as ShareInvitation[];
+          for (const invitedEmail of invitedEmails) {
+            const match = next.find((inviteRow) => inviteRow.email === invitedEmail);
+            if (match) {
+              match.access = inviteAccess;
+              match.notify = notify;
+            } else {
+              next.push({
+                id: `local:${selectedScope.type}:${selectedScope.id ?? 'resource'}:${invitedEmail}`,
+                email: invitedEmail,
+                access: inviteAccess,
+                notify,
+              });
+            }
+          }
+          return {
+            scopeKey: selectedScopeKey,
+            rows: next.sort((a, b) => a.email.localeCompare(b.email)),
+          };
+        });
         setStatus(notify ? `${result.count} invitation${result.count === 1 ? '' : 's'} sent.` : `${result.count} access grant${result.count === 1 ? '' : 's'} added.`);
         setEmail('');
         setMessage('');
@@ -216,15 +257,18 @@ export function ShareDialog({
               </button>
             </header>
 
-            <div className="space-y-6 px-6 pb-6">
+            <div className="space-y-5 px-6 pb-6">
               {scopeOptions.length > 1 && (
-                <section>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-                    Share scope
-                  </p>
+                <section className="rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] p-3">
+                  <div className="mb-2 flex items-baseline justify-between gap-3">
+                    <p className="text-[13px] font-semibold text-[color:var(--ink)]">Share scope</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
+                      {selectedScope.type === 'resource' ? 'full' : selectedScope.type}
+                    </p>
+                  </div>
                   <CustomSelect
-                    className="mt-3"
                     value={`${selectedScope.type}:${selectedScope.id ?? ''}`}
+                    menuMaxHeight={360}
                     onChange={(value) => {
                       setScopeKey(value);
                       setLocalLink(null);
@@ -239,10 +283,72 @@ export function ShareDialog({
               )}
 
               <section>
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-                  People with access
-                </p>
-                <div className="mt-3 flex items-center gap-3">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
+                  <label className="flex min-h-12 items-center gap-2 rounded-lg border border-[color:var(--paper-edge)] bg-[color:var(--paper)] px-3 transition-colors focus-within:border-[color:var(--library-green)] focus-within:ring-2 focus-within:ring-[color:var(--library-green)]/15">
+                    <Mail size={16} className="shrink-0 text-[color:var(--ink-faint)]" />
+                    <input
+                      type="text"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Add people by email, separated with commas"
+                      className="min-w-0 flex-1 bg-transparent text-[15px] text-[color:var(--ink)] outline-none placeholder:text-[color:var(--ink-ghost)]"
+                    />
+                  </label>
+                  <CustomSelect
+                    value={inviteAccess}
+                    onChange={(value) => setInviteAccess(value as InviteAccess)}
+                    menuLabel="Role you give"
+                    options={inviteLevels.map((level) => ({
+                      value: level,
+                      label: shortAccessLabels[level],
+                    }))}
+                  />
+                </div>
+                {emailCount > 0 && (
+                  <>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <label className="flex items-center gap-3 text-[14px] text-[color:var(--ink)]">
+                        <input
+                          type="checkbox"
+                          checked={notify}
+                          onChange={(e) => setNotify(e.target.checked)}
+                          className="h-4 w-4 accent-[color:var(--library-green)]"
+                        />
+                        Send invitation email
+                      </label>
+                      <button
+                        type="button"
+                        onClick={invite}
+                        disabled={pendingInvite || !email.trim()}
+                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--paper)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {pendingInvite ? 'Sending...' : emailCount > 1 ? `Invite ${emailCount}` : 'Invite'}
+                      </button>
+                    </div>
+                    {notify && (
+                      <textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Optional message"
+                        rows={2}
+                        className="mt-3 w-full rounded-lg border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors focus:border-[color:var(--ink)]"
+                      />
+                    )}
+                  </>
+                )}
+                {status && (
+                  <p className="mt-3 text-[13px] text-[color:var(--ink-soft)]">{status}</p>
+                )}
+              </section>
+
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-[15px] font-semibold text-[color:var(--ink)]">People with access</p>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
+                    {invitations.length + 1}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg px-1 py-2">
                   <span className="grid h-9 w-9 place-items-center rounded-full bg-[color:var(--ink)] text-[color:var(--paper)]">
                     <Users size={16} />
                   </span>
@@ -254,18 +360,29 @@ export function ShareDialog({
                       <p className="truncate text-[13px] text-[color:var(--ink-soft)]">{settings.ownerEmail}</p>
                     )}
                   </div>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">Owner</span>
+                  <span className="text-[13px] text-[color:var(--ink-faint)]">Owner</span>
                 </div>
-                {(settings?.invitations ?? []).length > 0 && (
-                  <ul className="mt-3 divide-y divide-[color:var(--paper-rule)] border-y border-[color:var(--paper-rule)]">
-                    {settings!.invitations.map((invite) => (
-                      <li key={invite.id} className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_190px_auto] sm:items-center">
-                        <span className="min-w-0 truncate text-[14px] text-[color:var(--ink)]">{invite.email}</span>
+                {invitations.length > 0 && (
+                  <ul className="mt-1 divide-y divide-[color:var(--paper-rule)]">
+                    {invitations.map((invite) => (
+                      <li key={invite.id} className="grid gap-3 rounded-lg px-1 py-2 sm:grid-cols-[minmax(0,1fr)_190px] sm:items-center">
+                        <div className="min-w-0">
+                          <span className="block truncate text-[14px] font-medium text-[color:var(--ink)]">{invite.email}</span>
+                          <span className="text-[12px] text-[color:var(--ink-soft)]">Direct invite</span>
+                        </div>
                         <CustomSelect
                           compact
+                          align="right"
                           value={invite.access}
                           onChange={(value) => {
                             if (value === 'remove') {
+                              setLocalInvitations((current) =>
+                                ({
+                                  scopeKey: selectedScopeKey,
+                                  rows: (current?.scopeKey === selectedScopeKey ? current.rows : settings?.invitations ?? [])
+                                    .filter((row) => row.email !== invite.email),
+                                }),
+                              );
                               void removeInvitation({
                                 resourceType,
                                 resourceId,
@@ -279,6 +396,15 @@ export function ShareDialog({
                               setStatus('Use Transfer ownership below to confirm.');
                               return;
                             }
+                            setLocalInvitations((current) =>
+                              ({
+                                scopeKey: selectedScopeKey,
+                                rows: (current?.scopeKey === selectedScopeKey ? current.rows : settings?.invitations ?? [])
+                                  .map((row) =>
+                                    row.email === invite.email ? { ...row, access: value as InviteAccess } : row,
+                                  ),
+                              }),
+                            );
                             void upsertInvitation({
                               resourceType,
                               resourceId,
@@ -291,30 +417,50 @@ export function ShareDialog({
                             });
                           }}
                           options={[
-                            ...inviteLevels.map((level) => ({ value: level, label: accessCopy[level].label })),
+                            ...inviteLevels.map((level) => ({ value: level, label: shortAccessLabels[level] })),
                             { value: 'transfer', label: 'Transfer ownership', separatorBefore: true },
                             { value: 'remove', label: 'Remove access', destructive: true },
                           ]}
+                          menuLabel="Role"
                         />
-                        <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)] sm:block">
-                          Direct
-                        </span>
                       </li>
                     ))}
                   </ul>
                 )}
               </section>
 
-              <section className="border-y border-[color:var(--paper-rule)] py-5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-                  General access
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-start">
+              <section className="border-t border-[color:var(--paper-rule)] pt-5">
+                <p className="text-[15px] font-semibold text-[color:var(--ink)]">General access</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
                   <span className={`grid h-10 w-10 place-items-center rounded-full ${linkAccess === 'none' ? 'bg-[color:var(--surface-soft)] text-[color:var(--ink-soft)]' : 'bg-[color:var(--library-green)]/12 text-[color:var(--library-green)]'}`}>
                     {linkAccess === 'none' ? <Lock size={18} /> : <Link2 size={18} />}
                   </span>
-                  <div>
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px] sm:items-center">
                     <CustomSelect
+                      compact
+                      value={linkAccess === 'none' ? 'none' : 'link'}
+                      onChange={(value) => {
+                        const nextAccess = value === 'none' ? 'none' : linkAccess === 'none' ? 'view' : linkAccess;
+                        void setLinkAccess({
+                          resourceType,
+                          resourceId,
+                          scopeType: selectedScope.type,
+                          scopeId: selectedScope.id,
+                          scopeLabel: selectedScope.label,
+                          access: nextAccess as LinkAccess,
+                        }).then((result) => {
+                          setLocalLink({ access: result.access, token: result.token });
+                        });
+                      }}
+                      options={[
+                        { value: 'none', label: 'Limited access', description: 'Only invited people can open.' },
+                        { value: 'link', label: 'Anyone with link', description: 'People with this link can open.' },
+                      ]}
+                    />
+                    {linkAccess !== 'none' && (
+                      <CustomSelect
+                        align="right"
+                        compact
                       value={linkAccess}
                       onChange={(value) => {
                         void setLinkAccess({
@@ -328,79 +474,17 @@ export function ShareDialog({
                           setLocalLink({ access: result.access, token: result.token });
                         });
                       }}
-                      options={linkLevels.map((level) => ({
+                        options={linkRoleLevels.map((level) => ({
                         value: level,
-                        label: accessCopy[level].label,
-                        description: accessCopy[level].helper,
+                          label: shortAccessLabels[level],
                       }))}
-                    />
-                    <p className="mt-2 font-display-italic text-[14px] text-[color:var(--ink-soft)]">
+                        menuLabel="Role"
+                      />
+                    )}
+                    <p className="text-[13px] leading-5 text-[color:var(--ink-soft)] sm:col-span-2">
                       {accessCopy[linkAccess].helper}
                     </p>
-                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-ghost)]">
-                      {linkAccess === 'none'
-                        ? 'Copy link stays disabled until link access is enabled.'
-                        : 'Changing this selector prepares the link automatically.'}
-                    </p>
                   </div>
-                </div>
-              </section>
-
-              <section>
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-                  Invite by email
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
-                  <label className="flex min-h-12 items-center gap-2 rounded-lg border border-[color:var(--paper-edge)] px-3 focus-within:border-[color:var(--ink)]">
-                    <Mail size={16} className="shrink-0 text-[color:var(--ink-faint)]" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@example.com, teammate@example.com"
-                      className="min-w-0 flex-1 bg-transparent text-[15px] text-[color:var(--ink)] outline-none placeholder:text-[color:var(--ink-ghost)]"
-                    />
-                  </label>
-                  <CustomSelect
-                    value={inviteAccess}
-                    onChange={(value) => setInviteAccess(value as InviteAccess)}
-                    options={inviteLevels.map((level) => ({
-                      value: level,
-                      label: accessCopy[level].label,
-                      description: accessCopy[level].helper,
-                    }))}
-                  />
-                </div>
-                <label className="mt-4 flex items-center gap-3 text-[14px] text-[color:var(--ink)]">
-                  <input
-                    type="checkbox"
-                    checked={notify}
-                    onChange={(e) => setNotify(e.target.checked)}
-                    className="h-4 w-4 accent-[color:var(--library-green)]"
-                  />
-                  Send invitation email with Resend
-                </label>
-                {notify && (
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Optional message"
-                    rows={3}
-                    className="mt-3 w-full rounded-lg border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors focus:border-[color:var(--ink)]"
-                  />
-                )}
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={invite}
-                    disabled={pendingInvite || !email.trim()}
-                    className="inline-flex min-h-11 items-center justify-center rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--paper)] transition-colors hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {pendingInvite ? 'Sending...' : emailCount > 1 ? `Invite ${emailCount}` : 'Invite'}
-                  </button>
-                  {status && (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">{status}</span>
-                  )}
                 </div>
               </section>
 

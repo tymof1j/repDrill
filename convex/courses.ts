@@ -11,7 +11,10 @@ async function canReadSharedCourse(ctx: QueryCtx, courseId: Id<"courses">, userI
     .query("shareInvitations")
     .withIndex("by_email", (q) => q.eq("email", user.email!.trim().toLowerCase()))
     .take(100);
-  return invitations.some((invite) => invite.resourceType === "course" && invite.resourceId === courseId);
+  return invitations.some((invite) =>
+    (invite.resourceType === "course" && invite.resourceId === courseId) ||
+    (invite.resourceType === "repertoire" && invite.scopeType === "course" && invite.scopeId === courseId)
+  );
 }
 
 async function getDirectCourseAccess(ctx: QueryCtx | MutationCtx, courseId: Id<"courses">, userId: Id<"users">) {
@@ -21,7 +24,10 @@ async function getDirectCourseAccess(ctx: QueryCtx | MutationCtx, courseId: Id<"
     .query("shareInvitations")
     .withIndex("by_email", (q) => q.eq("email", user.email!.trim().toLowerCase()))
     .take(100);
-  const match = invitations.find((invite) => invite.resourceType === "course" && invite.resourceId === courseId);
+  const match = invitations.find((invite) =>
+    (invite.resourceType === "course" && invite.resourceId === courseId) ||
+    (invite.resourceType === "repertoire" && invite.scopeType === "course" && invite.scopeId === courseId)
+  );
   return match?.access ?? null;
 }
 
@@ -304,7 +310,7 @@ export const getPublicByToken = query({
       .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
       .first();
     let access: "view" | "copy" | "collaborate" = "copy";
-    let scopeType: "resource" | "chapter" | "line" = "resource";
+    let scopeType: "resource" | "course" | "chapter" | "line" = "resource";
     let scopeId: string | undefined;
     let scopeLabel: string | undefined;
     if (!course || !course.isPublic) {
@@ -312,12 +318,23 @@ export const getPublicByToken = query({
         .query("shareLinks")
         .withIndex("by_token", (q) => q.eq("token", args.token))
         .unique();
-      if (!link || link.resourceType !== "course" || link.access === "none") return null;
-      course = await ctx.db.get(link.resourceId as Id<"courses">);
+      if (!link || link.access === "none") return null;
+      if (link.resourceType === "course") {
+        course = await ctx.db.get(link.resourceId as Id<"courses">);
+      } else if (link.resourceType === "repertoire" && link.scopeType === "course" && link.scopeId) {
+        const junctions = await ctx.db
+          .query("repertoireCourses")
+          .withIndex("by_repertoire", (q) => q.eq("repertoireId", link.resourceId as Id<"repertoires">))
+          .collect();
+        if (!junctions.some((junction) => junction.courseId === link.scopeId)) return null;
+        course = await ctx.db.get(link.scopeId as Id<"courses">);
+      } else {
+        return null;
+      }
       if (!course) return null;
       access = link.access;
-      scopeType = link.scopeType ?? "resource";
-      scopeId = link.scopeId;
+      scopeType = link.resourceType === "repertoire" ? "resource" : (link.scopeType ?? "resource");
+      scopeId = link.resourceType === "repertoire" ? undefined : link.scopeId;
       scopeLabel = link.scopeLabel;
     }
     const userId = await getAuthUserId(ctx);
@@ -366,8 +383,19 @@ export const getPublicChapterTree = query({
         .query("shareLinks")
         .withIndex("by_token", (q) => q.eq("token", args.token))
         .unique();
-      if (!link || link.resourceType !== "course" || link.access === "none") return null;
-      course = await ctx.db.get(link.resourceId as Id<"courses">);
+      if (!link || link.access === "none") return null;
+      if (link.resourceType === "course") {
+        course = await ctx.db.get(link.resourceId as Id<"courses">);
+      } else if (link.resourceType === "repertoire" && link.scopeType === "course" && link.scopeId) {
+        const junctions = await ctx.db
+          .query("repertoireCourses")
+          .withIndex("by_repertoire", (q) => q.eq("repertoireId", link.resourceId as Id<"repertoires">))
+          .collect();
+        if (!junctions.some((junction) => junction.courseId === link.scopeId)) return null;
+        course = await ctx.db.get(link.scopeId as Id<"courses">);
+      } else {
+        return null;
+      }
       if (!course) return null;
     }
 

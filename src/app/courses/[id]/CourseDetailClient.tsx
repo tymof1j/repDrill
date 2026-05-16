@@ -136,28 +136,34 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     () => (selectedChapterId ? (linesByChapter.get(selectedChapterId) ?? []) : []),
     [linesByChapter, selectedChapterId],
   );
+  const scopeChapterId = selectedChapterId ?? chapters[0]?.id ?? null;
+  const scopeChapter = chapters.find((chapter) => chapter.id === scopeChapterId) ?? null;
+  const scopeChapterLines = useMemo(
+    () => (scopeChapterId ? (linesByChapter.get(scopeChapterId) ?? []) : []),
+    [linesByChapter, scopeChapterId],
+  );
   const shareScopes = useMemo(() => {
     const scopes: { type: 'resource' | 'chapter' | 'line'; id?: string; label: string; description?: string }[] = [
-      { type: 'resource', label: 'Entire course', description: 'All chapters and lines' },
+      { type: 'resource', label: 'Whole course', description: 'All chapters and lines' },
     ];
-    if (selectedChapter) {
+    if (scopeChapter) {
       scopes.push({
         type: 'chapter',
-        id: selectedChapter.id,
-        label: `Chapter: ${selectedChapter.name}`,
-        description: `${selectedChapterLines.length} line${selectedChapterLines.length === 1 ? '' : 's'}`,
+        id: scopeChapter.id,
+        label: 'This chapter',
+        description: `${scopeChapter.name} · ${scopeChapterLines.length} line${scopeChapterLines.length === 1 ? '' : 's'}`,
       });
       scopes.push(
-        ...selectedChapterLines.slice(0, 12).map((line, index) => ({
+        ...scopeChapterLines.map((line, index) => ({
           type: 'line' as const,
           id: line.leafPositionId,
-          label: `Line ${index + 1}: ${line.moves.slice(0, 5).map(formatMove).join(' ')}`,
-          description: line.moves.length > 5 ? `${line.moves.length} moves total` : undefined,
+          label: `Specific line ${String(index + 1).padStart(2, '0')}`,
+          description: line.moves.slice(0, 9).map(formatMove).join(' '),
         })),
       );
     }
     return scopes;
-  }, [selectedChapter, selectedChapterLines]);
+  }, [scopeChapter, scopeChapterLines]);
   const visibleMoves = useMemo(
     () =>
       selectedChapterId
@@ -310,6 +316,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                     onChange={(e) => setChapterQuery(e.target.value)}
                     placeholder="Search chapters…"
                     className="font-display flex-1 bg-transparent text-lg italic text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none"
+                    suppressHydrationWarning
                   />
                 </div>
               </div>
@@ -439,6 +446,10 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         moves={visibleMoves}
         chapters={chapters}
         selectedChapterName={selectedChapter?.name ?? null}
+        lineMarkers={selectedChapterLines.map((line, index) => ({
+          leafPositionId: line.leafPositionId,
+          number: index + 1,
+        }))}
         onAnnotationSave={handleAnnotationSave}
         jumpToPositionId={jumpTarget}
         onJumpDone={() => setJumpTarget(null)}

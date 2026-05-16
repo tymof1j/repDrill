@@ -4,6 +4,60 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
+async function loadRepertoireTree(ctx: QueryCtx, repertoireId: Id<"repertoires">) {
+  const courseRows = await ctx.db
+    .query("repertoireCourses")
+    .withIndex("by_repertoire", (q) => q.eq("repertoireId", repertoireId))
+    .collect();
+
+  const courses = [];
+  for (const cr of courseRows) {
+    const course = await ctx.db.get(cr.courseId);
+    if (course) courses.push({ junctionId: cr._id, sortOrder: cr.sortOrder, course });
+  }
+
+  const courseIds = courses.map((c) => c.course._id);
+  if (courseIds.length === 0) {
+    return { courses, chapters: [], moves: [], positions: [], choices: [] };
+  }
+
+  const chapters: Doc<"chapters">[] = [];
+  for (const courseId of courseIds) {
+    const chs = await ctx.db
+      .query("chapters")
+      .withIndex("by_course", (q) => q.eq("courseId", courseId))
+      .collect();
+    chapters.push(...chs);
+  }
+
+  const moves: Doc<"moves">[] = [];
+  for (const ch of chapters) {
+    const chMoves = await ctx.db
+      .query("moves")
+      .withIndex("by_chapter", (q) => q.eq("chapterId", ch._id))
+      .collect();
+    moves.push(...chMoves);
+  }
+
+  const positionIds = new Set<string>();
+  for (const m of moves) {
+    positionIds.add(m.parentPositionId as string);
+    positionIds.add(m.childPositionId as string);
+  }
+  const positions: Doc<"positions">[] = [];
+  for (const id of positionIds) {
+    const pos = await ctx.db.get(id as Id<"positions">);
+    if (pos) positions.push(pos);
+  }
+
+  const choices = await ctx.db
+    .query("repertoireChoices")
+    .withIndex("by_repertoire", (q) => q.eq("repertoireId", repertoireId))
+    .collect();
+
+  return { courses, chapters, moves, positions, choices };
+}
+
 async function canReadSharedRepertoire(ctx: QueryCtx, repertoireId: Id<"repertoires">, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
   if (!user?.email) return false;
@@ -11,7 +65,11 @@ async function canReadSharedRepertoire(ctx: QueryCtx, repertoireId: Id<"repertoi
     .query("shareInvitations")
     .withIndex("by_email", (q) => q.eq("email", user.email!.trim().toLowerCase()))
     .take(100);
-  return invitations.some((invite) => invite.resourceType === "repertoire" && invite.resourceId === repertoireId);
+  return invitations.some((invite) =>
+    invite.resourceType === "repertoire" &&
+    invite.resourceId === repertoireId &&
+    (invite.scopeType === undefined || invite.scopeType === "resource")
+  );
 }
 
 export const list = query({
@@ -211,56 +269,29 @@ export const loadTree = query({
       return { courses: [], chapters: [], moves: [], positions: [], choices: [] };
     }
 
-    const courseRows = await ctx.db
-      .query("repertoireCourses")
-      .withIndex("by_repertoire", (q) => q.eq("repertoireId", args.repertoireId))
-      .collect();
+    return await loadRepertoireTree(ctx, args.repertoireId);
+  },
+});
 
-    const courses = [];
-    for (const cr of courseRows) {
-      const course = await ctx.db.get(cr.courseId);
-      if (course) courses.push({ junctionId: cr._id, sortOrder: cr.sortOrder, course });
+export const getPublicByToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("shareLinks")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique();
+    if (
+      !link ||
+      link.resourceType !== "repertoire" ||
+      link.access === "none" ||
+      (link.scopeType && link.scopeType !== "resource")
+    ) {
+      return null;
     }
 
-    const courseIds = courses.map((c) => c.course._id);
-    if (courseIds.length === 0) {
-      return { courses, chapters: [], moves: [], positions: [], choices: [] };
-    }
-
-    const chapters: Doc<"chapters">[] = [];
-    for (const courseId of courseIds) {
-      const chs = await ctx.db
-        .query("chapters")
-        .withIndex("by_course", (q) => q.eq("courseId", courseId))
-        .collect();
-      chapters.push(...chs);
-    }
-
-    const moves: Doc<"moves">[] = [];
-    for (const ch of chapters) {
-      const chMoves = await ctx.db
-        .query("moves")
-        .withIndex("by_chapter", (q) => q.eq("chapterId", ch._id))
-        .collect();
-      moves.push(...chMoves);
-    }
-
-    const positionIds = new Set<string>();
-    for (const m of moves) {
-      positionIds.add(m.parentPositionId as string);
-      positionIds.add(m.childPositionId as string);
-    }
-    const positions: Doc<"positions">[] = [];
-    for (const id of positionIds) {
-      const pos = await ctx.db.get(id as Id<"positions">);
-      if (pos) positions.push(pos);
-    }
-
-    const choices = await ctx.db
-      .query("repertoireChoices")
-      .withIndex("by_repertoire", (q) => q.eq("repertoireId", args.repertoireId))
-      .collect();
-
-    return { courses, chapters, moves, positions, choices };
+    const repertoire = await ctx.db.get(link.resourceId as Id<"repertoires">);
+    if (!repertoire) return null;
+    const tree = await loadRepertoireTree(ctx, repertoire._id);
+    return { repertoire, access: link.access, ...tree };
   },
 });

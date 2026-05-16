@@ -4,6 +4,13 @@ import { fetchQuery } from 'convex/nextjs';
 import { api } from '@convex/_generated/api';
 import { AppSurface, PageHeader, BackLink } from '@/components/ui/Premium';
 import { SharePublicView } from './SharePublicView';
+import { normalizeFen } from '@/lib/chess/fen';
+import {
+  MergedRepertoireViewer,
+  type MergedChoice,
+  type MergedMove,
+  type MergedPosition,
+} from '@/components/repertoire/MergedRepertoireViewer';
 
 export default async function SharedCoursePage({
   params,
@@ -17,7 +24,70 @@ export default async function SharedCoursePage({
     { token },
     authToken ? { token: authToken } : undefined,
   );
-  if (!data) notFound();
+  if (!data) {
+    const repertoireData = await fetchQuery(
+      api.repertoires.getPublicByToken,
+      { token },
+      authToken ? { token: authToken } : undefined,
+    );
+    if (!repertoireData) notFound();
+
+    const chaptersById = new Map(repertoireData.chapters.map((chapter) => [chapter._id as string, chapter]));
+    const coursesById = new Map(repertoireData.courses.map((entry) => [entry.course._id as string, entry.course]));
+    const rootPosition = repertoireData.positions.find(
+      (position) => position.fen === normalizeFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'),
+    );
+    const viewerPositions: MergedPosition[] = repertoireData.positions.map((position) => ({
+      id: position._id as string,
+      fen: position.fen,
+      annotation: position.annotation ?? null,
+    }));
+    const viewerMoves: MergedMove[] = repertoireData.moves.flatMap((move) => {
+      const chapter = chaptersById.get(move.chapterId as string);
+      if (!chapter) return [];
+      const course = coursesById.get(chapter.courseId as string);
+      if (!course) return [];
+      return [{
+        id: move._id as string,
+        parentPositionId: move.parentPositionId as string,
+        childPositionId: move.childPositionId as string,
+        san: move.san,
+        uci: move.uci,
+        moveNumber: move.moveNumber,
+        colorToMove: move.colorToMove,
+        isMainLine: move.isMainLine,
+        moveType: move.moveType,
+        chapterId: move.chapterId as string,
+        chapterName: chapter.name,
+        courseId: course._id as string,
+        courseName: course.name,
+        courseColor: course.color,
+      }];
+    });
+    const viewerChoices: MergedChoice[] = repertoireData.choices.map((choice) => ({
+      positionId: choice.positionId as string,
+      preferredMoveId: choice.preferredMoveId as string,
+    }));
+
+    return (
+      <AppSurface>
+        <BackLink href="/">Home</BackLink>
+        <PageHeader
+          eyebrow="Shared repertoire"
+          title={repertoireData.repertoire.name}
+          body={repertoireData.repertoire.description ?? 'A shared merged repertoire. Inspect the combined move tree from the linked courses.'}
+        />
+        <MergedRepertoireViewer
+          repertoireId={repertoireData.repertoire._id}
+          rootPositionId={(rootPosition?._id as string) ?? ''}
+          positions={viewerPositions}
+          moves={viewerMoves}
+          choices={viewerChoices}
+          readOnly
+        />
+      </AppSurface>
+    );
+  }
 
   const { course, chapters } = data;
   const isLoggedIn = await isAuthenticatedNextjs();

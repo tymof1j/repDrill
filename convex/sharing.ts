@@ -24,11 +24,11 @@ const inviteAccessValidator = v.union(
 );
 
 const shareScopeTypeValidator = v.optional(
-  v.union(v.literal("resource"), v.literal("chapter"), v.literal("line")),
+  v.union(v.literal("resource"), v.literal("course"), v.literal("chapter"), v.literal("line")),
 );
 
 type ResourceType = "course" | "repertoire" | "analysis";
-type ShareScopeType = "resource" | "chapter" | "line";
+type ShareScopeType = "resource" | "course" | "chapter" | "line";
 type InviteAccess = "view" | "copy" | "collaborate";
 type AnyAccess = "none" | InviteAccess;
 
@@ -448,9 +448,13 @@ export const listSharedCourses = query({
     const invitations = await getInvitationsForCurrentUser(ctx, userId);
     const rows = [];
     for (const invitation of invitations) {
-      if (invitation.resourceType !== "course") continue;
+      if (invitation.resourceType !== "course" && !(invitation.resourceType === "repertoire" && invitation.scopeType === "course" && invitation.scopeId)) {
+        continue;
+      }
       const owner = await ctx.db.get(invitation.ownerId);
-      const resource = await ctx.db.get(invitation.resourceId as Id<"courses">);
+      const resource = await ctx.db.get(
+        (invitation.resourceType === "repertoire" ? invitation.scopeId : invitation.resourceId) as Id<"courses">,
+      );
       if (resource) rows.push({ invitation, owner, resource });
     }
     return rows;
@@ -466,6 +470,7 @@ export const listSharedRepertoires = query({
     const rows = [];
     for (const invitation of invitations) {
       if (invitation.resourceType !== "repertoire") continue;
+      if (invitation.scopeType && invitation.scopeType !== "resource") continue;
       const owner = await ctx.db.get(invitation.ownerId);
       const resource = await ctx.db.get(invitation.resourceId as Id<"repertoires">);
       if (resource) rows.push({ invitation, owner, resource });

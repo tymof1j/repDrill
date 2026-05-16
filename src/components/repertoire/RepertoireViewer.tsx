@@ -44,6 +44,7 @@ type Props = {
   onAnnotationSave?: (positionId: string, text: string) => void;
   jumpToPositionId?: string | null;
   onJumpDone?: () => void;
+  lineMarkers?: { leafPositionId: string; number: number }[];
 };
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
@@ -58,6 +59,7 @@ export function RepertoireViewer({
   onAnnotationSave,
   jumpToPositionId,
   onJumpDone,
+  lineMarkers = [],
 }: Props) {
   const positionsById = useMemo(() => new Map(positions.map((p) => [p.id, p])), [positions]);
 
@@ -84,6 +86,21 @@ export function RepertoireViewer({
 
   const currentPosition = positionsById.get(currentPositionId);
   const currentFen = currentPosition?.fen ?? STARTING_FEN;
+  const currentLineNumber = useMemo(() => {
+    if (path.length === 0 || lineMarkers.length === 0) return null;
+    const parentByChild = new Map(moves.map((move) => [move.childPositionId, move.parentPositionId]));
+    for (const marker of lineMarkers) {
+      const positionsOnLine = new Set<string>();
+      let cursor: string | undefined = marker.leafPositionId;
+      while (cursor && !positionsOnLine.has(cursor)) {
+        positionsOnLine.add(cursor);
+        if (cursor === rootPositionId) break;
+        cursor = parentByChild.get(cursor);
+      }
+      if (positionsOnLine.has(currentPositionId)) return marker.number;
+    }
+    return null;
+  }, [currentPositionId, lineMarkers, moves, path.length, rootPositionId]);
 
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
@@ -286,16 +303,8 @@ export function RepertoireViewer({
           </button>
         </div>
 
-        {/* Keyboard hint */}
-        <p className="mt-3 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
-          <kbd className="font-mono">v</kbd> arrows · <kbd className="font-mono">/</kbd> search annotations
-        </p>
-      </div>
-
-      {/* ── Right page: line + branches + annotation + search ─ */}
-      <div className="space-y-10">
-        {/* Annotation (mobile first to keep it visible while browsing) */}
-        <section className="md:hidden">
+        {/* Annotation — narrow screens only: right below nav controls */}
+        <section className="mt-4 md:hidden">
           <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Annotation
@@ -337,11 +346,26 @@ export function RepertoireViewer({
           )}
         </section>
 
+        {/* Keyboard hint */}
+        <p className="mt-3 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
+          <kbd className="font-mono">v</kbd> arrows · <kbd className="font-mono">h</kbd> hints · <kbd className="font-mono">/</kbd> search annotations
+        </p>
+      </div>
+
+      {/* ── Right page: line + branches + annotation + search ─ */}
+      <div className="space-y-10">
         {/* Line */}
         <section>
-          <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-            Line
-          </p>
+          <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Line
+            </p>
+            {currentLineNumber && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+                #{String(currentLineNumber).padStart(2, '0')}
+              </span>
+            )}
+          </div>
           {path.length === 0 ? (
             <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
               Starting position. Pick a continuation below.

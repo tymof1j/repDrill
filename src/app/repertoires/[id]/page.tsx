@@ -85,6 +85,19 @@ export default async function RepertoireDetailPage({
     positionId: c.positionId as string,
     preferredMoveId: c.preferredMoveId as string,
   }));
+  const shareScopes = [
+    {
+      type: 'resource' as const,
+      label: 'Whole repertoire',
+      description: 'Share the merged repertoire with every bound course.',
+    },
+    ...tree.courses.map((entry) => ({
+      type: 'course' as const,
+      id: entry.course._id as string,
+      label: entry.course.name,
+      description: `Only this ${entry.course.color} course from the repertoire.`,
+    })),
+  ];
 
   return (
     <AppSurface>
@@ -98,6 +111,7 @@ export default async function RepertoireDetailPage({
             resourceType="repertoire"
             resourceId={repertoire._id}
             title={repertoire.name}
+            scopes={shareScopes}
           />
         }
       />

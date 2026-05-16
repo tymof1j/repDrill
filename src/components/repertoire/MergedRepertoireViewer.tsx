@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { ChessBoard } from '@/components/board/ChessBoard';
 import { useTreeNavigation } from '@/lib/hooks/useTreeNavigation';
 import {
@@ -44,6 +44,7 @@ type Props = {
   positions: MergedPosition[];
   moves: MergedMove[];
   choices: MergedChoice[];
+  readOnly?: boolean;
 };
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
@@ -54,6 +55,7 @@ export function MergedRepertoireViewer({
   positions,
   moves,
   choices,
+  readOnly = false,
 }: Props) {
   const positionsById = useMemo(() => new Map(positions.map((p) => [p.id, p])), [positions]);
   const choiceByPosition = useMemo(
@@ -106,6 +108,43 @@ export function MergedRepertoireViewer({
   const orientation: 'white' | 'black' =
     path.length === 0 ? 'white' : path[0].colorToMove === 'black' ? 'white' : 'black';
 
+  const [showArrows, setShowArrows] = useState(true);
+  const [showHighlights, setShowHighlights] = useState(true);
+
+  const arrows = useMemo(() => {
+    if (!showArrows || grouped.length <= 1) return [];
+    return grouped.map((g) => ({
+      orig: g.uci.slice(0, 2) as `${string}`,
+      dest: g.uci.slice(2, 4) as `${string}`,
+      brush: g.moves.some((m) => m.moveType === 'repertoire') ? 'green' : 'blue',
+    }));
+  }, [showArrows, grouped]);
+
+  const squareMarks = useMemo(() => {
+    if (!showHighlights || grouped.length === 0) return [];
+    return grouped.flatMap((g) => {
+      const dest = g.uci.slice(2, 4);
+      return g.moves.some((m) => m.moveType === 'repertoire')
+        ? [{ orig: dest, brush: 'green' }]
+        : [];
+    });
+  }, [showHighlights, grouped]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShowArrows((s) => !s);
+      } else if (e.key === 'h' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShowHighlights((s) => !s);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const setPreferred = (move: MergedMove) => {
     const fd = new FormData();
     fd.set('repertoireId', repertoireId);
@@ -133,14 +172,42 @@ export function MergedRepertoireViewer({
           <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
             Diagram
           </p>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
-            {path.length === 0 ? 'starting' : `${path.length} ply deep`}
-          </p>
+          <div className="flex items-baseline gap-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
+              {path.length === 0 ? 'starting' : `${path.length} ply deep`}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowHighlights((s) => !s)}
+              aria-pressed={showHighlights}
+              className={`font-mono text-[10px] font-semibold uppercase tracking-[0.18em] underline decoration-1 underline-offset-[6px] transition-colors duration-200 ${
+                showHighlights
+                  ? 'text-[color:var(--margin-red)] decoration-[color:var(--margin-red)]'
+                  : 'text-[color:var(--ink-faint)] decoration-[color:var(--paper-edge)] hover:text-[color:var(--ink)]'
+              }`}
+              title="Toggle piece highlights (h)"
+            >
+              Hints {showHighlights ? 'on' : 'off'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowArrows((s) => !s)}
+              aria-pressed={showArrows}
+              className={`font-mono text-[10px] font-semibold uppercase tracking-[0.18em] underline decoration-1 underline-offset-[6px] transition-colors duration-200 ${
+                showArrows
+                  ? 'text-[color:var(--margin-red)] decoration-[color:var(--margin-red)]'
+                  : 'text-[color:var(--ink-faint)] decoration-[color:var(--paper-edge)] hover:text-[color:var(--ink)]'
+              }`}
+              title="Toggle alternative move arrows (v)"
+            >
+              Arrows {showArrows ? 'on' : 'off'}
+            </button>
+          </div>
         </div>
 
         <div className="-mx-5 md:mx-0">
           <ResizableDiagramFrame caption={`§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}>
-            <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} />
+            <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} arrows={arrows} squareMarks={squareMarks} />
           </ResizableDiagramFrame>
         </div>
 
@@ -170,6 +237,10 @@ export function MergedRepertoireViewer({
             Forward ▶
           </button>
         </div>
+
+        <p className="mt-3 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
+          <kbd className="font-mono">v</kbd> arrows · <kbd className="font-mono">h</kbd> hints
+        </p>
       </div>
 
       {/* ── Right page: line + branches + annotation ───────── */}
@@ -220,14 +291,14 @@ export function MergedRepertoireViewer({
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Branches{grouped.length > 0 && ` · ${grouped.length}`}
             </p>
-            {hasConflict && (
+            {hasConflict && !readOnly && (
               <Stamp tone="red" rotate>
                 Conflict
               </Stamp>
             )}
           </div>
 
-          {hasConflict && (
+          {hasConflict && !readOnly && (
             <p className="mt-3 marginalia text-[14px]">
               Two of your courses prepare different moves here. Choose which line wins
               for this repertoire — the others remain available as alternatives.
@@ -274,7 +345,7 @@ export function MergedRepertoireViewer({
                         ))}
                       </span>
                     </button>
-                    {hasConflict && repertoireMove && (
+                    {hasConflict && repertoireMove && !readOnly && (
                       <div className="flex items-center gap-3">
                         {isPreferred ? (
                           <GhostButton onClick={clearPreferred} disabled={pending}>
