@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Id } from "./_generated/dataModel";
 
 const SYNC_COOLDOWN_MS = 4 * 60 * 1000;
 
@@ -117,6 +118,22 @@ export const storeSync = mutation({
     });
 
     return { syncedAt: now, rows: insertedRows };
+  },
+});
+
+export const getPublicByToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("shareLinks")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique();
+    if (!link || link.resourceType !== "analysis" || link.access === "none") return null;
+
+    const game = await ctx.db.get(link.resourceId as Id<"analyzedGames">);
+    if (!game) return null;
+
+    return { game, access: link.access };
   },
 });
 

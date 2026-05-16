@@ -62,7 +62,13 @@ export function ShareDialog({
   resourceId: string;
   title: string;
   buttonClassName?: string;
-  scopes?: { type: ShareScopeType; id?: string; label: string; description?: string }[];
+  scopes?: {
+    type: ShareScopeType;
+    id?: string;
+    label: string;
+    description?: string;
+    lineRefs?: { code: string; id: string; preview?: string }[];
+  }[];
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -72,6 +78,7 @@ export function ShareDialog({
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [scopeKey, setScopeKey] = useState('resource:');
+  const [lineScopeInput, setLineScopeInput] = useState('');
   const [localInvitations, setLocalInvitations] = useState<{
     scopeKey: string;
     rows: ShareInvitation[];
@@ -87,12 +94,37 @@ export function ShareDialog({
   const selectedScope =
     scopeOptions.find((scope) => `${scope.type}:${scope.id ?? ''}` === scopeKey) ?? scopeOptions[0];
   const selectedScopeKey = `${selectedScope.type}:${selectedScope.id ?? ''}`;
+  const lineMode = selectedScope.type === 'line' && !selectedScope.id && (selectedScope.lineRefs?.length ?? 0) > 0;
+  const parsedLineCodes = useMemo(
+    () =>
+      lineScopeInput
+        .split(/[,\n;]/)
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean),
+    [lineScopeInput],
+  );
+  const matchedLineRefs = useMemo(() => {
+    if (!lineMode) return [];
+    const byCode = new Map((selectedScope.lineRefs ?? []).map((row) => [row.code.toLowerCase(), row]));
+    const uniqueCodes = Array.from(new Set(parsedLineCodes));
+    return uniqueCodes.map((code) => byCode.get(code)).filter(Boolean) as { code: string; id: string; preview?: string }[];
+  }, [lineMode, parsedLineCodes, selectedScope.lineRefs]);
+  const effectiveScope = useMemo(() => {
+    if (!lineMode) return selectedScope;
+    const first = matchedLineRefs[0];
+    if (!first) return selectedScope;
+    return {
+      ...selectedScope,
+      id: first.id,
+      label: `Line ${first.code}`,
+    };
+  }, [lineMode, matchedLineRefs, selectedScope]);
 
   const settings = useQuery(api.sharing.getSettings, {
     resourceType,
     resourceId,
-    scopeType: selectedScope.type,
-    scopeId: selectedScope.id,
+    scopeType: effectiveScope.type,
+    scopeId: effectiveScope.id,
   });
   const setLinkAccess = useMutation(api.sharing.setLinkAccess);
   const upsertInvitation = useMutation(api.sharing.upsertInvitation);
@@ -150,9 +182,9 @@ export function ShareDialog({
       const result = await setLinkAccess({
         resourceType,
         resourceId,
-        scopeType: selectedScope.type,
-        scopeId: selectedScope.id,
-        scopeLabel: selectedScope.label,
+        scopeType: effectiveScope.type,
+        scopeId: effectiveScope.id,
+        scopeLabel: effectiveScope.label,
         access: linkAccess,
       });
       setLocalLink({ access: result.access, token: result.token });
@@ -171,9 +203,6 @@ export function ShareDialog({
     const fd = new FormData();
     fd.set('resourceType', resourceType);
     fd.set('resourceId', resourceId);
-    fd.set('scopeType', selectedScope.type);
-    fd.set('scopeId', selectedScope.id ?? '');
-    fd.set('scopeLabel', selectedScope.label);
     fd.set('email', email);
     fd.set('access', inviteAccess);
     fd.set('notify', String(notify));
@@ -182,7 +211,19 @@ export function ShareDialog({
     startInvite(async () => {
       try {
         const invitedEmails = splitEmails(email);
-        const result = await sendShareInvitationAction(fd);
+        if (lineMode && matchedLineRefs.length > 0) {
+          for (const lineRef of matchedLineRefs) {
+            fd.set('scopeType', 'line');
+            fd.set('scopeId', lineRef.id);
+            fd.set('scopeLabel', `Line ${lineRef.code}`);
+            await sendShareInvitationAction(fd);
+          }
+        } else {
+          fd.set('scopeType', effectiveScope.type);
+          fd.set('scopeId', effectiveScope.id ?? '');
+          fd.set('scopeLabel', effectiveScope.label);
+          await sendShareInvitationAction(fd);
+        }
         setLocalInvitations((current) => {
           const next = [
             ...(current?.scopeKey === selectedScopeKey ? current.rows : settings?.invitations ?? []),
@@ -206,7 +247,8 @@ export function ShareDialog({
             rows: next.sort((a, b) => a.email.localeCompare(b.email)),
           };
         });
-        setStatus(notify ? `${result.count} invitation${result.count === 1 ? '' : 's'} sent.` : `${result.count} access grant${result.count === 1 ? '' : 's'} added.`);
+        const granted = lineMode && matchedLineRefs.length > 0 ? invitedEmails.length * matchedLineRefs.length : invitedEmails.length;
+        setStatus(notify ? `${granted} invitation${granted === 1 ? '' : 's'} sent.` : `${granted} access grant${granted === 1 ? '' : 's'} added.`);
         setEmail('');
         setMessage('');
       } catch (e) {
@@ -272,6 +314,7 @@ export function ShareDialog({
                     onChange={(value) => {
                       setScopeKey(value);
                       setLocalLink(null);
+                      setLineScopeInput('');
                     }}
                     options={scopeOptions.map((scope) => ({
                       value: `${scope.type}:${scope.id ?? ''}`,
@@ -279,6 +322,22 @@ export function ShareDialog({
                       description: scope.description,
                     }))}
                   />
+                  {lineMode && (
+                    <div className="mt-2 space-y-2">
+                      <label className="flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--paper-edge)] px-3 focus-within:border-[color:var(--library-green)] focus-within:ring-2 focus-within:ring-[color:var(--library-green)]/15">
+                        <input
+                          type="text"
+                          value={lineScopeInput}
+                          onChange={(e) => setLineScopeInput(e.target.value)}
+                          placeholder="qgg-1 or qgg-1,qgg-3"
+                          className="w-full bg-transparent text-[14px] text-[color:var(--ink)] outline-none placeholder:text-[color:var(--ink-ghost)]"
+                        />
+                      </label>
+                      <p className="text-[12px] text-[color:var(--ink-soft)]">
+                        Use chapter prefix + line number. Comma-separated is supported.
+                      </p>
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -316,12 +375,12 @@ export function ShareDialog({
                         />
                         Send invitation email
                       </label>
-                      <button
-                        type="button"
-                        onClick={invite}
-                        disabled={pendingInvite || !email.trim()}
-                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--paper)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
+                  <button
+                    type="button"
+                    onClick={invite}
+                    disabled={pendingInvite || !email.trim() || (lineMode && matchedLineRefs.length === 0)}
+                    className="inline-flex min-h-10 items-center justify-center rounded-full border border-[color:var(--ink)] bg-[color:var(--ink)] px-5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--paper)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                         {pendingInvite ? 'Sending...' : emailCount > 1 ? `Invite ${emailCount}` : 'Invite'}
                       </button>
                     </div>
@@ -386,8 +445,8 @@ export function ShareDialog({
                               void removeInvitation({
                                 resourceType,
                                 resourceId,
-                                scopeType: selectedScope.type,
-                                scopeId: selectedScope.id,
+                                scopeType: effectiveScope.type,
+                                scopeId: effectiveScope.id,
                                 email: invite.email,
                               });
                               return;
@@ -408,9 +467,9 @@ export function ShareDialog({
                             void upsertInvitation({
                               resourceType,
                               resourceId,
-                              scopeType: selectedScope.type,
-                              scopeId: selectedScope.id,
-                              scopeLabel: selectedScope.label,
+                              scopeType: effectiveScope.type,
+                              scopeId: effectiveScope.id,
+                              scopeLabel: effectiveScope.label,
                               email: invite.email,
                               access: value as InviteAccess,
                               notify: false,
@@ -439,14 +498,15 @@ export function ShareDialog({
                     <CustomSelect
                       compact
                       value={linkAccess === 'none' ? 'none' : 'link'}
+                      disabled={lineMode && matchedLineRefs.length === 0}
                       onChange={(value) => {
                         const nextAccess = value === 'none' ? 'none' : linkAccess === 'none' ? 'view' : linkAccess;
                         void setLinkAccess({
                           resourceType,
                           resourceId,
-                          scopeType: selectedScope.type,
-                          scopeId: selectedScope.id,
-                          scopeLabel: selectedScope.label,
+                          scopeType: effectiveScope.type,
+                          scopeId: effectiveScope.id,
+                          scopeLabel: effectiveScope.label,
                           access: nextAccess as LinkAccess,
                         }).then((result) => {
                           setLocalLink({ access: result.access, token: result.token });
@@ -461,14 +521,15 @@ export function ShareDialog({
                       <CustomSelect
                         align="right"
                         compact
-                      value={linkAccess}
+                        disabled={lineMode && matchedLineRefs.length === 0}
+                        value={linkAccess}
                       onChange={(value) => {
                         void setLinkAccess({
                           resourceType,
                           resourceId,
-                          scopeType: selectedScope.type,
-                          scopeId: selectedScope.id,
-                          scopeLabel: selectedScope.label,
+                          scopeType: effectiveScope.type,
+                          scopeId: effectiveScope.id,
+                          scopeLabel: effectiveScope.label,
                           access: value as LinkAccess,
                         }).then((result) => {
                           setLocalLink({ access: result.access, token: result.token });

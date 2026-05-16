@@ -496,6 +496,26 @@ export const listSharedAnalysis = query({
   },
 });
 
+export const listMySharedAnalysis = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const links = await ctx.db
+      .query("shareLinks")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .take(100);
+    const rows = [];
+    for (const link of links) {
+      if (link.resourceType !== "analysis") continue;
+      if (link.access === "none") continue;
+      const game = await ctx.db.get(link.resourceId as Id<"analyzedGames">);
+      if (game) rows.push({ link, resource: game });
+    }
+    return rows;
+  },
+});
+
 export const resolveToken = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {

@@ -44,7 +44,7 @@ type Props = {
   onAnnotationSave?: (positionId: string, text: string) => void;
   jumpToPositionId?: string | null;
   onJumpDone?: () => void;
-  lineMarkers?: { leafPositionId: string; number: number }[];
+  lineMarkers?: { leafPositionId: string; code: string }[];
 };
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
@@ -86,7 +86,7 @@ export function RepertoireViewer({
 
   const currentPosition = positionsById.get(currentPositionId);
   const currentFen = currentPosition?.fen ?? STARTING_FEN;
-  const currentLineNumber = useMemo(() => {
+  const currentLineCode = useMemo(() => {
     if (path.length === 0 || lineMarkers.length === 0) return null;
     const parentByChild = new Map(moves.map((move) => [move.childPositionId, move.parentPositionId]));
     for (const marker of lineMarkers) {
@@ -97,7 +97,7 @@ export function RepertoireViewer({
         if (cursor === rootPositionId) break;
         cursor = parentByChild.get(cursor);
       }
-      if (positionsOnLine.has(currentPositionId)) return marker.number;
+      if (positionsOnLine.has(currentPositionId)) return marker.code;
     }
     return null;
   }, [currentPositionId, lineMarkers, moves, path.length, rootPositionId]);
@@ -360,9 +360,9 @@ export function RepertoireViewer({
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Line
             </p>
-            {currentLineNumber && (
+            {currentLineCode && (
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
-                #{String(currentLineNumber).padStart(2, '0')}
+                {currentLineCode}
               </span>
             )}
           </div>

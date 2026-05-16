@@ -291,7 +291,6 @@ export async function getGameDeviationDetail(formData: FormData): Promise<{
   expectedSans?: string[];
   playedAs: 'white' | 'black';
 }> {
-  await requireToken();
   const pgn = String(formData.get('pgn') ?? '');
   const usernameLower = String(formData.get('username') ?? '').toLowerCase();
   const whiteUsername = String(formData.get('white') ?? '');

@@ -89,8 +89,9 @@ export function AnalyzePanel({
   const [pending, start] = useTransition();
   const [activeGame, setActiveGame] = useState<GameAnalysisRow | null>(null);
   const [activePly, setActivePly] = useState<number>(0);
-  const [tab, setTab] = useState<'mine' | 'shared'>(searchParams.get('shared') ? 'shared' : 'mine');
+  const [tab, setTab] = useState<'mine' | 'shared' | 'sent'>(searchParams.get('shared') ? 'shared' : searchParams.get('sent') ? 'sent' : 'mine');
   const sharedGames = useQuery(api.sharing.listSharedAnalysis);
+  const sentGames = useQuery(api.sharing.listMySharedAnalysis);
 
   const username =
     source === 'lichess' ? initialUsername.lichess : initialUsername.chesscom;
@@ -236,6 +237,9 @@ export function AnalyzePanel({
         <Pill active={tab === 'shared'} onClick={() => setTab('shared')}>
           Shared with you
         </Pill>
+        <Pill active={tab === 'sent'} onClick={() => setTab('sent')}>
+          You shared
+        </Pill>
       </div>
 
       {tab === 'shared' ? (
@@ -269,6 +273,38 @@ export function AnalyzePanel({
           />
         ) : (
           <EmptyState>No shared analysis games yet.</EmptyState>
+        )
+      ) : tab === 'sent' ? (
+        sentGames && sentGames.length > 0 ? (
+          <GameList
+            rows={sentGames.map((item) => ({
+              id: item.resource._id,
+              source: item.resource.source,
+              gameId: item.resource.gameId,
+              url: item.resource.url,
+              whiteUsername: item.resource.whiteUsername,
+              blackUsername: item.resource.blackUsername,
+              result: item.resource.result,
+              playedAt: new Date(item.resource.playedAt).toISOString(),
+              opening: item.resource.opening,
+              timeControl: item.resource.timeControl,
+              pgn: item.resource.pgn,
+              deviation: {
+                kind: item.resource.deviationKind,
+                playedAs: item.resource.playedAs,
+                deviationMoveNumber: item.resource.deviationMoveNumber,
+                deviationPly: item.resource.deviationPly,
+                playedSan: item.resource.playedSan,
+                expectedSans: item.resource.expectedSans,
+                deviationFen: item.resource.deviationFen,
+                deviationPositionId: item.resource.deviationPositionId,
+                totalPlies: item.resource.totalPlies,
+              },
+            }))}
+            onOpen={onOpenGame}
+          />
+        ) : (
+          <EmptyState>No games shared by you yet.</EmptyState>
         )
       ) : (
         <>
@@ -576,16 +612,18 @@ function DeviationBadge({ dev }: { dev: GameAnalysisRow['deviation'] }) {
   );
 }
 
-function DeviationViewer({
+export function DeviationViewer({
   game,
   ply,
   setPly,
   onBack,
+  readOnly,
 }: {
   game: GameAnalysisRow;
   ply: number;
   setPly: (p: number) => void;
   onBack: () => void;
+  readOnly?: boolean;
 }) {
   const [pliesState, setPliesState] = useState<
     { san: string; uci: string; fenAfter: string; fenBefore: string }[] | null
@@ -767,13 +805,13 @@ function DeviationViewer({
               Open on {game.source === 'lichess' ? 'Lichess' : 'Chess.com'}
             </a>
           )}
-          {shareId ? (
+          {!readOnly && shareId ? (
             <ShareDialog
               resourceType="analysis"
               resourceId={shareId}
               title={`${game.whiteUsername} vs ${game.blackUsername}`}
             />
-          ) : (
+          ) : !readOnly ? (
             <button
               type="button"
               disabled={sharePending}
@@ -806,7 +844,7 @@ function DeviationViewer({
             >
               {sharePending ? 'Preparing...' : 'Share'}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -878,6 +916,46 @@ function DeviationViewer({
           <p className="mt-3 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
             <kbd className="font-mono">v</kbd> arrows · <kbd className="font-mono">h</kbd> hints
           </p>
+
+          {/* Annotation — narrow screens only: right below nav controls */}
+          <section className="mt-4 md:hidden">
+            <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Annotation
+              </p>
+              {!readOnly && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+                  {annotationSaved ? 'Saved' : 'Autosave'}
+                </span>
+              )}
+            </div>
+            {!readOnly ? (
+              <textarea
+                value={annotationsByPly[ply] ?? ''}
+                onChange={(e) => {
+                  const text = e.target.value;
+                  setAnnotationSaved(false);
+                  setAnnotationsByPly((prev) => {
+                    const next = { ...prev };
+                    if (text.trim()) next[ply] = text;
+                    else delete next[ply];
+                    return next;
+                  });
+                }}
+                placeholder="Position annotation (auto-saved)"
+                rows={3}
+                className="mt-3 w-full border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
+              />
+            ) : annotationsByPly[ply] ? (
+              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
+                {annotationsByPly[ply]}
+              </p>
+            ) : (
+              <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+                No annotation.
+              </p>
+            )}
+          </section>
         </div>
 
         <div className="space-y-6">
@@ -935,34 +1013,47 @@ function DeviationViewer({
 
           <MoveList plies={pliesState} ply={ply} setPly={setPly} deviationPly={game.deviation.deviationPly} />
 
-          <section className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-4">
+          {/* Annotation — wide screens only */}
+          <section className="hidden md:block">
             <div className="flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                 Annotation
               </p>
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
-                {annotationSaved ? 'Saved' : 'Autosave'}
-              </span>
+              {!readOnly && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+                  {annotationSaved ? 'Saved' : 'Autosave'}
+                </span>
+              )}
             </div>
-            <textarea
-              value={annotationsByPly[ply] ?? ''}
-              onChange={(e) => {
-                const text = e.target.value;
-                setAnnotationSaved(false);
-                setAnnotationsByPly((prev) => {
-                  const next = { ...prev };
-                  if (text.trim()) next[ply] = text;
-                  else delete next[ply];
-                  return next;
-                });
-              }}
-              placeholder="Position annotation (auto-saved)"
-              rows={3}
-              className="mt-3 w-full border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
-            />
+            {!readOnly ? (
+              <textarea
+                value={annotationsByPly[ply] ?? ''}
+                onChange={(e) => {
+                  const text = e.target.value;
+                  setAnnotationSaved(false);
+                  setAnnotationsByPly((prev) => {
+                    const next = { ...prev };
+                    if (text.trim()) next[ply] = text;
+                    else delete next[ply];
+                    return next;
+                  });
+                }}
+                placeholder="Position annotation (auto-saved)"
+                rows={3}
+                className="mt-3 w-full border border-[color:var(--paper-edge)] bg-transparent px-3 py-2 text-[14px] text-[color:var(--ink)] outline-none transition-colors duration-150 focus:border-[color:var(--ink)]"
+              />
+            ) : annotationsByPly[ply] ? (
+              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
+                {annotationsByPly[ply]}
+              </p>
+            ) : (
+              <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+                No annotation.
+              </p>
+            )}
           </section>
 
-          <section className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-4">
+          {!readOnly && <section className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Import to course
             </p>
@@ -1008,7 +1099,7 @@ function DeviationViewer({
                 </p>
               )}
             </div>
-          </section>
+          </section>}
         </div>
       </div>
     </section>

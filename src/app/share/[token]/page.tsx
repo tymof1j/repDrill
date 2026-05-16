@@ -3,6 +3,7 @@ import { convexAuthNextjsToken, isAuthenticatedNextjs } from '@convex-dev/auth/n
 import { fetchQuery } from 'convex/nextjs';
 import { api } from '@convex/_generated/api';
 import { AppSurface, PageHeader, BackLink } from '@/components/ui/Premium';
+import { SharedAnalysisView } from './SharedAnalysisView';
 import { SharePublicView } from './SharePublicView';
 import { normalizeFen } from '@/lib/chess/fen';
 import {
@@ -30,7 +31,52 @@ export default async function SharedCoursePage({
       { token },
       authToken ? { token: authToken } : undefined,
     );
-    if (!repertoireData) notFound();
+    if (!repertoireData) {
+      const analysisData = await fetchQuery(
+        api.analyze.getPublicByToken,
+        { token },
+        authToken ? { token: authToken } : undefined,
+      );
+      if (!analysisData) notFound();
+
+      const { game } = analysisData;
+      const gameRow = {
+        id: game._id,
+        source: game.source,
+        gameId: game.gameId,
+        url: game.url,
+        whiteUsername: game.whiteUsername,
+        blackUsername: game.blackUsername,
+        result: game.result,
+        playedAt: new Date(game.playedAt).toISOString(),
+        opening: game.opening,
+        timeControl: game.timeControl,
+        pgn: game.pgn,
+        deviation: {
+          kind: game.deviationKind,
+          playedAs: game.playedAs,
+          deviationMoveNumber: game.deviationMoveNumber,
+          deviationPly: game.deviationPly,
+          playedSan: game.playedSan,
+          expectedSans: game.expectedSans,
+          deviationFen: game.deviationFen,
+          deviationPositionId: game.deviationPositionId,
+          totalPlies: game.totalPlies,
+        },
+      };
+
+      return (
+        <AppSurface>
+          <BackLink href="/">Home</BackLink>
+          <PageHeader
+            eyebrow="Shared analysis"
+            title={`${game.whiteUsername} vs ${game.blackUsername}`}
+            body={game.opening ?? 'Game analysis shared via RepDrill.'}
+          />
+          <SharedAnalysisView game={gameRow} />
+        </AppSurface>
+      );
+    }
 
     const chaptersById = new Map(repertoireData.chapters.map((chapter) => [chapter._id as string, chapter]));
     const coursesById = new Map(repertoireData.courses.map((entry) => [entry.course._id as string, entry.course]));

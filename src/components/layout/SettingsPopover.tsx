@@ -52,11 +52,13 @@ export function SettingsPopover({
   useEffect(() => {
     if (!open) return;
     function onClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
       if (
         panelRef.current &&
-        !panelRef.current.contains(e.target as Node) &&
+        !panelRef.current.contains(target) &&
         buttonRef.current &&
-        !buttonRef.current.contains(e.target as Node)
+        !buttonRef.current.contains(target) &&
+        !target.closest?.('[data-custom-select-menu]')
       ) {
         setOpen(false);
       }

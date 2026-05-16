@@ -46,6 +46,17 @@ type ChapterLine = {
   leafPositionId: string;
 };
 
+function chapterPrefix(name: string) {
+  const words = name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/[\s-]+/)
+    .filter(Boolean);
+  if (words.length === 0) return 'ln';
+  if (words.length === 1) return words[0].slice(0, 3) || 'ln';
+  return words.slice(0, 3).map((word) => word[0]).join('').slice(0, 3);
+}
+
 function formatMove(move: ViewerMove) {
   const prefix = move.colorToMove === 'white' ? `${move.moveNumber}.` : '';
   return `${prefix}${move.san}`;
@@ -143,7 +154,13 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     [linesByChapter, scopeChapterId],
   );
   const shareScopes = useMemo(() => {
-    const scopes: { type: 'resource' | 'chapter' | 'line'; id?: string; label: string; description?: string }[] = [
+    const scopes: {
+      type: 'resource' | 'chapter' | 'line';
+      id?: string;
+      label: string;
+      description?: string;
+      lineRefs?: { code: string; id: string; preview: string }[];
+    }[] = [
       { type: 'resource', label: 'Whole course', description: 'All chapters and lines' },
     ];
     if (scopeChapter) {
@@ -162,8 +179,23 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         })),
       );
     }
+    const lineRefs = chapters.flatMap((chapter) => {
+      const lines = linesByChapter.get(chapter.id) ?? [];
+      const prefix = chapterPrefix(chapter.name);
+      return lines.map((line, index) => ({
+        code: `${prefix}-${index + 1}`,
+        id: line.leafPositionId,
+        preview: `${chapter.name} · ${line.moves.slice(0, 7).map(formatMove).join(' ')}`,
+      }));
+    });
+    scopes.push({
+      type: 'line',
+      label: 'List of lines',
+      description: 'Enter codes like qgg-1 or qgg-1,qgg-3',
+      lineRefs,
+    });
     return scopes;
-  }, [scopeChapter, scopeChapterLines]);
+  }, [chapters, linesByChapter, scopeChapter, scopeChapterLines]);
   const visibleMoves = useMemo(
     () =>
       selectedChapterId
@@ -448,7 +480,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         selectedChapterName={selectedChapter?.name ?? null}
         lineMarkers={selectedChapterLines.map((line, index) => ({
           leafPositionId: line.leafPositionId,
-          number: index + 1,
+          code: `${chapterPrefix(selectedChapter?.name ?? 'line')}-${index + 1}`,
         }))}
         onAnnotationSave={handleAnnotationSave}
         jumpToPositionId={jumpTarget}

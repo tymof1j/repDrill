@@ -163,5 +163,6 @@ export default defineSchema({
     totalPlies: v.number(),
     deviationPositionId: v.optional(v.id("positions")),
     analyzedAt: v.number(),
+    annotations: v.optional(v.string()),
   }).index("by_user", ["userId"]).index("by_user_source", ["userId", "source"]),
 });
