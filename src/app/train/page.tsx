@@ -15,6 +15,11 @@ import {
 import { TrainingSession } from './TrainingSession';
 import type { Id } from '@convex/_generated/dataModel';
 
+type Selection =
+  | { type: 'all' }
+  | { type: 'repertoire'; id: Id<'repertoires'> }
+  | { type: 'course'; id: Id<'courses'> };
+
 export default function TrainPage() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const router = useRouter();
@@ -22,6 +27,7 @@ export default function TrainPage() {
   const fromParam = searchParams.get('from') ?? undefined;
 
   const [cardsReady, setCardsReady] = useState(false);
+  const [selection, setSelection] = useState<Selection>({ type: 'all' });
   const ensureCards = useMutation(api.training.ensureCards);
 
   useEffect(() => {
@@ -36,16 +42,82 @@ export default function TrainPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isAuthenticated]);
 
-  const result = useQuery(
-    api.training.getTrainingLines,
-    cardsReady ? { fromPositionId: fromParam as Id<'positions'> | undefined } : 'skip',
-  );
+  const courses = useQuery(api.courses.list);
+  const repertoires = useQuery(api.repertoires.list);
 
-  if (!isAuthenticated || !cardsReady || result === undefined) return null;
+  const onlyCourse = courses?.length === 1 ? courses[0]._id : undefined;
+
+  const queryArgs = cardsReady && courses !== undefined && repertoires !== undefined
+    ? {
+        fromPositionId: fromParam as Id<'positions'> | undefined,
+        courseId:
+          selection.type === 'course'
+            ? selection.id
+            : onlyCourse && selection.type === 'all'
+              ? onlyCourse
+              : undefined,
+        repertoireId:
+          selection.type === 'repertoire' ? selection.id : undefined,
+      }
+    : 'skip' as const;
+
+  const result = useQuery(api.training.getTrainingLines, queryArgs);
+
+  if (!isAuthenticated || !cardsReady || result === undefined || courses === undefined || repertoires === undefined) return null;
+
+  const showSelector = courses.length > 1 || repertoires.length > 0;
+
+  const filterBar = showSelector ? (
+    <div className="mb-6 flex flex-wrap items-center gap-x-1 gap-y-1 border-b border-[color:var(--paper-edge)] pb-3">
+      <span className="mr-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+        Filter
+      </span>
+      <button
+        type="button"
+        onClick={() => setSelection({ type: 'all' })}
+        className={`rounded px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors duration-150 ${
+          selection.type === 'all'
+            ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+            : 'text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-deep)]'
+        }`}
+      >
+        All lines
+      </button>
+      {repertoires.map((r) => (
+        <button
+          key={r._id}
+          type="button"
+          onClick={() => setSelection({ type: 'repertoire', id: r._id })}
+          className={`rounded px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors duration-150 ${
+            selection.type === 'repertoire' && selection.id === r._id
+              ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+              : 'text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-deep)]'
+          }`}
+        >
+          {r.name}
+        </button>
+      ))}
+      {courses.length > 1 && courses.map((c) => (
+        <button
+          key={c._id}
+          type="button"
+          onClick={() => setSelection({ type: 'course', id: c._id })}
+          className={`rounded px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors duration-150 ${
+            selection.type === 'course' && selection.id === c._id
+              ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+              : 'text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-deep)]'
+          }`}
+        >
+          {c.name}
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   if (result.lines.length === 0) {
     return (
       <AppSurface>
+        {filterBar}
         <PageHeader
           eyebrow="Part III — Training"
           title="The queue is quiet."
@@ -78,5 +150,5 @@ export default function TrainPage() {
     );
   }
 
-  return <TrainingSession initialLines={result.lines} />;
+  return <TrainingSession initialLines={result.lines} filterBar={filterBar} />;
 }

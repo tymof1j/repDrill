@@ -64,23 +64,6 @@ export function MergedRepertoireViewer({
     [choices],
   );
 
-  const {
-    path,
-    currentPositionId,
-    rawNextMoves: nextMovesRaw,
-    lastMove,
-    goRoot,
-    goBack,
-    goForward,
-    goToIndex,
-    playMove,
-  } = useTreeNavigation(rootPositionId, moves);
-
-  const [pending, startTransition] = useTransition();
-
-  const currentPosition = positionsById.get(currentPositionId);
-  const currentFen = currentPosition?.fen ?? STARTING_FEN;
-
   const availableSides = useMemo(() => {
     const sides = new Set<'white' | 'black'>();
     for (const m of moves) {
@@ -98,11 +81,41 @@ export function MergedRepertoireViewer({
 
   const hasBothSides = availableSides.includes('white') && availableSides.includes('black');
 
+  // Filter moves by selected side BEFORE passing to the hook so all keyboard
+  // shortcuts (→ goForward, ↑↓ cycleSibling, 1-9 selectBranch) respect the filter.
+  const filteredMoves = useMemo(
+    () => moves.filter((m) => m.courseColor === viewingSide),
+    [moves, viewingSide],
+  );
+
+  const {
+    path,
+    currentPositionId,
+    rawNextMoves: nextMovesRaw,
+    lastMove,
+    goRoot,
+    goBack,
+    goForward,
+    goToIndex,
+    playMove,
+  } = useTreeNavigation(rootPositionId, filteredMoves);
+
+  // Reset to root whenever the user switches sides.
+  useEffect(() => {
+    goRoot();
+  // goRoot is stable (useCallback), viewingSide change is the only trigger.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingSide]);
+
+  const [pending, startTransition] = useTransition();
+
+  const currentPosition = positionsById.get(currentPositionId);
+  const currentFen = currentPosition?.fen ?? STARTING_FEN;
+
   type GroupedMove = { san: string; uci: string; moves: MergedMove[] };
   const grouped: GroupedMove[] = useMemo(() => {
     const bySan = new Map<string, GroupedMove>();
-    const filtered = nextMovesRaw.filter((m) => m.courseColor === viewingSide);
-    for (const m of filtered) {
+    for (const m of nextMovesRaw) {
       const existing = bySan.get(m.san);
       if (existing) {
         existing.moves.push(m);
@@ -116,7 +129,7 @@ export function MergedRepertoireViewer({
       if (aMain !== bMain) return aMain ? -1 : 1;
       return a.san.localeCompare(b.san);
     });
-  }, [nextMovesRaw, viewingSide]);
+  }, [nextMovesRaw]);
 
   const repertoireOptions = grouped.filter((g) =>
     g.moves.some((m) => m.moveType === 'repertoire'),

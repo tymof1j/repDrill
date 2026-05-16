@@ -44,7 +44,6 @@ type Props = {
   onAnnotationSave?: (positionId: string, text: string) => void;
   jumpToPositionId?: string | null;
   onJumpDone?: () => void;
-  lineMarkers?: { leafPositionId: string; code: string }[];
 };
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
@@ -59,7 +58,6 @@ export function RepertoireViewer({
   onAnnotationSave,
   jumpToPositionId,
   onJumpDone,
-  lineMarkers = [],
 }: Props) {
   const positionsById = useMemo(() => new Map(positions.map((p) => [p.id, p])), [positions]);
 
@@ -86,29 +84,6 @@ export function RepertoireViewer({
 
   const currentPosition = positionsById.get(currentPositionId);
   const currentFen = currentPosition?.fen ?? STARTING_FEN;
-  const currentLineCode = useMemo(() => {
-    if (path.length === 0 || lineMarkers.length === 0) return null;
-    const parentByChild = new Map(moves.map((move) => [move.childPositionId, move.parentPositionId]));
-    for (const marker of lineMarkers) {
-      const positionsOnLine = new Set<string>();
-      let cursor: string | undefined = marker.leafPositionId;
-      while (cursor && !positionsOnLine.has(cursor)) {
-        positionsOnLine.add(cursor);
-        if (cursor === rootPositionId) break;
-        cursor = parentByChild.get(cursor);
-      }
-      if (positionsOnLine.has(currentPositionId)) return marker.code;
-    }
-    return null;
-  }, [currentPositionId, lineMarkers, moves, path.length, rootPositionId]);
-  const lineCodeHint = useMemo(() => {
-    if (currentLineCode) return currentLineCode;
-    const first = lineMarkers[0]?.code;
-    if (!first) return null;
-    const prefix = first.split('-')[0] ?? '';
-    if (!prefix) return null;
-    return `${prefix}-?`;
-  }, [currentLineCode, lineMarkers]);
 
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
@@ -368,11 +343,6 @@ export function RepertoireViewer({
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Line
             </p>
-            {lineCodeHint && (
-              <span className="font-mono text-[10px] tracking-[0.16em] text-[color:var(--ink-ghost)]">
-                {lineCodeHint}
-              </span>
-            )}
           </div>
           {path.length === 0 ? (
             <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">

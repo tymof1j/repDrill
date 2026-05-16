@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity */
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Chess } from 'chess.js';
@@ -38,9 +38,9 @@ type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 type LinePhase = 'browse' | 'drill' | 'line-done';
 type SessionPhase = 'playing' | 'done';
 
-type Props = { initialLines: TrainingLine[] };
+type Props = { initialLines: TrainingLine[]; filterBar?: React.ReactNode };
 
-export function TrainingSession({ initialLines }: Props) {
+export function TrainingSession({ initialLines, filterBar }: Props) {
   const [lines] = useState(initialLines);
   const [lineIndex, setLineIndex] = useState(0);
   const [linePhase, setLinePhase] = useState<LinePhase>('browse');
@@ -535,6 +535,7 @@ export function TrainingSession({ initialLines }: Props) {
 
   return (
     <AppSurface>
+      {filterBar}
       {/* Header ribbon */}
       <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">

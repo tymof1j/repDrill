@@ -280,22 +280,9 @@ Every board view — Course chapter viewer, Repertoire merged viewer, Analyze De
 When sharing from the **course tab**, owner can scope sharing to:
 
 - `Whole course`
-- `This chapter` (currently selected chapter, or first chapter if none selected)
-- `That chapter` entries (one per chapter in the course)
-- `List of lines` (manual code input)
+- Any individual chapter in the course
 
-For `List of lines`:
-
-- Input format: `prefix-lineNumber`, single or comma-separated (e.g. `qgg-1` or `qgg-1,qgg-3`)
-- Prefix is a lowercase 2-3 letter chapter shorthand derived from chapter name.
-- Invites apply to all valid line codes entered.
-- Link/general-access controls use the first valid entered line code.
-- Scope actions are disabled until at least one valid line code is entered.
-
-### Line code display in viewers
-
-- Course viewer line header shows current line code after `Line` (e.g. `Line qgg-1`) when available.
-- Code format is tied to chapter shorthand + line ordinal within that chapter.
+Line-code sharing was removed from the user-facing flow. Course sharing now stays at course or chapter granularity.
 
 ### Repertoire sharing scopes
 

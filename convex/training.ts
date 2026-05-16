@@ -119,6 +119,7 @@ const ROOT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 export const getTrainingLines = query({
   args: {
     courseId: v.optional(v.id("courses")),
+    repertoireId: v.optional(v.id("repertoires")),
     fromPositionId: v.optional(v.id("positions")),
     newLineLimit: v.optional(v.number()),
   },
@@ -132,6 +133,14 @@ export const getTrainingLines = query({
       .query("courses")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
+    if (args.repertoireId) {
+      const repCourses = await ctx.db
+        .query("repertoireCourses")
+        .withIndex("by_repertoire", (q) => q.eq("repertoireId", args.repertoireId!))
+        .collect();
+      const repCourseIds = new Set(repCourses.map((rc) => rc.courseId as string));
+      userCourses = userCourses.filter((c) => repCourseIds.has(c._id as string));
+    }
     if (args.courseId) {
       userCourses = userCourses.filter((c) => c._id === args.courseId);
     }
