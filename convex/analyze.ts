@@ -199,3 +199,14 @@ export const storeOne = mutation({
     return { id };
   },
 });
+
+export const saveAnnotations = mutation({
+  args: { id: v.id("analyzedGames"), annotations: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const game = await ctx.db.get(args.id);
+    if (!game || game.userId !== userId) throw new Error("Not found");
+    await ctx.db.patch(args.id, { annotations: args.annotations });
+  },
+});

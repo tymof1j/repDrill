@@ -359,6 +359,15 @@ export async function ensureAnalyzedGameStored(formData: FormData): Promise<{ id
   return { id: result.id };
 }
 
+export async function saveAnalysisAnnotations(gameId: string, annotations: Record<number, string>): Promise<void> {
+  const token = await requireToken();
+  await fetchMutation(
+    api.analyze.saveAnnotations,
+    { id: gameId as import('@convex/_generated/dataModel').Id<'analyzedGames'>, annotations: JSON.stringify(annotations) },
+    { token },
+  );
+}
+
 export async function importAnalyzedGameToCourse(formData: FormData): Promise<{ courseId: string; chapterName: string }> {
   const token = await requireToken();
   const pgn = String(formData.get('pgn') ?? '').trim();

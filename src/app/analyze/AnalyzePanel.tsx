@@ -618,12 +618,14 @@ export function DeviationViewer({
   setPly,
   onBack,
   readOnly,
+  initialAnnotations,
 }: {
   game: GameAnalysisRow;
   ply: number;
   setPly: (p: number) => void;
   onBack: () => void;
   readOnly?: boolean;
+  initialAnnotations?: Record<number, string>;
 }) {
   const [pliesState, setPliesState] = useState<
     { san: string; uci: string; fenAfter: string; fenBefore: string }[] | null
@@ -683,6 +685,10 @@ export function DeviationViewer({
 
   const annotationKey = `${game.source}:${game.gameId}:annotations`;
   useEffect(() => {
+    if (readOnly) {
+      setAnnotationsByPly(initialAnnotations ?? {});
+      return;
+    }
     try {
       const raw = window.localStorage.getItem(annotationKey);
       if (!raw) {
@@ -699,9 +705,10 @@ export function DeviationViewer({
     } catch {
       setAnnotationsByPly({});
     }
-  }, [annotationKey]);
+  }, [annotationKey, readOnly, initialAnnotations]);
 
   useEffect(() => {
+    if (readOnly) return;
     const timer = window.setTimeout(() => {
       try {
         window.localStorage.setItem(annotationKey, JSON.stringify(annotationsByPly));
@@ -709,9 +716,12 @@ export function DeviationViewer({
       } catch {
         // no-op
       }
+      if (game.id) {
+        import('./actions').then((m) => m.saveAnalysisAnnotations(game.id!, annotationsByPly)).catch(() => {});
+      }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [annotationKey, annotationsByPly]);
+  }, [annotationKey, annotationsByPly, readOnly, game.id]);
 
   useEffect(() => {
     if (!annotationSaved) return;

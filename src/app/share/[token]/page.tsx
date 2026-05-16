@@ -73,7 +73,18 @@ export default async function SharedCoursePage({
             title={`${game.whiteUsername} vs ${game.blackUsername}`}
             body={game.opening ?? 'Game analysis shared via RepDrill.'}
           />
-          <SharedAnalysisView game={gameRow} />
+          <SharedAnalysisView game={gameRow} initialAnnotations={(() => {
+            if (!game.annotations) return undefined;
+            try {
+              const raw = JSON.parse(game.annotations) as Record<string, string>;
+              const result: Record<number, string> = {};
+              for (const [k, v] of Object.entries(raw)) {
+                const idx = Number(k);
+                if (Number.isFinite(idx) && idx >= 0 && typeof v === 'string') result[idx] = v;
+              }
+              return result;
+            } catch { return undefined; }
+          })()} />
         </AppSurface>
       );
     }
