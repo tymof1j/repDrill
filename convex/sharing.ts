@@ -23,7 +23,12 @@ const inviteAccessValidator = v.union(
   v.literal("collaborate"),
 );
 
+const shareScopeTypeValidator = v.optional(
+  v.union(v.literal("resource"), v.literal("chapter"), v.literal("line")),
+);
+
 type ResourceType = "course" | "repertoire" | "analysis";
+type ShareScopeType = "resource" | "chapter" | "line";
 type InviteAccess = "view" | "copy" | "collaborate";
 type AnyAccess = "none" | InviteAccess;
 
@@ -72,19 +77,36 @@ function resourceTitle(resource: Doc<"courses"> | Doc<"repertoires"> | Doc<"anal
   return (resource as Doc<"courses"> | Doc<"repertoires">).name;
 }
 
-async function getShareLink(ctx: QueryCtx | MutationCtx, resourceType: ResourceType, resourceId: string) {
-  return await ctx.db
+function sameScope(
+  doc: { scopeType?: ShareScopeType; scopeId?: string },
+  scopeType?: ShareScopeType,
+  scopeId?: string,
+) {
+  return (doc.scopeType ?? "resource") === (scopeType ?? "resource") && (doc.scopeId ?? "") === (scopeId ?? "");
+}
+
+async function getShareLink(
+  ctx: QueryCtx | MutationCtx,
+  resourceType: ResourceType,
+  resourceId: string,
+  scopeType?: ShareScopeType,
+  scopeId?: string,
+) {
+  const links = await ctx.db
     .query("shareLinks")
     .withIndex("by_resource_type_and_resource_id", (q) =>
       q.eq("resourceType", resourceType).eq("resourceId", resourceId),
     )
-    .unique();
+    .take(100);
+  return links.find((link) => sameScope(link, scopeType, scopeId)) ?? null;
 }
 
 export const getSettings = query({
   args: {
     resourceType: resourceTypeValidator,
     resourceId: v.string(),
+    scopeType: shareScopeTypeValidator,
+    scopeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -93,7 +115,7 @@ export const getSettings = query({
     const resource = await getOwnedResource(ctx, args.resourceType, args.resourceId, userId);
     if (!resource) return null;
 
-    const link = await getShareLink(ctx, args.resourceType, args.resourceId);
+    const link = await getShareLink(ctx, args.resourceType, args.resourceId, args.scopeType, args.scopeId);
     const invitations = await ctx.db
       .query("shareInvitations")
       .withIndex("by_resource_type_and_resource_id", (q) =>
@@ -110,6 +132,7 @@ export const getSettings = query({
       token: link?.access !== "none" ? (link?.token ?? null) : null,
       invitations: invitations
         .sort((a, b) => a.email.localeCompare(b.email))
+        .filter((invite) => sameScope(invite, args.scopeType, args.scopeId))
         .map((invite) => ({
           id: invite._id,
           email: invite.email,
@@ -124,6 +147,9 @@ export const setLinkAccess = mutation({
   args: {
     resourceType: resourceTypeValidator,
     resourceId: v.string(),
+    scopeType: shareScopeTypeValidator,
+    scopeId: v.optional(v.string()),
+    scopeLabel: v.optional(v.string()),
     access: linkAccessValidator,
   },
   handler: async (ctx, args) => {
@@ -134,11 +160,14 @@ export const setLinkAccess = mutation({
     if (!resource) throw new Error("Not found");
 
     const now = Date.now();
-    const existing = await getShareLink(ctx, args.resourceType, args.resourceId);
+    const existing = await getShareLink(ctx, args.resourceType, args.resourceId, args.scopeType, args.scopeId);
     if (existing) {
       const token = existing.token ?? newToken();
       await ctx.db.patch(existing._id, {
         access: args.access,
+        scopeType: args.scopeType ?? "resource",
+        scopeId: args.scopeId,
+        scopeLabel: args.scopeLabel,
         token: args.access === "none" ? undefined : token,
         updatedAt: now,
       });
@@ -150,6 +179,9 @@ export const setLinkAccess = mutation({
       ownerId: userId,
       resourceType: args.resourceType,
       resourceId: args.resourceId,
+      scopeType: args.scopeType ?? "resource",
+      scopeId: args.scopeId,
+      scopeLabel: args.scopeLabel,
       token,
       access: args.access,
       createdAt: now,
@@ -163,6 +195,9 @@ export const rotateLink = mutation({
   args: {
     resourceType: resourceTypeValidator,
     resourceId: v.string(),
+    scopeType: shareScopeTypeValidator,
+    scopeId: v.optional(v.string()),
+    scopeLabel: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -172,10 +207,13 @@ export const rotateLink = mutation({
 
     const now = Date.now();
     const token = newToken();
-    const existing = await getShareLink(ctx, args.resourceType, args.resourceId);
+    const existing = await getShareLink(ctx, args.resourceType, args.resourceId, args.scopeType, args.scopeId);
     if (existing) {
       await ctx.db.patch(existing._id, {
         access: existing.access === "none" ? "view" : existing.access,
+        scopeType: args.scopeType ?? "resource",
+        scopeId: args.scopeId,
+        scopeLabel: args.scopeLabel,
         token,
         updatedAt: now,
       });
@@ -184,6 +222,9 @@ export const rotateLink = mutation({
         ownerId: userId,
         resourceType: args.resourceType,
         resourceId: args.resourceId,
+        scopeType: args.scopeType ?? "resource",
+        scopeId: args.scopeId,
+        scopeLabel: args.scopeLabel,
         token,
         access: "view",
         createdAt: now,
@@ -198,6 +239,9 @@ export const upsertInvitation = mutation({
   args: {
     resourceType: resourceTypeValidator,
     resourceId: v.string(),
+    scopeType: shareScopeTypeValidator,
+    scopeId: v.optional(v.string()),
+    scopeLabel: v.optional(v.string()),
     email: v.string(),
     access: inviteAccessValidator,
     notify: v.boolean(),
@@ -219,10 +263,13 @@ export const upsertInvitation = mutation({
         q.eq("resourceType", args.resourceType).eq("resourceId", args.resourceId),
       )
       .take(100);
-    const match = existing.find((invite) => invite.email === email);
+    const match = existing.find((invite) => invite.email === email && sameScope(invite, args.scopeType, args.scopeId));
     if (match) {
       await ctx.db.patch(match._id, {
         access: args.access,
+        scopeType: args.scopeType ?? "resource",
+        scopeId: args.scopeId,
+        scopeLabel: args.scopeLabel,
         notify: args.notify,
         message: args.message,
         updatedAt: now,
@@ -234,6 +281,9 @@ export const upsertInvitation = mutation({
       ownerId: userId,
       resourceType: args.resourceType,
       resourceId: args.resourceId,
+      scopeType: args.scopeType ?? "resource",
+      scopeId: args.scopeId,
+      scopeLabel: args.scopeLabel,
       email,
       access: args.access,
       notify: args.notify,
@@ -249,6 +299,8 @@ export const removeInvitation = mutation({
   args: {
     resourceType: resourceTypeValidator,
     resourceId: v.string(),
+    scopeType: shareScopeTypeValidator,
+    scopeId: v.optional(v.string()),
     email: v.string(),
   },
   handler: async (ctx, args) => {
@@ -264,9 +316,81 @@ export const removeInvitation = mutation({
         q.eq("resourceType", args.resourceType).eq("resourceId", args.resourceId),
       )
       .take(100);
-    const match = invitations.find((invite) => invite.email === email);
+    const match = invitations.find((invite) => invite.email === email && sameScope(invite, args.scopeType, args.scopeId));
     if (match) await ctx.db.delete(match._id);
     return { ok: true };
+  },
+});
+
+export const transferOwnership = mutation({
+  args: {
+    resourceType: resourceTypeValidator,
+    resourceId: v.string(),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const resource = await getOwnedResource(ctx, args.resourceType, args.resourceId, ownerId);
+    if (!resource) throw new Error("Not found");
+
+    const email = normalizeEmail(args.email);
+    const target = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .unique();
+    if (!target) throw new Error("The new owner must sign in once before ownership can be transferred.");
+    if (target._id === ownerId) throw new Error("You already own this item.");
+
+    if (args.resourceType === "course") {
+      const courseId = args.resourceId as Id<"courses">;
+      const chapters = await ctx.db
+        .query("chapters")
+        .withIndex("by_course", (q) => q.eq("courseId", courseId))
+        .take(1000);
+      const positionIds = new Set<Id<"positions">>();
+      for (const chapter of chapters) {
+        const moves = await ctx.db
+          .query("moves")
+          .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+          .take(1000);
+        for (const move of moves) {
+          positionIds.add(move.parentPositionId);
+          positionIds.add(move.childPositionId);
+        }
+      }
+      for (const positionId of positionIds) {
+        const position = await ctx.db.get(positionId);
+        if (position?.userId === ownerId) {
+          await ctx.db.patch(positionId, { userId: target._id });
+        }
+      }
+      await ctx.db.patch(courseId, { userId: target._id, updatedAt: Date.now() });
+    } else if (args.resourceType === "repertoire") {
+      await ctx.db.patch(args.resourceId as Id<"repertoires">, { userId: target._id, updatedAt: Date.now() });
+    } else {
+      await ctx.db.patch(args.resourceId as Id<"analyzedGames">, { userId: target._id });
+    }
+
+    const shares = await ctx.db
+      .query("shareInvitations")
+      .withIndex("by_resource_type_and_resource_id", (q) =>
+        q.eq("resourceType", args.resourceType).eq("resourceId", args.resourceId),
+      )
+      .take(100);
+    for (const share of shares) await ctx.db.delete(share._id);
+
+    const links = await ctx.db
+      .query("shareLinks")
+      .withIndex("by_resource_type_and_resource_id", (q) =>
+        q.eq("resourceType", args.resourceType).eq("resourceId", args.resourceId),
+      )
+      .take(100);
+    for (const link of links) {
+      await ctx.db.patch(link._id, { ownerId: target._id, updatedAt: Date.now() });
+    }
+
+    return { ownerEmail: target.email ?? email };
   },
 });
 
@@ -387,7 +511,11 @@ export const resolveToken = query({
           .withIndex("by_email", (q) => q.eq("email", email))
           .take(100);
         for (const invitation of invitations) {
-          if (invitation.resourceType === link.resourceType && invitation.resourceId === link.resourceId) {
+          if (
+            invitation.resourceType === link.resourceType &&
+            invitation.resourceId === link.resourceId &&
+            sameScope(invitation, link.scopeType, link.scopeId)
+          ) {
             effectiveAccess = strongest(effectiveAccess, invitation.access);
           }
         }
@@ -397,6 +525,9 @@ export const resolveToken = query({
     return {
       resourceType: link.resourceType,
       resourceId: link.resourceId,
+      scopeType: link.scopeType ?? "resource",
+      scopeId: link.scopeId,
+      scopeLabel: link.scopeLabel,
       access: effectiveAccess,
     };
   },

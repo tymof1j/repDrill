@@ -154,6 +154,37 @@ export async function copySharedCourseAction(formData: FormData): Promise<void> 
       });
     }
   }
+  const visibleMoveIds =
+    data.scopeType === 'line' && data.scopeId
+      ? (() => {
+          const allMoves = chapterTrees.flatMap((tree) => tree?.moves ?? []);
+          const childIds = new Set(allMoves.map((move) => String(move.childPositionId)));
+          const root =
+            Array.from(positionsById.entries()).find(([, position]) => position.fen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -')?.[0] ??
+            Array.from(positionsById.keys()).find((id) => !childIds.has(id));
+          const byParent = new Map<string, typeof allMoves>();
+          for (const move of allMoves) {
+            const siblings = byParent.get(move.parentPositionId) ?? [];
+            siblings.push(move);
+            byParent.set(move.parentPositionId, siblings);
+          }
+          const pathIds = new Set<string>();
+          const visit = (positionId: string, seen: Set<string>): boolean => {
+            if (positionId === data.scopeId) return true;
+            if (seen.has(positionId)) return false;
+            seen.add(positionId);
+            for (const move of byParent.get(positionId) ?? []) {
+              if (visit(move.childPositionId, new Set(seen))) {
+                pathIds.add(move._id);
+                return true;
+              }
+            }
+            return false;
+          };
+          if (root) visit(root, new Set());
+          return pathIds;
+        })()
+      : null;
 
   await fetchMutation(
     api.import.importBundle,
@@ -173,6 +204,7 @@ export async function copySharedCourseAction(formData: FormData): Promise<void> 
                 sortOrder: chapter.sortOrder,
                 description: chapter.description,
                 moves: (tree?.moves ?? []).flatMap((move) => {
+                  if (visibleMoveIds && !visibleMoveIds.has(move._id)) return [];
                   const parent = positionsById.get(move.parentPositionId);
                   const child = positionsById.get(move.childPositionId);
                   if (!parent || !child) return [];

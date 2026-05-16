@@ -132,7 +132,32 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     [chapters, moves, rootPositionId],
   );
   const selectedChapter = chapters.find((chapter) => chapter.id === selectedChapterId) ?? null;
-  const selectedChapterLines = selectedChapterId ? (linesByChapter.get(selectedChapterId) ?? []) : [];
+  const selectedChapterLines = useMemo(
+    () => (selectedChapterId ? (linesByChapter.get(selectedChapterId) ?? []) : []),
+    [linesByChapter, selectedChapterId],
+  );
+  const shareScopes = useMemo(() => {
+    const scopes: { type: 'resource' | 'chapter' | 'line'; id?: string; label: string; description?: string }[] = [
+      { type: 'resource', label: 'Entire course', description: 'All chapters and lines' },
+    ];
+    if (selectedChapter) {
+      scopes.push({
+        type: 'chapter',
+        id: selectedChapter.id,
+        label: `Chapter: ${selectedChapter.name}`,
+        description: `${selectedChapterLines.length} line${selectedChapterLines.length === 1 ? '' : 's'}`,
+      });
+      scopes.push(
+        ...selectedChapterLines.slice(0, 12).map((line, index) => ({
+          type: 'line' as const,
+          id: line.leafPositionId,
+          label: `Line ${index + 1}: ${line.moves.slice(0, 5).map(formatMove).join(' ')}`,
+          description: line.moves.length > 5 ? `${line.moves.length} moves total` : undefined,
+        })),
+      );
+    }
+    return scopes;
+  }, [selectedChapter, selectedChapterLines]);
   const visibleMoves = useMemo(
     () =>
       selectedChapterId
@@ -236,6 +261,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                 resourceType="course"
                 resourceId={course.id}
                 title={course.name}
+                scopes={shareScopes}
               />
             </>
           )

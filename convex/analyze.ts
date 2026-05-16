@@ -119,3 +119,66 @@ export const storeSync = mutation({
     return { syncedAt: now, rows: insertedRows };
   },
 });
+
+export const storeOne = mutation({
+  args: {
+    source: v.union(v.literal("lichess"), v.literal("chesscom")),
+    gameId: v.string(),
+    url: v.optional(v.string()),
+    whiteUsername: v.string(),
+    blackUsername: v.string(),
+    result: v.union(v.literal("1-0"), v.literal("0-1"), v.literal("1/2-1/2"), v.literal("*")),
+    playedAt: v.number(),
+    opening: v.optional(v.string()),
+    timeControl: v.optional(v.string()),
+    pgn: v.string(),
+    playedAs: v.union(v.literal("white"), v.literal("black")),
+    deviationKind: v.union(
+      v.literal("in_book"),
+      v.literal("left_book"),
+      v.literal("no_repertoire_for_color"),
+      v.literal("parse_error"),
+    ),
+    deviationMoveNumber: v.optional(v.number()),
+    deviationPly: v.optional(v.number()),
+    playedSan: v.optional(v.string()),
+    expectedSans: v.optional(v.array(v.string())),
+    deviationFen: v.optional(v.string()),
+    totalPlies: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const existing = await ctx.db
+      .query("analyzedGames")
+      .withIndex("by_user_source", (q) => q.eq("userId", userId).eq("source", args.source))
+      .take(100);
+    const match = existing.find((row) => row.gameId === args.gameId);
+    if (match) return { id: match._id };
+
+    const id = await ctx.db.insert("analyzedGames", {
+      userId,
+      source: args.source,
+      gameId: args.gameId,
+      url: args.url,
+      whiteUsername: args.whiteUsername,
+      blackUsername: args.blackUsername,
+      result: args.result,
+      playedAt: args.playedAt,
+      opening: args.opening,
+      timeControl: args.timeControl,
+      pgn: args.pgn,
+      playedAs: args.playedAs,
+      deviationKind: args.deviationKind,
+      deviationMoveNumber: args.deviationMoveNumber,
+      deviationPly: args.deviationPly,
+      playedSan: args.playedSan,
+      expectedSans: args.expectedSans,
+      deviationFen: args.deviationFen,
+      totalPlies: args.totalPlies,
+      analyzedAt: Date.now(),
+    });
+    return { id };
+  },
+});

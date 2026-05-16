@@ -34,6 +34,11 @@ export async function sendShareInvitationAction(formData: FormData) {
 
   const resourceType = normalizeResourceType(formData.get('resourceType'));
   const resourceId = String(formData.get('resourceId') ?? '');
+  const scopeTypeRaw = String(formData.get('scopeType') ?? 'resource');
+  const scopeType =
+    scopeTypeRaw === 'chapter' || scopeTypeRaw === 'line' ? scopeTypeRaw : 'resource';
+  const scopeId = String(formData.get('scopeId') ?? '').trim();
+  const scopeLabel = String(formData.get('scopeLabel') ?? '').trim();
   const emails = String(formData.get('email') ?? '')
     .split(/[,\n;]/)
     .map((value) => value.trim().toLowerCase())
@@ -55,6 +60,9 @@ export async function sendShareInvitationAction(formData: FormData) {
       {
         resourceType,
         resourceId,
+        scopeType,
+        scopeId: scopeId || undefined,
+        scopeLabel: scopeLabel || undefined,
         email,
         access,
         notify,

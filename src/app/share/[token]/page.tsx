@@ -30,7 +30,7 @@ export default async function SharedCoursePage({
 
   const chapterNameById = new Map(chapters.map((chapter) => [chapter._id, chapter.name]));
 
-  const allMoves = chapterTrees.flatMap((t) => t?.moves ?? []);
+  let allMoves = chapterTrees.flatMap((t) => t?.moves ?? []);
   const positionsById = new Map<string, { _id: string; fen: string; annotation?: string }>();
   for (const tree of chapterTrees) {
     for (const position of tree?.positions ?? []) {
@@ -45,6 +45,29 @@ export default async function SharedCoursePage({
     allPositions.find((p) => p.fen === STARTING_FEN) ??
     allPositions.find((p) => !childIds.has(p._id)) ??
     null;
+  if (data.scopeType === 'line' && data.scopeId && rootPosition) {
+    const byParent = new Map<string, typeof allMoves>();
+    for (const move of allMoves) {
+      const siblings = byParent.get(move.parentPositionId) ?? [];
+      siblings.push(move);
+      byParent.set(move.parentPositionId, siblings);
+    }
+    const pathIds = new Set<string>();
+    const visit = (positionId: string, seen: Set<string>): boolean => {
+      if (positionId === data.scopeId) return true;
+      if (seen.has(positionId)) return false;
+      seen.add(positionId);
+      for (const move of byParent.get(positionId) ?? []) {
+        if (visit(move.childPositionId, new Set(seen))) {
+          pathIds.add(move._id);
+          return true;
+        }
+      }
+      return false;
+    };
+    visit(rootPosition._id, new Set());
+    allMoves = allMoves.filter((move) => pathIds.has(move._id));
+  }
 
   return (
     <AppSurface>

@@ -15,18 +15,15 @@ import {
   AppSurface,
   BackLink,
   EmptyState,
-  FieldLabel,
   GhostButton,
   PageHeader,
-  PremiumButton,
   Stamp,
-  fieldClassName,
 } from '@/components/ui/Premium';
 import {
-  addCourseToRepertoireAction,
   removeCourseFromRepertoireAction,
 } from '../actions';
 import { ShareDialog } from '@/components/share/ShareDialog';
+import { AddCourseForm } from './AddCourseForm';
 
 const STARTING_FEN_NORMALIZED = normalizeFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
 
@@ -145,22 +142,14 @@ export default async function RepertoireDetailPage({
         )}
 
         {availableCourses.length > 0 && (
-          <form
-            action={addCourseToRepertoireAction}
-            className="grid items-end gap-4 border-t border-[color:var(--paper-rule)] px-5 py-5 md:grid-cols-[1fr_auto] md:gap-6 md:px-7"
-          >
-            <input type="hidden" name="repertoireId" value={id} />
-            <FieldLabel label="Bind another course">
-              <select name="courseId" required className={fieldClassName}>
-                {availableCourses.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name} ({c.color})
-                  </option>
-                ))}
-              </select>
-            </FieldLabel>
-            <PremiumButton type="submit">Bind</PremiumButton>
-          </form>
+          <AddCourseForm
+            repertoireId={id}
+            courses={availableCourses.map((course) => ({
+              id: course._id,
+              name: course.name,
+              color: course.color,
+            }))}
+          />
         )}
 
         {availableCourses.length === 0 && tree.courses.length === 0 && (

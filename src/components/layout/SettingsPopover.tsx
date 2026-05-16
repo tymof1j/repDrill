@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { updateLanguageAction } from '@/app/settings/actions';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 
 interface SettingsPopoverProps {
   email: string | null;
@@ -151,31 +152,16 @@ export function SettingsPopover({
                     {isPending ? text.saving : saved ? text.saved : ''}
                   </span>
                 </span>
-                <div className="relative">
-                  <select
-                    name="language"
-                    value={selectedLanguage}
-                    onChange={(event) => handleLanguageChange(event.target.value)}
-                    disabled={isPending}
-                    className="w-full appearance-none rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--paper)] py-2.5 pl-3 pr-10 text-[13px] text-[color:var(--ink)] outline-none transition-colors duration-200 focus:border-[color:var(--library-green)] focus:ring-1 focus:ring-[color:var(--library-green)]/20 disabled:opacity-70"
-                  >
-                    <option value="en">English</option>
-                    <option value="uk">Українська</option>
-                  </select>
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-soft)]"
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </div>
+                <CustomSelect
+                  compact
+                  value={selectedLanguage}
+                  onChange={(value) => handleLanguageChange(value)}
+                  disabled={isPending}
+                  options={[
+                    { value: 'en', label: 'English' },
+                    { value: 'uk', label: 'Українська' },
+                  ]}
+                />
               </label>
             </div>
 

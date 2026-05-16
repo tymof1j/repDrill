@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Link2, Lock, Mail, Share2, Users, X } from 'lucide-react';
+import { Check, Link2, Lock, Mail, Share2, Users, X } from 'lucide-react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { sendShareInvitationAction } from '@/app/share/actions';
+import { CustomSelect } from '@/components/ui/CustomSelect';
 
 export type ShareResourceType = 'course' | 'repertoire' | 'analysis';
+type ShareScopeType = 'resource' | 'chapter' | 'line';
 type LinkAccess = 'none' | 'view' | 'copy' | 'collaborate';
 type InviteAccess = 'view' | 'copy' | 'collaborate';
 
@@ -47,11 +49,13 @@ export function ShareDialog({
   resourceId,
   title,
   buttonClassName,
+  scopes,
 }: {
   resourceType: ShareResourceType;
   resourceId: string;
   title: string;
   buttonClassName?: string;
+  scopes?: { type: ShareScopeType; id?: string; label: string; description?: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -60,14 +64,28 @@ export function ShareDialog({
   const [notify, setNotify] = useState(true);
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+  const [scopeKey, setScopeKey] = useState('resource:');
   const [pendingInvite, startInvite] = useTransition();
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const settings = useQuery(api.sharing.getSettings, { resourceType, resourceId });
+  const scopeOptions = useMemo(
+    () => (scopes && scopes.length > 0 ? scopes : [{ type: 'resource' as const, label: 'Entire item' }]),
+    [scopes],
+  );
+  const selectedScope =
+    scopeOptions.find((scope) => `${scope.type}:${scope.id ?? ''}` === scopeKey) ?? scopeOptions[0];
+
+  const settings = useQuery(api.sharing.getSettings, {
+    resourceType,
+    resourceId,
+    scopeType: selectedScope.type,
+    scopeId: selectedScope.id,
+  });
   const setLinkAccess = useMutation(api.sharing.setLinkAccess);
   const upsertInvitation = useMutation(api.sharing.upsertInvitation);
   const removeInvitation = useMutation(api.sharing.removeInvitation);
+  const transferOwnership = useMutation(api.sharing.transferOwnership);
   const [localLink, setLocalLink] = useState<{ access: LinkAccess; token: string | null } | null>(null);
   const linkAccess = localLink?.access ?? settings?.linkAccess ?? 'none';
   const token = localLink?.token ?? settings?.token ?? null;
@@ -112,7 +130,14 @@ export function ShareDialog({
   const copy = async () => {
     let url = shareUrl;
     if (!url && linkAccess !== 'none') {
-      const result = await setLinkAccess({ resourceType, resourceId, access: linkAccess });
+      const result = await setLinkAccess({
+        resourceType,
+        resourceId,
+        scopeType: selectedScope.type,
+        scopeId: selectedScope.id,
+        scopeLabel: selectedScope.label,
+        access: linkAccess,
+      });
       setLocalLink({ access: result.access, token: result.token });
       if (result.token && typeof window !== 'undefined') {
         url = `${window.location.origin}/share/${result.token}`;
@@ -129,6 +154,9 @@ export function ShareDialog({
     const fd = new FormData();
     fd.set('resourceType', resourceType);
     fd.set('resourceId', resourceId);
+    fd.set('scopeType', selectedScope.type);
+    fd.set('scopeId', selectedScope.id ?? '');
+    fd.set('scopeLabel', selectedScope.label);
     fd.set('email', email);
     fd.set('access', inviteAccess);
     fd.set('notify', String(notify));
@@ -189,6 +217,27 @@ export function ShareDialog({
             </header>
 
             <div className="space-y-6 px-6 pb-6">
+              {scopeOptions.length > 1 && (
+                <section>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                    Share scope
+                  </p>
+                  <CustomSelect
+                    className="mt-3"
+                    value={`${selectedScope.type}:${selectedScope.id ?? ''}`}
+                    onChange={(value) => {
+                      setScopeKey(value);
+                      setLocalLink(null);
+                    }}
+                    options={scopeOptions.map((scope) => ({
+                      value: `${scope.type}:${scope.id ?? ''}`,
+                      label: scope.label,
+                      description: scope.description,
+                    }))}
+                  />
+                </section>
+              )}
+
               <section>
                 <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                   People with access
@@ -212,17 +261,30 @@ export function ShareDialog({
                     {settings!.invitations.map((invite) => (
                       <li key={invite.id} className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_190px_auto] sm:items-center">
                         <span className="min-w-0 truncate text-[14px] text-[color:var(--ink)]">{invite.email}</span>
-                        <NiceSelect
+                        <CustomSelect
                           compact
                           value={invite.access}
                           onChange={(value) => {
                             if (value === 'remove') {
-                              void removeInvitation({ resourceType, resourceId, email: invite.email });
+                              void removeInvitation({
+                                resourceType,
+                                resourceId,
+                                scopeType: selectedScope.type,
+                                scopeId: selectedScope.id,
+                                email: invite.email,
+                              });
+                              return;
+                            }
+                            if (value === 'transfer') {
+                              setStatus('Use Transfer ownership below to confirm.');
                               return;
                             }
                             void upsertInvitation({
                               resourceType,
                               resourceId,
+                              scopeType: selectedScope.type,
+                              scopeId: selectedScope.id,
+                              scopeLabel: selectedScope.label,
                               email: invite.email,
                               access: value as InviteAccess,
                               notify: false,
@@ -230,7 +292,8 @@ export function ShareDialog({
                           }}
                           options={[
                             ...inviteLevels.map((level) => ({ value: level, label: accessCopy[level].label })),
-                            { value: 'remove', label: 'Remove access' },
+                            { value: 'transfer', label: 'Transfer ownership', separatorBefore: true },
+                            { value: 'remove', label: 'Remove access', destructive: true },
                           ]}
                         />
                         <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)] sm:block">
@@ -251,14 +314,25 @@ export function ShareDialog({
                     {linkAccess === 'none' ? <Lock size={18} /> : <Link2 size={18} />}
                   </span>
                   <div>
-                    <NiceSelect
+                    <CustomSelect
                       value={linkAccess}
                       onChange={(value) => {
-                        void setLinkAccess({ resourceType, resourceId, access: value as LinkAccess }).then((result) => {
+                        void setLinkAccess({
+                          resourceType,
+                          resourceId,
+                          scopeType: selectedScope.type,
+                          scopeId: selectedScope.id,
+                          scopeLabel: selectedScope.label,
+                          access: value as LinkAccess,
+                        }).then((result) => {
                           setLocalLink({ access: result.access, token: result.token });
                         });
                       }}
-                      options={linkLevels.map((level) => ({ value: level, label: accessCopy[level].label }))}
+                      options={linkLevels.map((level) => ({
+                        value: level,
+                        label: accessCopy[level].label,
+                        description: accessCopy[level].helper,
+                      }))}
                     />
                     <p className="mt-2 font-display-italic text-[14px] text-[color:var(--ink-soft)]">
                       {accessCopy[linkAccess].helper}
@@ -287,10 +361,14 @@ export function ShareDialog({
                       className="min-w-0 flex-1 bg-transparent text-[15px] text-[color:var(--ink)] outline-none placeholder:text-[color:var(--ink-ghost)]"
                     />
                   </label>
-                  <NiceSelect
+                  <CustomSelect
                     value={inviteAccess}
                     onChange={(value) => setInviteAccess(value as InviteAccess)}
-                    options={inviteLevels.map((level) => ({ value: level, label: accessCopy[level].label }))}
+                    options={inviteLevels.map((level) => ({
+                      value: level,
+                      label: accessCopy[level].label,
+                      description: accessCopy[level].helper,
+                    }))}
                   />
                 </div>
                 <label className="mt-4 flex items-center gap-3 text-[14px] text-[color:var(--ink)]">
@@ -325,6 +403,45 @@ export function ShareDialog({
                   )}
                 </div>
               </section>
+
+              <details className="border-t border-[color:var(--paper-rule)] pt-5">
+                <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)] transition-colors hover:text-[color:var(--ink)]">
+                  Advanced · transfer ownership
+                </summary>
+                <p className="mt-3 text-[13px] leading-6 text-[color:var(--ink-soft)]">
+                  Transfers the full item to a signed-in user. Sharing links stay, direct invites are cleared.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <input
+                    type="email"
+                    value={emailCount === 1 ? email : ''}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="new.owner@example.com"
+                    className="min-h-11 min-w-[240px] flex-1 rounded-lg border border-[color:var(--paper-edge)] bg-transparent px-3 text-[14px] text-[color:var(--ink)] outline-none transition-colors focus:border-[color:var(--ink)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = splitEmails(email)[0];
+                      if (!target) {
+                        setStatus('Enter the new owner email first.');
+                        return;
+                      }
+                      void transferOwnership({ resourceType, resourceId, email: target })
+                        .then((result) => {
+                          setStatus(`Ownership transferred to ${result.ownerEmail}.`);
+                          setEmail('');
+                        })
+                        .catch((e) => {
+                          setStatus(e instanceof Error ? e.message : 'Could not transfer ownership.');
+                        });
+                    }}
+                    className="inline-flex min-h-11 items-center justify-center rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--paper)] px-5 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink)] transition-colors hover:border-[color:var(--margin-red)] hover:text-[color:var(--margin-red)]"
+                  >
+                    Transfer
+                  </button>
+                </div>
+              </details>
             </div>
 
             <footer className="flex items-center justify-between gap-3 border-t border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] px-6 py-4">
@@ -354,37 +471,5 @@ export function ShareDialog({
         document.body,
       )}
     </>
-  );
-}
-
-function NiceSelect({
-  value,
-  onChange,
-  options,
-  compact = false,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  compact?: boolean;
-}) {
-  return (
-    <label className="relative block">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`${compact ? 'h-10 text-[13px]' : 'h-12 text-[14px]'} w-full appearance-none rounded-lg border border-[color:var(--paper-edge)] bg-[color:var(--paper)] px-4 pr-10 font-medium text-[color:var(--ink)] outline-none transition-colors hover:border-[color:var(--ink-soft)] focus:border-[color:var(--ink)]`}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        size={16}
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-faint)]"
-      />
-    </label>
   );
 }

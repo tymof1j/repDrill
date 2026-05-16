@@ -304,6 +304,9 @@ export const getPublicByToken = query({
       .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
       .first();
     let access: "view" | "copy" | "collaborate" = "copy";
+    let scopeType: "resource" | "chapter" | "line" = "resource";
+    let scopeId: string | undefined;
+    let scopeLabel: string | undefined;
     if (!course || !course.isPublic) {
       const link = await ctx.db
         .query("shareLinks")
@@ -313,6 +316,9 @@ export const getPublicByToken = query({
       course = await ctx.db.get(link.resourceId as Id<"courses">);
       if (!course) return null;
       access = link.access;
+      scopeType = link.scopeType ?? "resource";
+      scopeId = link.scopeId;
+      scopeLabel = link.scopeLabel;
     }
     const userId = await getAuthUserId(ctx);
     if (userId) {
@@ -339,7 +345,12 @@ export const getPublicByToken = query({
       return a.createdAt - b.createdAt;
     });
 
-    return { course, chapters, access };
+    const visibleChapters =
+      scopeType === "chapter" && scopeId
+        ? chapters.filter((chapter) => chapter._id === scopeId)
+        : chapters;
+
+    return { course, chapters: visibleChapters, access, scopeType, scopeId, scopeLabel };
   },
 });
 

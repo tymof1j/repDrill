@@ -197,9 +197,16 @@ export function AnalyzePanel({
   }, [result, searchParams, activeGame, activePly]);
 
   if (activeGame) {
+    const activeGameWithId = {
+      ...activeGame,
+      id:
+        activeGame.id ??
+        cached?.rows.find((row) => row.source === activeGame.source && row.gameId === activeGame.gameId)?.id ??
+        result?.rows.find((row) => row.source === activeGame.source && row.gameId === activeGame.gameId)?.id,
+    };
     return (
       <DeviationViewer
-        game={activeGame}
+        game={activeGameWithId}
         ply={activePly}
         setPly={(p) => {
           setActivePly(p);
@@ -755,6 +762,16 @@ function DeviationViewer({
               resourceId={game.id}
               title={`${game.whiteUsername} vs ${game.blackUsername}`}
             />
+          )}
+          {!game.id && (
+            <button
+              type="button"
+              disabled
+              title="Run Analyze again or load the cached game so RepDrill can attach a shareable game id."
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ink-faint)] opacity-60"
+            >
+              Share
+            </button>
           )}
         </div>
       </div>
