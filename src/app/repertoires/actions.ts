@@ -54,6 +54,17 @@ export async function removeCourseFromRepertoireAction(formData: FormData): Prom
   revalidatePath(`/repertoires/${repertoireId}`);
 }
 
+export async function renameRepertoireAction(formData: FormData): Promise<void> {
+  const token = await requireToken();
+  const id = String(formData.get('id') ?? '') as Id<"repertoires">;
+  const name = String(formData.get('name') ?? '').trim();
+  if (!id || !name) throw new Error('Missing id or name');
+
+  await fetchMutation(api.repertoires.rename, { id, name }, { token });
+  revalidatePath(`/repertoires/${id}`);
+  revalidatePath('/repertoires');
+}
+
 export async function setRepertoireChoiceAction(formData: FormData): Promise<void> {
   const token = await requireToken();
   const repertoireId = String(formData.get('repertoireId') ?? '') as Id<"repertoires">;

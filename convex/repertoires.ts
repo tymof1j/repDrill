@@ -138,6 +138,17 @@ export const remove = mutation({
   },
 });
 
+export const rename = mutation({
+  args: { id: v.id("repertoires"), name: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const rep = await ctx.db.get(args.id);
+    if (!rep || rep.userId !== userId) throw new Error("Not found");
+    await ctx.db.patch(args.id, { name: args.name });
+  },
+});
+
 export const addCourse = mutation({
   args: { repertoireId: v.id("repertoires"), courseId: v.id("courses") },
   handler: async (ctx, args) => {

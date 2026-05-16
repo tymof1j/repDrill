@@ -336,6 +336,25 @@ export function ShareDialog({
                       <p className="text-[12px] text-[color:var(--ink-soft)]">
                         Use chapter prefix + line number. Comma-separated is supported.
                       </p>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-ghost)]">
+                        {matchedLineRefs.length > 0
+                          ? `${matchedLineRefs.length} line${matchedLineRefs.length === 1 ? '' : 's'} selected`
+                          : 'No valid line codes yet'}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(selectedScope.lineRefs ?? []).slice(0, 10).map((lineRef) => (
+                          <button
+                            key={lineRef.code}
+                            type="button"
+                            onClick={() =>
+                              setLineScopeInput((prev) => (prev.trim() ? `${prev.replace(/\s+$/, '')},${lineRef.code}` : lineRef.code))
+                            }
+                            className="rounded border border-[color:var(--paper-edge)] px-2 py-1 font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-faint)] hover:border-[color:var(--library-green)] hover:text-[color:var(--library-green)]"
+                          >
+                            {lineRef.code}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </section>

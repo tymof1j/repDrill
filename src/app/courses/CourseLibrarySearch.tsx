@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
+import { Pencil } from 'lucide-react';
 import Fuse from 'fuse.js';
 import {
   EmptyState,
@@ -9,7 +10,7 @@ import {
   SecondaryButton,
   Stamp,
 } from '@/components/ui/Premium';
-import { deleteCourseAction } from './actions';
+import { deleteCourseAction, renameCourseAction } from './actions';
 
 export type CourseListItem = {
   id: string;
@@ -25,6 +26,18 @@ type Props = {
 export function CourseLibrarySearch({ courses }: Props) {
   const [query, setQuery] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [, startTransition] = useTransition();
+
+  const saveRename = (id: string) => {
+    if (!renameDraft.trim()) return;
+    const fd = new FormData();
+    fd.set('id', id);
+    fd.set('name', renameDraft.trim());
+    startTransition(() => void renameCourseAction(fd));
+    setRenameTargetId(null);
+  };
 
   const fuse = useMemo(
     () =>
@@ -86,6 +99,7 @@ export function CourseLibrarySearch({ courses }: Props) {
           {visibleCourses.map((course, idx) => {
             const num = String(idx + 1).padStart(2, '0');
             const isDeleting = deleteTargetId === course.id;
+            const isRenaming = renameTargetId === course.id;
             return (
               <li
                 key={course.id}
@@ -98,24 +112,41 @@ export function CourseLibrarySearch({ courses }: Props) {
                   {num}
                 </span>
 
-                <Link
-                  href={`/courses/${course.id}`}
-                  className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
-                >
-                  <div className="flex items-baseline gap-3">
-                    <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
-                      {course.name}
-                    </h2>
-                    <Stamp tone={course.color === 'white' ? 'ink' : 'red'}>
-                      {course.color}
-                    </Stamp>
+                {isRenaming ? (
+                  <div className="flex flex-wrap items-baseline gap-3">
+                    <input
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveRename(course.id);
+                        if (e.key === 'Escape') setRenameTargetId(null);
+                      }}
+                      className="font-display text-2xl font-medium bg-transparent border-b border-[color:var(--ink)] text-[color:var(--ink)] outline-none md:text-[1.65rem]"
+                      autoFocus
+                    />
+                    <GhostButton onClick={() => saveRename(course.id)}>Save</GhostButton>
+                    <GhostButton onClick={() => setRenameTargetId(null)}>Cancel</GhostButton>
                   </div>
-                  {course.description && (
-                    <p className="mt-2 font-display-italic max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
-                      {course.description}
-                    </p>
-                  )}
-                </Link>
+                ) : (
+                  <Link
+                    href={`/courses/${course.id}`}
+                    className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+                  >
+                    <div className="flex items-baseline gap-3">
+                      <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
+                        {course.name}
+                      </h2>
+                      <Stamp tone={course.color === 'white' ? 'ink' : 'red'}>
+                        {course.color}
+                      </Stamp>
+                    </div>
+                    {course.description && (
+                      <p className="mt-2 font-display-italic max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
+                        {course.description}
+                      </p>
+                    )}
+                  </Link>
+                )}
 
                 <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
                   Open to manage chapters,
@@ -144,9 +175,19 @@ export function CourseLibrarySearch({ courses }: Props) {
                       </button>
                     </form>
                   ) : (
-                    <GhostButton onClick={() => setDeleteTargetId(course.id)}>
-                      Delete
-                    </GhostButton>
+                    <>
+                      <button
+                        type="button"
+                        title="Rename"
+                        onClick={() => { setRenameDraft(course.name); setRenameTargetId(course.id); setDeleteTargetId(null); }}
+                        className="text-[color:var(--ink-faint)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-[color:var(--ink)]"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <GhostButton onClick={() => setDeleteTargetId(course.id)}>
+                        Delete
+                      </GhostButton>
+                    </>
                   )}
                 </div>
               </li>

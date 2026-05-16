@@ -1,6 +1,6 @@
 # RepDrill — Platform Features & Logic
 
-> Last updated: 2026-05-16. Reflects state after sharing + annotation persistence work + board controls consistency pass.
+> Last updated: 2026-05-16. Reflects state after sharing + annotation persistence work + board controls consistency pass + repertoire viewer overhaul + inline rename.
 
 ---
 
@@ -39,6 +39,19 @@ A spaced-repetition chess opening trainer. You build opening repertoires, then d
 - Create a repertoire, attach courses to it
 - The merged tree resolves conflicts by preferred choice per position
 - Useful for seeing the full repertoire as one coherent tree
+
+**Side toggle (added 2026-05-16):**
+
+When a repertoire contains courses for both colors, a segmented "○ White / ● Black" control appears above the board. Selecting a side:
+- Flips the board to that perspective
+- Filters the branches panel to show only moves from courses built for that color (e.g. selecting White hides Grunfeld branches which belong to a black course)
+- The toggle is hidden when only one color is present — no phantom options for colors with no prep
+
+Board orientation always defaults to the color of the bound courses (black course → black-POV board by default).
+
+**Arrow colors (updated 2026-05-16):**
+
+Arrows in the merged repertoire viewer now cycle through the same multi-color palette as the single-course viewer: `green → blue → red → yellow → paleGreen → paleBlue → paleRed`. Previously all arrows were a single blue.
 
 **Sharing:**
 - Same link-based sharing as courses
@@ -136,7 +149,26 @@ A spaced-repetition chess opening trainer. You build opening repertoires, then d
 
 ---
 
-### 6. Settings
+### 6. Inline Renaming (added 2026-05-16)
+
+Courses and repertoires can be renamed in two places:
+
+**From the detail page:**
+- Click the title — a pencil icon fades in on hover as a visual affordance (`title="Click to rename"`)
+- Title becomes an inline `<input>` (same font/size, transparent background, border-bottom focus indicator)
+- Enter saves, Escape cancels, Save/Cancel buttons appear in the action area (replacing Import/Share)
+- Mutations: `api.courses.rename` / `api.repertoires.rename`
+
+**From the list page (without navigating into the item):**
+- A pencil icon button (`Pencil` from lucide-react, 14px) appears on row hover in the action column
+- Clicking it replaces the title text with an inline input on the same row
+- Enter/Save saves; Escape/Cancel restores the title
+- Only available for owned resources (`tab === 'mine'` on repertoires list; always on courses list)
+- Rename and Delete can coexist in the action column — clicking rename clears any pending delete confirmation
+
+---
+
+### 7. Settings
 
 - Connect Lichess username (used for game fetch + color detection)
 - Connect Chess.com username
@@ -160,6 +192,8 @@ A spaced-repetition chess opening trainer. You build opening repertoires, then d
 | `shareLinks` | Token-based share links (resource type + id, access level, token) |
 | `shareInvitations` | Email-based invitations (resource type + id, email, access level) |
 | `repertoires` | Named merged repertoires with description |
+| `repertoireCourses` | Junction rows binding a course to a repertoire (with sortOrder) |
+| `repertoireChoices` | Per-position preferred move choices within a repertoire |
 
 ---
 

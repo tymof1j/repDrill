@@ -81,31 +81,6 @@ export function MergedRepertoireViewer({
   const currentPosition = positionsById.get(currentPositionId);
   const currentFen = currentPosition?.fen ?? STARTING_FEN;
 
-  type GroupedMove = { san: string; uci: string; moves: MergedMove[] };
-  const grouped: GroupedMove[] = useMemo(() => {
-    const bySan = new Map<string, GroupedMove>();
-    for (const m of nextMovesRaw) {
-      const existing = bySan.get(m.san);
-      if (existing) {
-        existing.moves.push(m);
-      } else {
-        bySan.set(m.san, { san: m.san, uci: m.uci, moves: [m] });
-      }
-    }
-    return Array.from(bySan.values()).sort((a, b) => {
-      const aMain = a.moves.some((m) => m.isMainLine);
-      const bMain = b.moves.some((m) => m.isMainLine);
-      if (aMain !== bMain) return aMain ? -1 : 1;
-      return a.san.localeCompare(b.san);
-    });
-  }, [nextMovesRaw]);
-
-  const repertoireOptions = grouped.filter((g) =>
-    g.moves.some((m) => m.moveType === 'repertoire'),
-  );
-  const hasConflict = repertoireOptions.length >= 2;
-  const preferredMoveId = choiceByPosition.get(currentPositionId);
-
   const availableSides = useMemo(() => {
     const sides = new Set<'white' | 'black'>();
     for (const m of moves) {
@@ -122,6 +97,32 @@ export function MergedRepertoireViewer({
   });
 
   const hasBothSides = availableSides.includes('white') && availableSides.includes('black');
+
+  type GroupedMove = { san: string; uci: string; moves: MergedMove[] };
+  const grouped: GroupedMove[] = useMemo(() => {
+    const bySan = new Map<string, GroupedMove>();
+    const filtered = nextMovesRaw.filter((m) => m.courseColor === viewingSide);
+    for (const m of filtered) {
+      const existing = bySan.get(m.san);
+      if (existing) {
+        existing.moves.push(m);
+      } else {
+        bySan.set(m.san, { san: m.san, uci: m.uci, moves: [m] });
+      }
+    }
+    return Array.from(bySan.values()).sort((a, b) => {
+      const aMain = a.moves.some((m) => m.isMainLine);
+      const bMain = b.moves.some((m) => m.isMainLine);
+      if (aMain !== bMain) return aMain ? -1 : 1;
+      return a.san.localeCompare(b.san);
+    });
+  }, [nextMovesRaw, viewingSide]);
+
+  const repertoireOptions = grouped.filter((g) =>
+    g.moves.some((m) => m.moveType === 'repertoire'),
+  );
+  const hasConflict = repertoireOptions.length >= 2;
+  const preferredMoveId = choiceByPosition.get(currentPositionId);
 
   const orientation = viewingSide;
 
@@ -185,6 +186,33 @@ export function MergedRepertoireViewer({
     <div className="grid gap-10 lg:grid-cols-[auto_minmax(420px,1fr)] lg:gap-14">
       {/* ── Left page: the diagram ─────────────────────────── */}
       <div>
+        {hasBothSides && (
+          <div className="mb-5 grid grid-cols-2 border border-[color:var(--paper-edge)]">
+            <button
+              type="button"
+              onClick={() => setViewingSide('white')}
+              className={`py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${
+                viewingSide === 'white'
+                  ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+                  : 'text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-shade)] hover:text-[color:var(--ink)]'
+              }`}
+            >
+              ○ White
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewingSide('black')}
+              className={`border-l border-[color:var(--paper-edge)] py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${
+                viewingSide === 'black'
+                  ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+                  : 'text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-shade)] hover:text-[color:var(--ink)]'
+              }`}
+            >
+              ● Black
+            </button>
+          </div>
+        )}
+
         <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
             Diagram
@@ -193,35 +221,6 @@ export function MergedRepertoireViewer({
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
               {path.length === 0 ? 'starting' : `${path.length} ply deep`}
             </p>
-            {hasBothSides && (
-              <div className="flex items-baseline gap-1 font-mono text-[10px] uppercase tracking-[0.18em]">
-                <button
-                  type="button"
-                  onClick={() => setViewingSide('white')}
-                  className={`transition-colors duration-200 ${
-                    viewingSide === 'white'
-                      ? 'font-semibold text-[color:var(--ink)]'
-                      : 'text-[color:var(--ink-faint)] hover:text-[color:var(--ink)]'
-                  }`}
-                  title="View white's moves"
-                >
-                  White
-                </button>
-                <span className="text-[color:var(--ink-ghost)]">/</span>
-                <button
-                  type="button"
-                  onClick={() => setViewingSide('black')}
-                  className={`transition-colors duration-200 ${
-                    viewingSide === 'black'
-                      ? 'font-semibold text-[color:var(--ink)]'
-                      : 'text-[color:var(--ink-faint)] hover:text-[color:var(--ink)]'
-                  }`}
-                  title="View black's moves"
-                >
-                  Black
-                </button>
-              </div>
-            )}
             <button
               type="button"
               onClick={() => setShowHighlights((s) => !s)}

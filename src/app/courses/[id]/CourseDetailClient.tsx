@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import { Pencil } from 'lucide-react';
 import {
   RepertoireViewer,
   type ViewerMove,
@@ -276,9 +277,11 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                 setNameDraft(course.name);
                 setEditingName(true);
               }}
-              className="text-left transition-colors duration-200 hover:text-[color:var(--margin-red)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+              className="group/name flex items-baseline gap-3 text-left transition-colors duration-200 hover:text-[color:var(--margin-red)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+              title="Click to rename"
             >
               {course.name}
+              <Pencil size={16} className="mb-0.5 shrink-0 self-center opacity-0 transition-opacity group-hover/name:opacity-40" />
             </button>
           )
         }
@@ -439,6 +442,9 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                                     style={{ fontFeatureSettings: '"onum"' }}
                                   >
                                     {String(lIdx + 1).padStart(2, '0')}
+                                  </span>
+                                  <span className="rounded border border-[color:var(--paper-edge)] px-1.5 py-0.5 font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-faint)]">
+                                    {`${chapterPrefix(selectedChapter?.name ?? 'line')}-${lIdx + 1}`}
                                   </span>
                                   <span className="notation line-clamp-2 text-[12px] leading-snug text-[color:var(--ink)]">
                                     {line.moves.slice(0, 10).map(formatMove).join(' ')}

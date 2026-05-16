@@ -101,6 +101,14 @@ export function RepertoireViewer({
     }
     return null;
   }, [currentPositionId, lineMarkers, moves, path.length, rootPositionId]);
+  const lineCodeHint = useMemo(() => {
+    if (currentLineCode) return currentLineCode;
+    const first = lineMarkers[0]?.code;
+    if (!first) return null;
+    const prefix = first.split('-')[0] ?? '';
+    if (!prefix) return null;
+    return `${prefix}-?`;
+  }, [currentLineCode, lineMarkers]);
 
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
@@ -360,9 +368,9 @@ export function RepertoireViewer({
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
               Line
             </p>
-            {currentLineCode && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
-                {currentLineCode}
+            {lineCodeHint && (
+              <span className="font-mono text-[10px] tracking-[0.16em] text-[color:var(--ink-ghost)]">
+                {lineCodeHint}
               </span>
             )}
           </div>

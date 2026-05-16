@@ -1,17 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
+import { Pencil } from 'lucide-react';
 import { useQuery, useConvexAuth } from 'convex/react';
 import { useRouter } from 'next/navigation';
 import { api } from '@convex/_generated/api';
-import { AppSurface, EmptyState, PageHeader, PremiumButton } from '@/components/ui/Premium';
+import { AppSurface, EmptyState, GhostButton, PageHeader, PremiumButton } from '@/components/ui/Premium';
 import { DeleteRepertoireButton } from './DeleteRepertoireButton';
+import { renameRepertoireAction } from './actions';
 
 export default function RepertoiresListPage() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const router = useRouter();
   const [tab, setTab] = useState<'mine' | 'shared'>('mine');
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [, startTransition] = useTransition();
+
+  const saveRename = (id: string) => {
+    if (!renameDraft.trim()) return;
+    const fd = new FormData();
+    fd.set('id', id);
+    fd.set('name', renameDraft.trim());
+    startTransition(() => void renameRepertoireAction(fd));
+    setRenameTargetId(null);
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/login');
@@ -59,6 +73,7 @@ export default function RepertoiresListPage() {
         <ol className="divide-y divide-[color:var(--paper-rule)] border-y border-[color:var(--paper-edge)]">
           {visibleItems.map((r, idx) => {
             const num = String(idx + 1).padStart(2, '0');
+            const isRenaming = renameTargetId === r.id;
             return (
               <li
                 key={r.id}
@@ -70,25 +85,56 @@ export default function RepertoiresListPage() {
                 >
                   {num}
                 </span>
-                <Link
-                  href={`/repertoires/${r.id}`}
-                  className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
-                >
-                  <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
-                    {r.name}
-                  </h2>
-                  {r.description && (
-                    <p className="mt-2 max-w-2xl font-display-italic text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
-                      {r.description}
-                    </p>
+
+                {isRenaming ? (
+                  <div className="flex flex-wrap items-baseline gap-3">
+                    <input
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveRename(r.id);
+                        if (e.key === 'Escape') setRenameTargetId(null);
+                      }}
+                      className="font-display text-2xl font-medium bg-transparent border-b border-[color:var(--ink)] text-[color:var(--ink)] outline-none md:text-[1.65rem]"
+                      autoFocus
+                    />
+                    <GhostButton onClick={() => saveRename(r.id)}>Save</GhostButton>
+                    <GhostButton onClick={() => setRenameTargetId(null)}>Cancel</GhostButton>
+                  </div>
+                ) : (
+                  <Link
+                    href={`/repertoires/${r.id}`}
+                    className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
+                  >
+                    <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
+                      {r.name}
+                    </h2>
+                    {r.description && (
+                      <p className="mt-2 max-w-2xl font-display-italic text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
+                        {r.description}
+                      </p>
+                    )}
+                    {r.sharedMeta && (
+                      <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
+                        {r.sharedMeta}
+                      </p>
+                    )}
+                  </Link>
+                )}
+
+                <div className="flex items-center gap-3">
+                  {tab === 'mine' && !isRenaming && (
+                    <button
+                      type="button"
+                      title="Rename"
+                      onClick={() => { setRenameDraft(r.name); setRenameTargetId(r.id); }}
+                      className="text-[color:var(--ink-faint)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-[color:var(--ink)]"
+                    >
+                      <Pencil size={14} />
+                    </button>
                   )}
-                  {r.sharedMeta && (
-                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
-                      {r.sharedMeta}
-                    </p>
-                  )}
-                </Link>
-                {tab === 'mine' ? <DeleteRepertoireButton id={r.id} /> : <span />}
+                  {tab === 'mine' ? <DeleteRepertoireButton id={r.id} /> : <span />}
+                </div>
               </li>
             );
           })}
