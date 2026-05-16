@@ -38,6 +38,13 @@ type Props = {
   rootPositionId: string;
   positions: ViewerPosition[];
   moves: ViewerMove[];
+  lineStatuses: {
+    chapterId: string;
+    lineIndex: number;
+    grade: 'A' | 'B' | 'C' | 'D' | 'N';
+    category: 'new' | 'learning' | 'review' | 'due' | 'mastered';
+    nextReviewAt: number | null;
+  }[];
 };
 
 type ChapterLine = {
@@ -54,6 +61,18 @@ function formatMove(move: ViewerMove) {
 
 function branchKey(move: ViewerMove) {
   return `${move.parentPositionId}:${move.childPositionId}:${move.uci}`;
+}
+
+function formatNextReview(nextReviewAt: number | null) {
+  if (!nextReviewAt) return 'not scheduled';
+  const deltaMs = nextReviewAt - Date.now();
+  if (deltaMs <= 0) return 'due now';
+  const minutes = Math.round(deltaMs / 60000);
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `in ${hours}h`;
+  const days = Math.round(hours / 24);
+  return `in ${days}d`;
 }
 
 function buildChapterLines(
@@ -117,7 +136,7 @@ function buildChapterLines(
   return linesByChapter;
 }
 
-export function CourseDetailClient({ course, chapters, rootPositionId, positions, moves }: Props) {
+export function CourseDetailClient({ course, chapters, rootPositionId, positions, moves, lineStatuses }: Props) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(course.name);
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
@@ -162,6 +181,10 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         ? moves.filter((move) => move.chapterId === selectedChapterId)
         : moves,
     [moves, selectedChapterId],
+  );
+  const lineStatusMap = useMemo(
+    () => new Map(lineStatuses.map((status) => [`${status.chapterId}:${status.lineIndex}`, status])),
+    [lineStatuses],
   );
 
   const saveName = () => {
@@ -389,7 +412,9 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                             <Stamp tone="red">Filtered</Stamp>
                           </div>
                           <ol className="grid gap-2 lg:grid-cols-2">
-                            {selectedChapterLines.map((line, lIdx) => (
+                            {selectedChapterLines.map((line, lIdx) => {
+                              const status = lineStatusMap.get(`${selectedChapterId}:${lIdx}`);
+                              return (
                               <li key={line.id}>
                                 <button
                                   type="button"
@@ -406,9 +431,22 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                                     {line.moves.slice(0, 10).map(formatMove).join(' ')}
                                     {line.moves.length > 10 ? ' …' : ''}
                                   </span>
+                                  {status && (
+                                    <span className="ml-auto inline-flex items-center gap-2 whitespace-nowrap">
+                                      <span className="rounded border border-[color:var(--paper-edge)] px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-faint)]">
+                                        {status.grade}
+                                      </span>
+                                      <span className="rounded border border-[color:var(--paper-edge)] px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-faint)]">
+                                        {status.category}
+                                      </span>
+                                      <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-ghost)]">
+                                        {formatNextReview(status.nextReviewAt)}
+                                      </span>
+                                    </span>
+                                  )}
                                 </button>
                               </li>
-                            ))}
+                            )})}
                           </ol>
                         </div>
                       )}

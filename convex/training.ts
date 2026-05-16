@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
 
 // Import FSRS logic — we inline the pure functions here since Convex can't import from src/
 // These are the same algorithms from src/lib/srs/fsrs.ts
@@ -25,6 +26,51 @@ function scheduleCard(card: Card, rating: Grade, now?: Date) {
   return f.next(card, now ?? new Date(), rating);
 }
 
+type TrainableCourse = {
+  course: Doc<"courses">;
+  ownerId: Id<"users">;
+};
+
+async function getTrainableCourses(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+) {
+  const ownCourses = await ctx.db
+    .query("courses")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  const result = new Map<string, TrainableCourse>(
+    ownCourses.map((course) => [course._id as string, { course, ownerId: course.userId }]),
+  );
+
+  const user = await ctx.db.get(userId);
+  const email = user?.email?.trim().toLowerCase();
+  if (!email) return Array.from(result.values());
+
+  const invitations = await ctx.db
+    .query("shareInvitations")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .take(100);
+
+  for (const invite of invitations) {
+    if (invite.ownerId === userId) continue;
+    if (invite.access === "view") continue;
+    const isCourseInvite = invite.resourceType === "course";
+    const isScopedRepertoireInvite =
+      invite.resourceType === "repertoire" &&
+      invite.scopeType === "course" &&
+      Boolean(invite.scopeId);
+    if (!isCourseInvite && !isScopedRepertoireInvite) continue;
+
+    const courseId = (isCourseInvite ? invite.resourceId : invite.scopeId) as Id<"courses">;
+    const course = await ctx.db.get(courseId);
+    if (!course) continue;
+    result.set(course._id as string, { course, ownerId: course.userId });
+  }
+
+  return Array.from(result.values());
+}
+
 // --- Ensure review cards exist for all repertoire moves ---
 export const ensureCards = mutation({
   args: {},
@@ -32,14 +78,11 @@ export const ensureCards = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
-    const userCourses = await ctx.db
-      .query("courses")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-    if (userCourses.length === 0) return 0;
+    const trainableCourses = await getTrainableCourses(ctx, userId);
+    if (trainableCourses.length === 0) return 0;
 
     const allChapterIds: Id<"chapters">[] = [];
-    for (const course of userCourses) {
+    for (const { course } of trainableCourses) {
       const chapters = await ctx.db
         .query("chapters")
         .withIndex("by_course", (q) => q.eq("courseId", course._id))
@@ -114,6 +157,14 @@ export type TrainingLine = {
   dueCount: number;
 };
 
+export type CourseLineStatus = {
+  chapterId: string;
+  lineIndex: number;
+  grade: "A" | "B" | "C" | "D" | "N";
+  category: "new" | "learning" | "review" | "due" | "mastered";
+  nextReviewAt: number | null;
+};
+
 const ROOT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 
 export const getTrainingLines = query({
@@ -129,10 +180,7 @@ export const getTrainingLines = query({
     const newLineLimit = args.newLineLimit ?? 5;
 
     // Load courses
-    let userCourses = await ctx.db
-      .query("courses")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+    let userCourses = (await getTrainableCourses(ctx, userId)).map((entry) => entry.course);
     if (args.repertoireId) {
       const repCourses = await ctx.db
         .query("repertoireCourses")
@@ -172,10 +220,15 @@ export const getTrainingLines = query({
       return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
 
     // Load all positions for this user in one batch query (replaces O(n) individual gets)
-    const allPositions = await ctx.db
-      .query("positions")
-      .withIndex("by_user_fen", (q) => q.eq("userId", userId))
-      .collect();
+    const ownerIds = new Set(userCourses.map((course) => course.userId as string));
+    const allPositions: Doc<"positions">[] = [];
+    for (const ownerId of ownerIds) {
+      const ownerPositions = await ctx.db
+        .query("positions")
+        .withIndex("by_user_fen", (q) => q.eq("userId", ownerId as Id<"users">))
+        .collect();
+      allPositions.push(...ownerPositions);
+    }
     const posById = new Map(allPositions.map((p) => [p._id as string, p]));
 
     // Load review cards
@@ -326,6 +379,134 @@ export const getTrainingLines = query({
     });
 
     return { lines: limited, totalLines, dueLines, newLines: newLinesCount };
+  },
+});
+
+export const getCourseLineStatuses = query({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [] as CourseLineStatus[];
+
+    const course = await ctx.db.get(args.courseId);
+    if (!course || course.userId !== userId) return [] as CourseLineStatus[];
+
+    const chaptersInCourse = await ctx.db
+      .query("chapters")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .collect();
+    if (chaptersInCourse.length === 0) return [] as CourseLineStatus[];
+
+    const chapterIds = new Set(chaptersInCourse.map((c) => c._id as string));
+    const allMoves = (
+      await Promise.all(
+        chaptersInCourse.map((chapter) =>
+          ctx.db
+            .query("moves")
+            .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+            .collect()
+        ),
+      )
+    ).flat();
+    if (allMoves.length === 0) return [] as CourseLineStatus[];
+
+    const allPositions = await ctx.db
+      .query("positions")
+      .withIndex("by_user_fen", (q) => q.eq("userId", userId))
+      .collect();
+    const allCards = await ctx.db
+      .query("reviewCards")
+      .withIndex("by_user_due", (q) => q.eq("userId", userId))
+      .collect();
+    const cardByMoveId = new Map(allCards.map((c) => [c.moveId as string, c]));
+    const now = Date.now();
+
+    const rootPos = allPositions.find((p) => p.fen === ROOT_FEN);
+    if (!rootPos) return [] as CourseLineStatus[];
+
+    const movesByParentByChapter = new Map<string, Map<string, Doc<"moves">[]>>();
+    for (const move of allMoves) {
+      const chapterId = move.chapterId as string;
+      if (!chapterIds.has(chapterId)) continue;
+      let chapterMap = movesByParentByChapter.get(chapterId);
+      if (!chapterMap) {
+        chapterMap = new Map();
+        movesByParentByChapter.set(chapterId, chapterMap);
+      }
+      const parentId = move.parentPositionId as string;
+      const siblings = chapterMap.get(parentId) ?? [];
+      siblings.push(move);
+      chapterMap.set(parentId, siblings);
+    }
+    for (const chapterMap of movesByParentByChapter.values()) {
+      for (const siblings of chapterMap.values()) {
+        siblings.sort((a, b) => Number(b.isMainLine) - Number(a.isMainLine) || a.sortOrder - b.sortOrder);
+      }
+    }
+
+    const result: CourseLineStatus[] = [];
+    for (const [chapterId, byParent] of movesByParentByChapter.entries()) {
+      const lines: { moves: Doc<"moves">[] }[] = [];
+      const onPath = new Set<string>();
+      const walk = (positionId: string, path: Doc<"moves">[]) => {
+        if (onPath.has(positionId)) {
+          if (path.length > 0) lines.push({ moves: [...path] });
+          return;
+        }
+        onPath.add(positionId);
+        const children = byParent.get(positionId) ?? [];
+        if (children.length === 0) {
+          if (path.length > 0) lines.push({ moves: [...path] });
+          onPath.delete(positionId);
+          return;
+        }
+        for (const child of children) {
+          path.push(child);
+          walk(child.childPositionId as string, path);
+          path.pop();
+        }
+        onPath.delete(positionId);
+      };
+      walk(rootPos._id as string, []);
+
+      lines.forEach((line, lineIndex) => {
+        const repMoves = line.moves.filter((move) => move.moveType === "repertoire");
+        const cards = repMoves
+          .map((move) => cardByMoveId.get(move._id as string))
+          .filter(Boolean) as Doc<"reviewCards">[];
+        if (cards.length === 0) {
+          result.push({
+            chapterId,
+            lineIndex,
+            grade: "N",
+            category: "new",
+            nextReviewAt: null,
+          });
+          return;
+        }
+        const minDue = cards.reduce((min, card) => Math.min(min, card.due), Number.POSITIVE_INFINITY);
+        const dueNow = cards.some((card) => card.due <= now);
+        const hasNew = cards.some((card) => card.state === 0);
+        const hasLearning = cards.some((card) => card.state === 1 || card.state === 3);
+        const avgStability = cards.reduce((sum, card) => sum + card.stability, 0) / cards.length;
+        const avgLapses = cards.reduce((sum, card) => sum + card.lapses, 0) / cards.length;
+        const mastery = Math.max(0, Math.min(100, Math.round(avgStability * 12 - avgLapses * 8)));
+        const grade: CourseLineStatus["grade"] =
+          hasNew ? "N" : mastery >= 82 ? "A" : mastery >= 65 ? "B" : mastery >= 45 ? "C" : "D";
+        const category: CourseLineStatus["category"] =
+          hasNew ? "new" : dueNow ? "due" : hasLearning ? "learning" : mastery >= 82 ? "mastered" : "review";
+
+        result.push({
+          chapterId,
+          lineIndex,
+          grade,
+          category,
+          nextReviewAt: Number.isFinite(minDue) ? minDue : null,
+        });
+      });
+    }
+
+    return result;
   },
 });
 

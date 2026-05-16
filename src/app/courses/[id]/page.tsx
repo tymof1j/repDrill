@@ -18,6 +18,7 @@ export default async function CourseDetailPage({
   if (!course) notFound();
 
   const chapters = await fetchQuery(api.courses.listChapters, { courseId: course._id }, { token });
+  const lineStatuses = await fetchQuery(api.training.getCourseLineStatuses, { courseId: course._id }, { token });
 
   // Load each chapter's tree in parallel — each query is bounded by its
   // own chapter, avoiding the 32k document-read limit per query.
@@ -75,6 +76,7 @@ export default async function CourseDetailPage({
         moveType: move.moveType,
         chapterName: chapterNameById.get(move.chapterId) ?? '',
       }))}
+      lineStatuses={lineStatuses}
     />
   );
 }
