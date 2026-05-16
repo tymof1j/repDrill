@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260516T112140-a7d4bd",
+  "command": "review",
+  "args": [
+    "review",
+    "--limit",
+    "10"
+  ],
+  "rootPath": "/Users/timamuravyov/Documents/KSE/KSE_Second_Year/chess-trainer/repdrill",
+  "headSha": "d29159d7e0798570845901d722ebdcbec757e6fc",
+  "startedAt": "2026-05-16T11:21:40.270Z",
+  "finishedAt": "2026-05-16T11:22:14.342Z",
+  "status": "completed",
+  "claimedFeatureIds": [
+    "feat_config_0c1c23856a",
+    "feat_config_7528cb5b98",
+    "feat_release_4862937c51",
+    "feat_release_51170e0f9c",
+    "feat_release_775032a0f4"
+  ],
+  "findingIds": [
+    "fnd_sig-feat-config-0c1c23856a-fe52f_2fe476f8b8",
+    "fnd_sig-feat-config-7528cb5b98-628fb_2e9670a2b1",
+    "fnd_sig-feat-config-7528cb5b98-0cce1_dc75e4426b"
+  ],
+  "patchAttemptIds": [],
+  "errors": []
+}

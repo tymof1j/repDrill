@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-config-7528cb5b98-628fb_2e9670a2b1",
+  "featureId": "feat_config_7528cb5b98",
+  "title": "Platform-specific Darwin ARM64 binaries are declared as direct devDependencies",
+  "category": "build-release",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "package.json",
+      "startLine": 32,
+      "endLine": 32,
+      "symbol": "devDependencies",
+      "quote": "\"@tailwindcss/oxide-darwin-arm64\": \"^4.2.4\""
+    },
+    {
+      "path": "package.json",
+      "startLine": 40,
+      "endLine": 40,
+      "symbol": "devDependencies",
+      "quote": "\"lightningcss-darwin-arm64\": \"^1.32.0\""
+    }
+  ],
+  "reasoning": "These packages are OS/CPU-specific binary builds. Declaring them as first-class devDependencies makes install/build behavior host-dependent and can fail in Linux/Windows CI or non-ARM64 machines with unsupported platform errors.",
+  "reproduction": null,
+  "recommendation": "Remove direct platform-targeted binary packages from devDependencies and rely on cross-platform parent packages/transitive optional dependencies instead.",
+  "whyTestsDoNotAlreadyCoverThis": "No install-matrix or CI validation is included in the provided evidence, so cross-platform dependency resolution failures would not be caught by tests here.",
+  "suggestedRegressionTest": "Add CI jobs that run dependency installation and build on at least linux-x64 and darwin-arm64.",
+  "minimumFixScope": "package.json devDependencies",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-config-7528cb5b98_628fbc9116",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260516T112140-a7d4bd",
+  "createdAt": "2026-05-16T11:22:02.287Z",
+  "updatedAt": "2026-05-16T11:22:02.287Z"
+}

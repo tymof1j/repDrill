@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-config-0c1c23856a-fe52f_2fe476f8b8",
+  "featureId": "feat_config_0c1c23856a",
+  "title": "JavaScript files are included but not type-checked, creating a silent quality gap",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "tsconfig.json",
+      "startLine": 6,
+      "endLine": 6,
+      "symbol": "compilerOptions.allowJs",
+      "quote": "\"allowJs\": true"
+    },
+    {
+      "path": "tsconfig.json",
+      "startLine": 1,
+      "endLine": 33,
+      "symbol": null,
+      "quote": "No \"checkJs\" option is set anywhere in this config"
+    }
+  ],
+  "reasoning": "With `allowJs: true`, `.js` files participate in the program, but without `checkJs: true` they are not type-checked. This creates an inconsistent contract where TypeScript files are strict but JavaScript can carry unchecked API/shape errors into runtime and releases.",
+  "reproduction": null,
+  "recommendation": "Either disable JavaScript ingestion (`allowJs: false`) or enforce checking for JS (`checkJs: true`). If migration is in progress, scope JS inclusion narrowly and enable `checkJs` per folder via layered tsconfig files.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests were provided for this feature, and this is a compile-time configuration gap that runtime tests may not deterministically detect.",
+  "suggestedRegressionTest": "Add a CI typecheck step (`tsc --noEmit`) with a fixture `.js` file containing an obvious type misuse; verify the build fails when `checkJs` is enabled (or verify `.js` is excluded when `allowJs` is disabled).",
+  "minimumFixScope": "tsconfig.json",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-config-0c1c23856a_fe52f9d91a",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260516T112140-a7d4bd",
+  "createdAt": "2026-05-16T11:21:58.394Z",
+  "updatedAt": "2026-05-16T11:21:58.394Z"
+}

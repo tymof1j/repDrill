@@ -26,6 +26,7 @@ const ChessBoard = dynamic(
 );
 import {
   analyzeRecentGames,
+  ensureAnalyzedGameStored,
   importAnalyzedGameToCourse,
   loadCachedAnalyze,
   type AnalyzeBatchResult,
@@ -595,6 +596,8 @@ function DeviationViewer({
   const [importPending, startImport] = useTransition();
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [annotationSaved, setAnnotationSaved] = useState(false);
+  const [shareId, setShareId] = useState(game.id ?? null);
+  const [sharePending, startShare] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
@@ -756,21 +759,44 @@ function DeviationViewer({
               Open on {game.source === 'lichess' ? 'Lichess' : 'Chess.com'}
             </a>
           )}
-          {game.id && (
+          {shareId ? (
             <ShareDialog
               resourceType="analysis"
-              resourceId={game.id}
+              resourceId={shareId}
               title={`${game.whiteUsername} vs ${game.blackUsername}`}
             />
-          )}
-          {!game.id && (
+          ) : (
             <button
               type="button"
-              disabled
-              title="Run Analyze again or load the cached game so RepDrill can attach a shareable game id."
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ink-faint)] opacity-60"
+              disabled={sharePending}
+              onClick={() => {
+                const fd = new FormData();
+                fd.set('source', game.source);
+                fd.set('gameId', game.gameId);
+                fd.set('url', game.url ?? '');
+                fd.set('whiteUsername', game.whiteUsername);
+                fd.set('blackUsername', game.blackUsername);
+                fd.set('result', game.result);
+                fd.set('playedAt', String(new Date(game.playedAt).getTime()));
+                fd.set('opening', game.opening ?? '');
+                fd.set('timeControl', game.timeControl ?? '');
+                fd.set('pgn', game.pgn);
+                fd.set('playedAs', game.deviation.playedAs);
+                fd.set('deviationKind', game.deviation.kind);
+                fd.set('deviationMoveNumber', String(game.deviation.deviationMoveNumber ?? ''));
+                fd.set('deviationPly', String(game.deviation.deviationPly ?? ''));
+                fd.set('playedSan', game.deviation.playedSan ?? '');
+                fd.set('expectedSans', (game.deviation.expectedSans ?? []).join('\n'));
+                fd.set('deviationFen', game.deviation.deviationFen ?? '');
+                fd.set('totalPlies', String(game.deviation.totalPlies));
+                startShare(async () => {
+                  const stored = await ensureAnalyzedGameStored(fd);
+                  setShareId(stored.id);
+                });
+              }}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.13em] text-[color:var(--ink)] transition-colors hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Share
+              {sharePending ? 'Preparing...' : 'Share'}
             </button>
           )}
         </div>

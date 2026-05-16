@@ -327,6 +327,39 @@ export async function getGameDeviationDetail(formData: FormData): Promise<{
   };
 }
 
+export async function ensureAnalyzedGameStored(formData: FormData): Promise<{ id: string }> {
+  const token = await requireToken();
+  const source = String(formData.get('source') ?? '') as GameSource;
+  if (source !== 'lichess' && source !== 'chesscom') throw new Error('Invalid source');
+  const result = await fetchMutation(
+    api.analyze.storeOne,
+    {
+      source,
+      gameId: String(formData.get('gameId') ?? ''),
+      url: String(formData.get('url') ?? '') || undefined,
+      whiteUsername: String(formData.get('whiteUsername') ?? ''),
+      blackUsername: String(formData.get('blackUsername') ?? ''),
+      result: String(formData.get('result') ?? '*') as '1-0' | '0-1' | '1/2-1/2' | '*',
+      playedAt: Number(formData.get('playedAt') ?? Date.now()),
+      opening: String(formData.get('opening') ?? '') || undefined,
+      timeControl: String(formData.get('timeControl') ?? '') || undefined,
+      pgn: String(formData.get('pgn') ?? ''),
+      playedAs: String(formData.get('playedAs') ?? 'white') as 'white' | 'black',
+      deviationKind: String(formData.get('deviationKind') ?? 'parse_error') as GameAnalysisRow['deviation']['kind'],
+      deviationMoveNumber: Number(formData.get('deviationMoveNumber') || '') || undefined,
+      deviationPly: Number(formData.get('deviationPly') || '') || undefined,
+      playedSan: String(formData.get('playedSan') ?? '') || undefined,
+      expectedSans: String(formData.get('expectedSans') ?? '')
+        ? String(formData.get('expectedSans')).split('\n')
+        : undefined,
+      deviationFen: String(formData.get('deviationFen') ?? '') || undefined,
+      totalPlies: Number(formData.get('totalPlies') ?? 0),
+    },
+    { token },
+  );
+  return { id: result.id };
+}
+
 export async function importAnalyzedGameToCourse(formData: FormData): Promise<{ courseId: string; chapterName: string }> {
   const token = await requireToken();
   const pgn = String(formData.get('pgn') ?? '').trim();
