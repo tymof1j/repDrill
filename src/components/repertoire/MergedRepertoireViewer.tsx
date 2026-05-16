@@ -48,6 +48,7 @@ type Props = {
 };
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
+const ARROW_BRUSHES = ['green', 'blue', 'red', 'yellow', 'paleGreen', 'paleBlue', 'paleRed'];
 
 export function MergedRepertoireViewer({
   repertoireId,
@@ -105,18 +106,34 @@ export function MergedRepertoireViewer({
   const hasConflict = repertoireOptions.length >= 2;
   const preferredMoveId = choiceByPosition.get(currentPositionId);
 
-  const orientation: 'white' | 'black' =
-    path.length === 0 ? 'white' : path[0].colorToMove === 'black' ? 'white' : 'black';
+  const availableSides = useMemo(() => {
+    const sides = new Set<'white' | 'black'>();
+    for (const m of moves) {
+      if (m.moveType === 'repertoire') sides.add(m.courseColor);
+    }
+    return Array.from(sides);
+  }, [moves]);
+
+  const [viewingSide, setViewingSide] = useState<'white' | 'black'>(() => {
+    const hasWhite = moves.some((m) => m.moveType === 'repertoire' && m.courseColor === 'white');
+    const hasBlack = moves.some((m) => m.moveType === 'repertoire' && m.courseColor === 'black');
+    if (hasBlack && !hasWhite) return 'black';
+    return 'white';
+  });
+
+  const hasBothSides = availableSides.includes('white') && availableSides.includes('black');
+
+  const orientation = viewingSide;
 
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
 
   const arrows = useMemo(() => {
     if (!showArrows || grouped.length <= 1) return [];
-    return grouped.map((g) => ({
+    return grouped.map((g, i) => ({
       orig: g.uci.slice(0, 2) as `${string}`,
       dest: g.uci.slice(2, 4) as `${string}`,
-      brush: g.moves.some((m) => m.moveType === 'repertoire') ? 'green' : 'blue',
+      brush: ARROW_BRUSHES[i % ARROW_BRUSHES.length],
     }));
   }, [showArrows, grouped]);
 
@@ -176,6 +193,35 @@ export function MergedRepertoireViewer({
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">
               {path.length === 0 ? 'starting' : `${path.length} ply deep`}
             </p>
+            {hasBothSides && (
+              <div className="flex items-baseline gap-1 font-mono text-[10px] uppercase tracking-[0.18em]">
+                <button
+                  type="button"
+                  onClick={() => setViewingSide('white')}
+                  className={`transition-colors duration-200 ${
+                    viewingSide === 'white'
+                      ? 'font-semibold text-[color:var(--ink)]'
+                      : 'text-[color:var(--ink-faint)] hover:text-[color:var(--ink)]'
+                  }`}
+                  title="View white's moves"
+                >
+                  White
+                </button>
+                <span className="text-[color:var(--ink-ghost)]">/</span>
+                <button
+                  type="button"
+                  onClick={() => setViewingSide('black')}
+                  className={`transition-colors duration-200 ${
+                    viewingSide === 'black'
+                      ? 'font-semibold text-[color:var(--ink)]'
+                      : 'text-[color:var(--ink-faint)] hover:text-[color:var(--ink)]'
+                  }`}
+                  title="View black's moves"
+                >
+                  Black
+                </button>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setShowHighlights((s) => !s)}

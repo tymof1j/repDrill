@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import React, { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -182,21 +182,36 @@ export function AnalyzePanel({
     setActivePly(nextPly);
   };
 
+  // Keep refs updated each render so the effect below can read latest values
+  // without needing them as deps (which would cause race-condition loops).
+  const activeGameRef = useRef(activeGame);
+  activeGameRef.current = activeGame;
+  const activePlyRef = useRef(activePly);
+  activePlyRef.current = activePly;
+  const onOpenGameRef = useRef(onOpenGame);
+  onOpenGameRef.current = onOpenGame;
+
   useEffect(() => {
     if (!result || result.rows.length === 0) return;
     const gameParam = searchParams.get('game');
-    if (!gameParam) return;
+    if (!gameParam) {
+      // URL has no game → clear active game (handles back-button navigation)
+      if (activeGameRef.current !== null) setActiveGame(null);
+      return;
+    }
     const plyParam = parseInt(searchParams.get('ply') ?? '', 10);
     const found = result.rows.find((r) => `${r.source}:${r.gameId}` === gameParam);
     if (!found) return;
-    if (!activeGame || activeGame.gameId !== found.gameId || activeGame.source !== found.source) {
-      onOpenGame(found, Number.isFinite(plyParam) && plyParam >= 0 ? plyParam : undefined);
+    const ag = activeGameRef.current;
+    if (!ag || ag.gameId !== found.gameId || ag.source !== found.source) {
+      onOpenGameRef.current(found, Number.isFinite(plyParam) && plyParam >= 0 ? plyParam : undefined);
       return;
     }
-    if (Number.isFinite(plyParam) && plyParam >= 0 && plyParam !== activePly) {
+    // Only sync ply from URL when it genuinely differs (avoids reverting in-flight ply updates)
+    if (Number.isFinite(plyParam) && plyParam >= 0 && plyParam !== activePlyRef.current) {
       setActivePly(plyParam);
     }
-  }, [result, searchParams, activeGame, activePly]);
+  }, [result, searchParams]);
 
   if (activeGame) {
     const activeGameWithId = {
@@ -1021,7 +1036,7 @@ export function DeviationViewer({
             </div>
           )}
 
-          <MoveList plies={pliesState} ply={ply} setPly={setPly} deviationPly={game.deviation.deviationPly} />
+          <MoveList plies={pliesState} ply={ply} setPly={setPly} deviationPly={game.deviation.deviationPly} annotationsByPly={annotationsByPly} />
 
           {/* Annotation — wide screens only */}
           <section className="hidden md:block">
@@ -1121,17 +1136,31 @@ function MoveList({
   ply,
   setPly,
   deviationPly,
+  annotationsByPly,
 }: {
   plies: { san: string }[];
   ply: number;
   setPly: (p: number) => void;
   deviationPly?: number;
+  annotationsByPly?: Record<number, string>;
 }) {
+  const activeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    activeButtonRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [ply]);
+
   const tokens = plies.map((p, i) => {
     const moveNumber = Math.floor(i / 2) + 1;
     const isWhite = i % 2 === 0;
     const prefix = isWhite ? `${moveNumber}.` : '';
-    return { key: `${i}-${p.san}`, text: `${prefix}${p.san}`, ply: i + 1 };
+    const tokenPly = i + 1;
+    return {
+      key: `${i}-${p.san}`,
+      text: `${prefix}${p.san}`,
+      ply: tokenPly,
+      hasAnnotation: !!(annotationsByPly?.[tokenPly]),
+    };
   });
 
   return (
@@ -1146,8 +1175,10 @@ function MoveList({
           {tokens.map((t) => (
             <PlyButton
               key={t.key}
+              ref={ply === t.ply ? activeButtonRef : undefined}
               active={ply === t.ply}
               deviation={t.ply === deviationPly}
+              hasAnnotation={t.hasAnnotation}
               onClick={() => setPly(t.ply)}
             >
               {t.text}
@@ -1159,19 +1190,19 @@ function MoveList({
   );
 }
 
-function PlyButton({
-  active,
-  deviation,
-  onClick,
-  children,
-}: {
-  active?: boolean;
-  deviation?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+const PlyButton = React.forwardRef<
+  HTMLButtonElement,
+  {
+    active?: boolean;
+    deviation?: boolean;
+    hasAnnotation?: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+  }
+>(function PlyButton({ active, deviation, hasAnnotation, onClick, children }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className={`rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 ${
@@ -1179,10 +1210,12 @@ function PlyButton({
           ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]'
           : deviation
             ? 'bg-transparent text-[color:var(--margin-red)] hover:bg-[color:var(--paper-edge)]'
-            : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
+            : hasAnnotation
+              ? 'bg-[color:var(--library-green)]/15 text-[color:var(--library-green)] hover:bg-[color:var(--library-green)]/25'
+              : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'
       }`}
     >
       {children}
     </button>
   );
-}
+});
