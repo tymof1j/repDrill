@@ -68,10 +68,26 @@ export default defineSchema({
   chapters: defineTable({
     courseId: v.id("courses"),
     name: v.string(),
+    chapterType: v.optional(v.union(v.literal("training"), v.literal("info_only"))),
     sortOrder: v.number(),
     description: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_course", ["courseId"]),
+
+  chapterLineSettings: defineTable({
+    chapterId: v.id("chapters"),
+    lineKey: v.string(),
+    infoOnly: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_chapter_and_line_key", ["chapterId", "lineKey"]).index("by_chapter", ["chapterId"]),
+
+  infoLineViews: defineTable({
+    userId: v.id("users"),
+    chapterId: v.id("chapters"),
+    lineKey: v.string(),
+    viewedAt: v.number(),
+  }).index("by_user_and_chapter_and_line_key", ["userId", "chapterId", "lineKey"]).index("by_user", ["userId"]),
 
   repertoires: defineTable({
     userId: v.id("users"),

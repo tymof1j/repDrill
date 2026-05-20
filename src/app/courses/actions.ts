@@ -8,6 +8,29 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { parsePgn } from '@/lib/chess/pgn-parser';
 import { buildTree } from '@/lib/chess/tree';
+import type { PgnMoveNode } from '@/lib/chess/pgn-parser';
+
+const INFO_HINT_WORDS = ['idea', 'ideas', 'game', 'games'];
+
+function looksLikeInfoContent(value: string | undefined) {
+  if (!value) return false;
+  const lower = value.toLowerCase();
+  return INFO_HINT_WORDS.some((word) => lower.includes(word));
+}
+
+function filenameWithoutExt(name: string) {
+  return name.replace(/\.[^.]+$/, '').trim();
+}
+
+function gameContainsInfoHints(nodes: PgnMoveNode[]): boolean {
+  for (const node of nodes) {
+    if (looksLikeInfoContent(node.comment)) return true;
+    for (const variation of node.variations) {
+      if (gameContainsInfoHints(variation)) return true;
+    }
+  }
+  return false;
+}
 
 async function requireToken() {
   const token = await convexAuthNextjsToken();
@@ -43,6 +66,11 @@ export async function importPgnAction(formData: FormData): Promise<void> {
   const token = await requireToken();
   const courseId = String(formData.get('courseId') ?? '') as Id<"courses">;
   const pgnText = String(formData.get('pgn') ?? '').trim();
+  const sourceFiles = String(formData.get('sourceFiles') ?? '')
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const fallbackFilename = sourceFiles.length === 1 ? filenameWithoutExt(sourceFiles[0]) : '';
   if (!courseId) throw new Error('Missing courseId');
   if (!pgnText) throw new Error('Paste a PGN');
 
@@ -53,11 +81,19 @@ export async function importPgnAction(formData: FormData): Promise<void> {
   if (games.length === 0) throw new Error('No games found in PGN');
 
   for (const [i, game] of games.entries()) {
-    const chapterName =
+    const chapterNameFromHeaders =
       game.headers.ChapterName ||
       game.headers.Event ||
-      game.headers.White ||
-      `Chapter ${i + 1}`;
+      game.headers.White;
+    const chapterName =
+      chapterNameFromHeaders && chapterNameFromHeaders !== '?'
+        ? chapterNameFromHeaders
+        : fallbackFilename || `Chapter ${i + 1}`;
+    const chapterType = looksLikeInfoContent(fallbackFilename) ||
+      Object.values(game.headers).some((value) => looksLikeInfoContent(value))
+      || gameContainsInfoHints(game.moves)
+      ? 'info_only'
+      : 'training';
 
     const tree = buildTree(game);
     await fetchMutation(
@@ -65,6 +101,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
       {
         courseId,
         chapterName,
+        chapterType,
         sortOrder: i,
         courseColor: course.color,
         rootFen: tree.rootFen,
@@ -116,6 +153,29 @@ export async function deleteChapterAction(formData: FormData): Promise<void> {
   if (!id) throw new Error('Missing id');
 
   await fetchMutation(api.courses.deleteChapter, { id }, { token });
+  revalidatePath(`/courses/${courseId}`);
+}
+
+export async function setChapterTypeAction(formData: FormData): Promise<void> {
+  const token = await requireToken();
+  const id = String(formData.get('id') ?? '') as Id<"chapters">;
+  const courseId = String(formData.get('courseId') ?? '');
+  const chapterType = String(formData.get('chapterType') ?? '') as 'training' | 'info_only';
+  if (!id || (chapterType !== 'training' && chapterType !== 'info_only')) throw new Error('Missing id or chapterType');
+
+  await fetchMutation(api.courses.setChapterType, { id, chapterType }, { token });
+  revalidatePath(`/courses/${courseId}`);
+}
+
+export async function setLineInfoOnlyAction(formData: FormData): Promise<void> {
+  const token = await requireToken();
+  const courseId = String(formData.get('courseId') ?? '');
+  const chapterId = String(formData.get('chapterId') ?? '') as Id<"chapters">;
+  const lineIndex = Number(formData.get('lineIndex') ?? -1);
+  const infoOnly = String(formData.get('infoOnly') ?? '') === 'true';
+  if (!chapterId || !Number.isFinite(lineIndex) || lineIndex < 0) throw new Error('Invalid line target');
+
+  await fetchMutation(api.courses.setLineInfoOnly, { chapterId, lineIndex, infoOnly }, { token });
   revalidatePath(`/courses/${courseId}`);
 }
 

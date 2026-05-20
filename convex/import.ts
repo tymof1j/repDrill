@@ -11,6 +11,7 @@ type ImportedBundle = {
     description?: string | null;
     chapters?: Array<{
       name?: string;
+      chapterType?: "training" | "info_only";
       sortOrder?: number;
       description?: string | null;
       moves?: Array<{
@@ -38,6 +39,7 @@ export const importTreeIntoChapter = mutation({
   args: {
     courseId: v.id("courses"),
     chapterName: v.string(),
+    chapterType: v.optional(v.union(v.literal("training"), v.literal("info_only"))),
     sortOrder: v.number(),
     courseColor: v.union(v.literal("white"), v.literal("black")),
     rootFen: v.string(),
@@ -66,6 +68,7 @@ export const importTreeIntoChapter = mutation({
     const chapterId = await ctx.db.insert("chapters", {
       courseId: args.courseId,
       name: args.chapterName,
+      chapterType: args.chapterType ?? "training",
       sortOrder: args.sortOrder,
       createdAt: Date.now(),
     });
@@ -259,6 +262,7 @@ export const importBundle = mutation({
         const chapterId = await ctx.db.insert("chapters", {
           courseId,
           name: chapter.name || `Chapter ${chapterIndex + 1}`,
+          chapterType: chapter.chapterType ?? "training",
           sortOrder: chapter.sortOrder ?? chapterIndex,
           description: chapter.description ?? undefined,
           createdAt: now,

@@ -22,6 +22,8 @@ import {
   renameChapterAction,
   deleteChapterAction,
   updateAnnotationAction,
+  setChapterTypeAction,
+  setLineInfoOnlyAction,
 } from '../actions';
 import { ShareDialog } from '@/components/share/ShareDialog';
 
@@ -34,7 +36,7 @@ type Props = {
     isPublic: boolean;
     shareToken: string | null;
   };
-  chapters: { id: string; name: string }[];
+  chapters: { id: string; name: string; chapterType: 'training' | 'info_only' }[];
   rootPositionId: string;
   positions: ViewerPosition[];
   moves: ViewerMove[];
@@ -42,8 +44,9 @@ type Props = {
     chapterId: string;
     lineIndex: number;
     grade: 'A' | 'B' | 'C' | 'D' | 'N';
-    category: 'new' | 'learning' | 'review' | 'due' | 'mastered';
+    category: 'new' | 'learning' | 'review' | 'due' | 'mastered' | 'info';
     nextReviewAt: number | null;
+    isInfoOnly: boolean;
   }[];
 };
 
@@ -234,6 +237,27 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     });
   };
 
+  const handleSetChapterType = (chapterId: string, chapterType: 'training' | 'info_only') => {
+    const fd = new FormData();
+    fd.set('id', chapterId);
+    fd.set('courseId', course.id);
+    fd.set('chapterType', chapterType);
+    startTransition(() => {
+      void setChapterTypeAction(fd);
+    });
+  };
+
+  const handleSetLineInfoOnly = (chapterId: string, lineIndex: number, infoOnly: boolean) => {
+    const fd = new FormData();
+    fd.set('courseId', course.id);
+    fd.set('chapterId', chapterId);
+    fd.set('lineIndex', String(lineIndex));
+    fd.set('infoOnly', infoOnly ? 'true' : 'false');
+    startTransition(() => {
+      void setLineInfoOnlyAction(fd);
+    });
+  };
+
   return (
     <AppSurface>
       <BackLink href="/courses">Courses</BackLink>
@@ -395,6 +419,12 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                             </span>
                           </button>
                           <div className="flex items-center gap-3">
+                            <GhostButton
+                              onClick={() => handleSetChapterType(ch.id, ch.chapterType === 'info_only' ? 'training' : 'info_only')}
+                              disabled={pending}
+                            >
+                              {ch.chapterType === 'info_only' ? 'Set training' : 'Set info-only'}
+                            </GhostButton>
                             <GhostButton onClick={() => startChapterRename(ch)}>Rename</GhostButton>
                             <GhostButton onClick={() => handleDeleteChapter(ch.id)} disabled={pending}>
                               Delete
@@ -444,6 +474,17 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                                       </span>
                                     </span>
                                   )}
+                                  <span className="ml-2">
+                                    <GhostButton
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSetLineInfoOnly(ch.id, lIdx, !status?.isInfoOnly);
+                                      }}
+                                      disabled={pending}
+                                    >
+                                      {status?.isInfoOnly ? 'Set training' : 'Set info-only'}
+                                    </GhostButton>
+                                  </span>
                                 </button>
                               </li>
                             )})}

@@ -29,6 +29,8 @@ import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { normalizeNotation } from '@/lib/chess/notation';
+import { getMoveSound } from '@/lib/preferences';
+import { playMoveSound } from '@/lib/sound/moveSound';
 
 type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 type LinePhase = 'browse' | 'drill' | 'line-done';
@@ -70,6 +72,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   const [queuedPremove, setQueuedPremove] = useState<{ from: string; to: string } | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
   const submitRatings = useMutation(api.training.submitLineRatings);
+  const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
 
   const [sessionStats, setSessionStats] = useState({
     linesCompleted: 0,
@@ -116,7 +119,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     setNeedsManualNext(false);
     setTracePreviewIndex(null);
     setQueuedPremove(null);
-    setLinePhase(line.isNew ? 'browse' : 'drill');
+    setLinePhase(line.isInfoOnly || line.isNew ? 'browse' : 'drill');
   }, [line, lineIndex]);
 
   useEffect(() => {
@@ -178,6 +181,12 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     if (linePhase !== 'line-done' || lineSaving || lineSaved) return;
     setLineSaving(true);
     void (async () => {
+      if (line?.isInfoOnly) {
+        await markInfoLineViewed({
+          chapterId: line.chapterId as Id<'chapters'>,
+          lineKey: line.lineKey,
+        }).catch(() => undefined);
+      }
       if (lineResults.length > 0) {
         await submitRatings({
           results: lineResults.map((r) => ({
@@ -196,7 +205,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
       setLineSaved(true);
       setLineSaving(false);
     })();
-  }, [linePhase, lineSaving, lineSaved, lineResults, submitRatings, lineCorrect, lineWrong]);
+  }, [linePhase, lineSaving, lineSaved, lineResults, submitRatings, lineCorrect, lineWrong, line, markInfoLineViewed]);
 
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
@@ -205,6 +214,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
         const chess = new Chess(step.parentFen + ' 0 1');
         const result = chess.move({ from, to, promotion: promotion ?? 'q' });
         if (!result) return;
+        playMoveSound(getMoveSound());
 
         const playedUci = from + to + (result.promotion ?? '');
         const correct = playedUci === step.uci || result.san === step.san;
@@ -300,7 +310,11 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   }, [step, waitingForUser, linePhase]);
 
   const startDrilling = useCallback(() => {
-    if (!line || userStepIndexes.length === 0) return;
+    if (!line) return;
+    if (line.isInfoOnly || userStepIndexes.length === 0) {
+      setLinePhase('line-done');
+      return;
+    }
     setLinePhase('drill');
     setDrillRun(1);
     setQuestionIndex(0);

@@ -21,6 +21,11 @@ const advantages = [
       'RepDrill stores learning around board positions, not only around a single move-order path. If a Catalan, Queen\'s Gambit, or Grunfeld line reaches the same FEN through a transposition, the note and review context stay attached to that position.',
   },
   {
+    title: 'Smart PGN chapter naming and info-only lines',
+    body:
+      'When a PGN includes useful chapter metadata (for example ChapterName/Event), RepDrill uses it. If metadata is missing (like "?" tags), single-file imports fall back to the uploaded filename. Chapters/lines that look informational ("ideas", "games") can be auto-marked or manually marked as info-only: they stay viewable everywhere, appear once in Learn, and are excluded from FSRS memorization scheduling.',
+  },
+  {
     title: 'FSRS review instead of fixed repetition',
     body:
       'Training uses the Free Spaced Repetition Scheduler through ts-fsrs. Each answer updates stability and difficulty, so daily practice focuses on weak positions instead of making you replay every line in a course.',

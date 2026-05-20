@@ -24,6 +24,18 @@ For hosted data, point the app at a Convex deployment with `NEXT_PUBLIC_CONVEX_U
 - **Analyze** — review your recent games against your prep and flag departures.
 - **FAQ** — `/documentation` (shortcuts, notation spec, why FSRS, why spaced repetition).
 
+## PGN import behavior
+
+- If a PGN game has a meaningful `ChapterName` or `Event`, RepDrill uses it as the chapter name.
+- If headers are missing/placeholder (for example `?`), and you imported a single file, RepDrill falls back to the uploaded filename (without `.pgn`).
+- RepDrill auto-detects informational content and marks chapters as `info-only` when it finds `idea/ideas/game/games` in:
+  - the filename,
+  - PGN headers,
+  - or PGN comments.
+- `Info-only` chapters/lines are viewable everywhere (course viewer, repertoire viewer, and Learn), but they are not scheduled for memorization via FSRS.
+- In Learn, an `info-only` line is shown once and then marked as viewed.
+- You can manually switch both chapter type and individual line type between `training` and `info-only` in the course detail UI.
+
 ## Chess-board-recognition (planned)
 
 Main product wish: import tactics directly from chess books (PDF page ranges), with screenshot import as a stepping stone while the PDF pipeline matures.

@@ -273,6 +273,110 @@ export const deleteChapter = mutation({
   },
 });
 
+function buildLineKey(moves: Doc<"moves">[]) {
+  return moves.map((move) => move.uci).join(" ");
+}
+
+export const setChapterType = mutation({
+  args: {
+    id: v.id("chapters"),
+    chapterType: v.union(v.literal("training"), v.literal("info_only")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const chapter = await ctx.db.get(args.id);
+    if (!chapter) throw new Error("Not found");
+    const course = await ctx.db.get(chapter.courseId);
+    if (!course || course.userId !== userId) throw new Error("Not found");
+    await ctx.db.patch(args.id, { chapterType: args.chapterType });
+  },
+});
+
+export const setLineInfoOnly = mutation({
+  args: {
+    chapterId: v.id("chapters"),
+    lineIndex: v.number(),
+    infoOnly: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const chapter = await ctx.db.get(args.chapterId);
+    if (!chapter) throw new Error("Not found");
+    const course = await ctx.db.get(chapter.courseId);
+    if (!course || course.userId !== userId) throw new Error("Not found");
+
+    const moves = await ctx.db
+      .query("moves")
+      .withIndex("by_chapter", (q) => q.eq("chapterId", args.chapterId))
+      .collect();
+    moves.sort((a, b) => Number(b.isMainLine) - Number(a.isMainLine) || a.sortOrder - b.sortOrder);
+
+    const root = await ctx.db
+      .query("positions")
+      .withIndex("by_user_fen", (q) =>
+        q.eq("userId", course.userId).eq("fen", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -"),
+      )
+      .first();
+    if (!root) throw new Error("Root position not found");
+
+    const byParent = new Map<string, Doc<"moves">[]>();
+    for (const move of moves) {
+      const siblings = byParent.get(move.parentPositionId as string) ?? [];
+      siblings.push(move);
+      byParent.set(move.parentPositionId as string, siblings);
+    }
+    for (const siblings of byParent.values()) {
+      siblings.sort((a, b) => Number(b.isMainLine) - Number(a.isMainLine) || a.sortOrder - b.sortOrder);
+    }
+
+    const lines: Doc<"moves">[][] = [];
+    const onPath = new Set<string>();
+    const walk = (positionId: string, path: Doc<"moves">[]) => {
+      if (onPath.has(positionId)) {
+        if (path.length > 0) lines.push([...path]);
+        return;
+      }
+      onPath.add(positionId);
+      const children = byParent.get(positionId) ?? [];
+      if (children.length === 0) {
+        if (path.length > 0) lines.push([...path]);
+        onPath.delete(positionId);
+        return;
+      }
+      for (const child of children) {
+        path.push(child);
+        walk(child.childPositionId as string, path);
+        path.pop();
+      }
+      onPath.delete(positionId);
+    };
+    walk(root._id as string, []);
+
+    const target = lines[args.lineIndex];
+    if (!target || target.length === 0) throw new Error("Line not found");
+    const lineKey = buildLineKey(target);
+
+    const existing = await ctx.db
+      .query("chapterLineSettings")
+      .withIndex("by_chapter_and_line_key", (q) => q.eq("chapterId", args.chapterId).eq("lineKey", lineKey))
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { infoOnly: args.infoOnly, updatedAt: Date.now() });
+      return;
+    }
+    await ctx.db.insert("chapterLineSettings", {
+      chapterId: args.chapterId,
+      lineKey,
+      infoOnly: args.infoOnly,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const setSharing = mutation({
   args: {
     courseId: v.id("courses"),

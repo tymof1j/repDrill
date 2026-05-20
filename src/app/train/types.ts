@@ -15,10 +15,13 @@ export type LineStep = {
 
 export type TrainingLine = {
   lineId: string;
+  chapterId: string;
+  lineKey: string;
   courseName: string;
   courseColor: 'white' | 'black';
   chapterName: string;
   steps: LineStep[];
   isNew: boolean;
   dueCount: number;
+  isInfoOnly: boolean;
 };

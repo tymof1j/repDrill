@@ -82,12 +82,16 @@ export const ensureCards = mutation({
     if (trainableCourses.length === 0) return 0;
 
     const allChapterIds: Id<"chapters">[] = [];
+    const chapterTypeById = new Map<string, Doc<"chapters">["chapterType"]>();
     for (const { course } of trainableCourses) {
       const chapters = await ctx.db
         .query("chapters")
         .withIndex("by_course", (q) => q.eq("courseId", course._id))
         .collect();
       allChapterIds.push(...chapters.map((c) => c._id));
+      for (const chapter of chapters) {
+        chapterTypeById.set(chapter._id as string, chapter.chapterType);
+      }
     }
     if (allChapterIds.length === 0) return 0;
 
@@ -97,6 +101,7 @@ export const ensureCards = mutation({
         .query("moves")
         .withIndex("by_chapter", (q) => q.eq("chapterId", chId))
         .collect();
+      if (chapterTypeById.get(chId as string) === "info_only") continue;
       for (const m of chMoves) {
         if (m.moveType === "repertoire") repertoireMoveIds.push(m._id);
       }
@@ -149,20 +154,24 @@ export type LineStep = {
 
 export type TrainingLine = {
   lineId: string;
+  chapterId: string;
+  lineKey: string;
   courseName: string;
   courseColor: "white" | "black";
   chapterName: string;
   steps: LineStep[];
   isNew: boolean;
   dueCount: number;
+  isInfoOnly: boolean;
 };
 
 export type CourseLineStatus = {
   chapterId: string;
   lineIndex: number;
   grade: "A" | "B" | "C" | "D" | "N";
-  category: "new" | "learning" | "review" | "due" | "mastered";
+  category: "new" | "learning" | "review" | "due" | "mastered" | "info";
   nextReviewAt: number | null;
+  isInfoOnly: boolean;
 };
 
 const ROOT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
@@ -236,10 +245,23 @@ export const getTrainingLines = query({
       .query("reviewCards")
       .withIndex("by_user_due", (q) => q.eq("userId", userId))
       .collect();
+    const chapterLineSettings = await ctx.db
+      .query("chapterLineSettings")
+      .collect();
+    const lineSettingByChapterAndKey = new Map(
+      chapterLineSettings.map((row) => [`${row.chapterId as string}:${row.lineKey}`, row.infoOnly]),
+    );
     const cardByMoveId = new Map(allCards.map((c) => [c.moveId as string, c]));
 
     const chapById = new Map(allChapters.map((c) => [c._id as string, c]));
     const courseById = new Map(userCourses.map((c) => [c._id as string, c]));
+    const infoLineViews = await ctx.db
+      .query("infoLineViews")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const viewedInfoLineKeys = new Set(
+      infoLineViews.map((row) => `${row.chapterId as string}:${row.lineKey}`),
+    );
 
     const rootPos = allPositions.find((p) => p.fen === ROOT_FEN);
     if (!rootPos)
@@ -339,7 +361,11 @@ export const getTrainingLines = query({
           if (startIdx === -1) continue;
           steps = rawSteps.slice(startIdx);
         }
-        if (!steps.some((s) => s.isUserMove)) continue;
+        const lineKey = steps.map((s) => s.uci).join(" ");
+        const lineSettingKey = `${chapterId}:${lineKey}`;
+        const lineIsInfoOnly =
+          chapter.chapterType === "info_only" || lineSettingByChapterAndKey.get(lineSettingKey) === true;
+        if (!steps.some((s) => s.isUserMove) && !lineIsInfoOnly) continue;
 
         const lineIsNew = steps.some((s) => s.isNew);
         const lineDueCount = steps.filter((s) => {
@@ -352,16 +378,21 @@ export const getTrainingLines = query({
         if (lineIsNew) newLinesCount++;
         if (lineDueCount > 0 || lineIsNew) dueLines++;
 
-        if (!args.fromPositionId && lineDueCount === 0 && !lineIsNew) continue;
+        const infoLineAlreadyViewed = viewedInfoLineKeys.has(lineSettingKey);
+        if (lineIsInfoOnly && infoLineAlreadyViewed) continue;
+        if (!lineIsInfoOnly && !args.fromPositionId && lineDueCount === 0 && !lineIsNew) continue;
 
         allExtracted.push({
           lineId: `${chapterId}-${i}`,
+          chapterId,
+          lineKey,
           courseName: course.name,
           courseColor: course.color,
           chapterName: chapter.name,
           steps,
-          isNew: lineIsNew,
-          dueCount: lineDueCount,
+          isNew: lineIsInfoOnly ? false : lineIsNew,
+          dueCount: lineIsInfoOnly ? 0 : lineDueCount,
+          isInfoOnly: lineIsInfoOnly,
         });
       }
     }
@@ -418,6 +449,12 @@ export const getCourseLineStatuses = query({
       .query("reviewCards")
       .withIndex("by_user_due", (q) => q.eq("userId", userId))
       .collect();
+    const chapterLineSettings = await ctx.db
+      .query("chapterLineSettings")
+      .collect();
+    const lineSettingByChapterAndKey = new Map(
+      chapterLineSettings.map((row) => [`${row.chapterId as string}:${row.lineKey}`, row.infoOnly]),
+    );
     const cardByMoveId = new Map(allCards.map((c) => [c.moveId as string, c]));
     const now = Date.now();
 
@@ -471,6 +508,21 @@ export const getCourseLineStatuses = query({
 
       lines.forEach((line, lineIndex) => {
         const repMoves = line.moves.filter((move) => move.moveType === "repertoire");
+        const lineKey = line.moves.map((move) => move.uci).join(" ");
+        const isInfoOnly =
+          chaptersInCourse.find((ch) => (ch._id as string) === chapterId)?.chapterType === "info_only" ||
+          lineSettingByChapterAndKey.get(`${chapterId}:${lineKey}`) === true;
+        if (isInfoOnly) {
+          result.push({
+            chapterId,
+            lineIndex,
+            grade: "N",
+            category: "info",
+            nextReviewAt: null,
+            isInfoOnly: true,
+          });
+          return;
+        }
         const cards = repMoves
           .map((move) => cardByMoveId.get(move._id as string))
           .filter(Boolean) as Doc<"reviewCards">[];
@@ -481,6 +533,7 @@ export const getCourseLineStatuses = query({
             grade: "N",
             category: "new",
             nextReviewAt: null,
+            isInfoOnly: false,
           });
           return;
         }
@@ -502,6 +555,7 @@ export const getCourseLineStatuses = query({
           grade,
           category,
           nextReviewAt: Number.isFinite(minDue) ? minDue : null,
+          isInfoOnly: false,
         });
       });
     }
@@ -710,6 +764,33 @@ export const submitLineRatings = mutation({
         prevState: card.state,
       });
     }
+  },
+});
+
+export const markInfoLineViewed = mutation({
+  args: {
+    chapterId: v.id("chapters"),
+    lineKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const existing = await ctx.db
+      .query("infoLineViews")
+      .withIndex("by_user_and_chapter_and_line_key", (q) =>
+        q.eq("userId", userId).eq("chapterId", args.chapterId).eq("lineKey", args.lineKey),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, { viewedAt: Date.now() });
+      return;
+    }
+    await ctx.db.insert("infoLineViews", {
+      userId,
+      chapterId: args.chapterId,
+      lineKey: args.lineKey,
+      viewedAt: Date.now(),
+    });
   },
 });
 

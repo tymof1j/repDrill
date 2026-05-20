@@ -11,12 +11,15 @@ import {
 
 export function PgnImportForm({ courseId }: { courseId: string }) {
   const [pgn, setPgn] = useState('');
+  const [sourceFiles, setSourceFiles] = useState('');
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = async (files: FileList | File[]) => {
-    const texts = await Promise.all(Array.from(files).map((f) => f.text()));
+    const allFiles = Array.from(files);
+    const texts = await Promise.all(allFiles.map((f) => f.text()));
     setPgn(texts.join('\n\n'));
+    setSourceFiles(allFiles.map((f) => f.name).join('\n'));
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -35,6 +38,7 @@ export function PgnImportForm({ courseId }: { courseId: string }) {
       className="max-w-4xl space-y-8 border-y border-[color:var(--paper-edge)] py-8"
     >
       <input type="hidden" name="courseId" value={courseId} />
+      <input type="hidden" name="sourceFiles" value={sourceFiles} />
 
       <div
         onDragOver={(e) => {
