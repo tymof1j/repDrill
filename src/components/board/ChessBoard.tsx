@@ -68,34 +68,45 @@ function buildConfig(props: {
   onPremoveSet?: Props['onPremoveSet'];
 }): Config {
   const turnColor = props.fen.split(/\s+/)[1] === 'b' ? 'black' : 'white';
+  const canMove = !props.viewOnly;
   const config: Config = {
     fen: props.fen,
     orientation: props.orientation,
     turnColor,
-    viewOnly: props.viewOnly,
+    viewOnly: false,
+    disableContextMenu: true,
     coordinates: true,
     animation: { enabled: false, duration: 0 },
     lastMove: props.lastMove as Key[] | undefined,
     drawable: {
       enabled: true,
+      eraseOnClick: true,
+      defaultSnapToValidMove: false,
       autoShapes: buildAutoShapes(props.arrows, props.squareMarks),
     },
     movable: {
       free: false,
-      color: props.movable?.color ?? undefined,
-      dests: props.movable?.dests as Map<Key, Key[]> | undefined,
-      showDests: props.movable?.showDests ?? true,
+      color: canMove ? props.movable?.color ?? undefined : undefined,
+      dests: canMove ? props.movable?.dests as Map<Key, Key[]> | undefined : undefined,
+      showDests: canMove ? props.movable?.showDests ?? true : false,
     },
     premovable: {
-      enabled: props.premovable?.enabled ?? true,
-      events: props.onPremoveSet
+      enabled: canMove ? props.premovable?.enabled ?? true : false,
+      events: canMove && props.onPremoveSet
         ? {
             set: (orig, dest) => props.onPremoveSet?.(orig as string, dest as string),
           }
         : undefined,
     },
+    draggable: {
+      enabled: canMove,
+      showGhost: canMove,
+    },
+    selectable: {
+      enabled: canMove,
+    },
   };
-  if (props.onMove) {
+  if (canMove && props.onMove) {
     config.events = {
       move: (orig, dest, captured) =>
         props.onMove!(orig as string, dest as string, captured),
@@ -120,6 +131,7 @@ export function ChessBoard({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<Api | null>(null);
   const onMoveRef = useRef<Props['onMove']>(onMove);
+  const previousFenRef = useRef(fen);
 
   useEffect(() => {
     onMoveRef.current = onMove;
@@ -143,6 +155,7 @@ export function ChessBoard({
 
     const ro = new ResizeObserver(() => apiRef.current?.redrawAll());
     ro.observe(containerRef.current);
+    previousFenRef.current = fen;
 
     return () => {
       ro.disconnect();
@@ -154,31 +167,44 @@ export function ChessBoard({
 
   useEffect(() => {
     if (!apiRef.current) return;
+    const fenChanged = previousFenRef.current !== fen;
     apiRef.current.set({
-      fen,
+      ...(fenChanged ? { fen } : {}),
       orientation,
-      turnColor: fen.split(/\s+/)[1] === 'b' ? 'black' : 'white',
-      viewOnly,
+      ...(fenChanged ? { turnColor: fen.split(/\s+/)[1] === 'b' ? 'black' : 'white' } : {}),
+      viewOnly: false,
+      disableContextMenu: true,
       animation: { enabled: false, duration: 0 },
       lastMove: lastMove as Key[] | undefined,
       drawable: {
+        enabled: true,
+        eraseOnClick: true,
+        defaultSnapToValidMove: false,
         autoShapes: buildAutoShapes(arrows, squareMarks),
       },
       movable: {
         free: false,
-        color: movable?.color ?? undefined,
-        dests: movable?.dests as Map<Key, Key[]> | undefined,
-        showDests: movable?.showDests ?? true,
+        color: !viewOnly ? movable?.color ?? undefined : undefined,
+        dests: !viewOnly ? movable?.dests as Map<Key, Key[]> | undefined : undefined,
+        showDests: !viewOnly ? movable?.showDests ?? true : false,
       },
       premovable: {
-        enabled: premovable?.enabled ?? true,
-        events: onPremoveSet
+        enabled: !viewOnly ? premovable?.enabled ?? true : false,
+        events: !viewOnly && onPremoveSet
           ? {
               set: (orig, dest) => onPremoveSet(orig as string, dest as string),
             }
           : undefined,
       },
+      draggable: {
+        enabled: !viewOnly,
+        showGhost: !viewOnly,
+      },
+      selectable: {
+        enabled: !viewOnly,
+      },
     });
+    previousFenRef.current = fen;
     apiRef.current.playPremove();
   }, [fen, orientation, viewOnly, lastMove, arrows, squareMarks, movable, premovable, onPremoveSet]);
 
@@ -187,7 +213,11 @@ export function ChessBoard({
       className="relative mx-auto aspect-square w-full max-w-none"
       style={size ? { width: `${size}px` } : undefined}
     >
-      <div ref={containerRef} className="cg-wrap h-full w-full" />
+      <div
+        ref={containerRef}
+        className="cg-wrap h-full w-full"
+        data-board-view-only={viewOnly ? 'true' : undefined}
+      />
     </div>
   );
 }
