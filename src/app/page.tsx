@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { isAuthenticatedNextjs } from "@convex-dev/auth/nextjs/server";
+import { redirect } from 'next/navigation';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LandingReveal } from '@/components/landing/LandingReveal';
 
@@ -202,8 +203,9 @@ const reviewRows = [
 
 export default async function Home() {
   const isLoggedIn = await isAuthenticatedNextjs();
-  const ctaHref = isLoggedIn ? '/courses' : '/login';
-  const ctaLabel = isLoggedIn ? 'Open library' : 'Start studying';
+  if (isLoggedIn) redirect('/courses');
+  const ctaHref = '/login';
+  const ctaLabel = 'Start studying';
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[color:var(--paper)] text-[color:var(--ink)]">
