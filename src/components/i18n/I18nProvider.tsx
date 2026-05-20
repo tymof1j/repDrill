@@ -100,7 +100,22 @@ export function I18nProvider({
   }, []);
 
   useEffect(() => {
-    applyLanguage(language, originals.current);
+    let frame = 0;
+    let secondFrame = 0;
+    let timer = 0;
+
+    const scheduleApply = (delay = 0) => {
+      window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(secondFrame);
+      timer = window.setTimeout(() => {
+        frame = window.requestAnimationFrame(() => {
+          secondFrame = window.requestAnimationFrame(() => applyLanguage(language, originals.current));
+        });
+      }, delay);
+    };
+
+    scheduleApply();
     persistLanguage(language);
 
     window.setRepDrillLanguage = (next) => setLanguage(normalizeLanguage(next));
@@ -110,16 +125,16 @@ export function I18nProvider({
     };
     window.addEventListener('repdrill-language', onLanguage);
 
-    let frame = 0;
     const observer = new MutationObserver(() => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => applyLanguage(language, originals.current));
+      scheduleApply(120);
     });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       observer.disconnect();
+      window.clearTimeout(timer);
       window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(secondFrame);
       window.removeEventListener('repdrill-language', onLanguage);
     };
   }, [language]);

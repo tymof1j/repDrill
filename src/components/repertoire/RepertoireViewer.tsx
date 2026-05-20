@@ -13,6 +13,15 @@ import {
   fieldClassName,
 } from '@/components/ui/Premium';
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
+import {
+  type ArrowTheme,
+  PREFERENCES_EVENT,
+  getArrowBrushes,
+  getBoardBrushes,
+  getArrowTheme,
+  getHintBrush,
+  normalizeArrowTheme,
+} from '@/lib/preferences';
 
 export type ViewerMove = {
   id: string;
@@ -87,6 +96,7 @@ export function RepertoireViewer({
 
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
+  const [arrowTheme, setArrowTheme] = useState<ArrowTheme>(() => getArrowTheme());
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -101,18 +111,28 @@ export function RepertoireViewer({
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const prefHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ arrowTheme?: string }>).detail;
+      setArrowTheme(normalizeArrowTheme(detail?.arrowTheme ?? getArrowTheme()));
+    };
+    window.addEventListener(PREFERENCES_EVENT, prefHandler as EventListener);
+    window.addEventListener('storage', prefHandler as EventListener);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener(PREFERENCES_EVENT, prefHandler as EventListener);
+      window.removeEventListener('storage', prefHandler as EventListener);
+    };
   }, []);
 
   const arrows: BoardArrow[] = useMemo(() => {
     if (!showArrows || nextMoves.length <= 1) return [];
-    const brushes = ['green', 'blue', 'red', 'yellow', 'paleGreen', 'paleBlue', 'paleRed'];
+    const brushes = getArrowBrushes(arrowTheme);
     return nextMoves.map((m, i) => ({
       orig: m.uci.slice(0, 2),
       dest: m.uci.slice(2, 4),
       brush: brushes[i % brushes.length],
     }));
-  }, [showArrows, nextMoves]);
+  }, [showArrows, nextMoves, arrowTheme]);
 
   // Highlight source squares of pieces with a continuation in the tree.
   // Shown only when:
@@ -132,10 +152,10 @@ export function RepertoireViewer({
       const orig = m.uci.slice(0, 2);
       if (seen.has(orig)) continue;
       seen.add(orig);
-      marks.push({ orig, brush: 'green' });
+      marks.push({ orig, brush: getHintBrush(arrowTheme) });
     }
     return marks;
-  }, [showHighlights, nextMoves, currentFen, repertoireColor]);
+  }, [showHighlights, nextMoves, currentFen, repertoireColor, arrowTheme]);
 
   const legalDests = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -165,7 +185,9 @@ export function RepertoireViewer({
       const result = chess.move({ from: orig, to: dest, promotion: 'q' });
       if (!result) return;
       const fallback = nextMoves.find((m) => m.san === result.san);
-      if (fallback) playMove(fallback);
+      if (fallback) {
+        playMove(fallback);
+      }
     } catch {
       // invalid local drag
     }
@@ -252,6 +274,7 @@ export function RepertoireViewer({
               lastMove={lastMove}
               arrows={arrows}
               squareMarks={movablePieceMarks}
+              brushes={getBoardBrushes(arrowTheme)}
               viewOnly={false}
               movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
               onMove={onBoardMove}

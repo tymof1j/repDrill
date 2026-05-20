@@ -25,6 +25,7 @@ Running list of fixes / improvements. Each entry: short title, description, stat
 - [ ] **Wrong teaching method** — current training/teaching method is wrong; revisit and fix (needs scoping).
 - [ ] **Parse `{bracket}` annotations into course content** — annotations inside `{...}` in PGN/lines should be parsed and surfaced in the course.
 - [ ] **Verify elastic search works** — confirm the elastic-search functionality is actually wired up and returning results.
+- [ ] **Reintroduce move sound (new implementation)** — previous move-sound approach was removed due to inconsistent playback in browsers. Re-add with a robust cross-browser strategy and clear UX verification.
 - [ ] **Highlights & arrows on the board (?)** — decide what to do; potentially add the ability to draw highlights/arrows on the board.
 - [ ] **Cache last 10 fetched games from API** — when games are pulled via API, cache the most recent 10 with timestamps ("last 10 games as of <time>") to avoid re-fetching.
 - [ ] **Train: choose all lines vs. specific repertoire** — in the Train view, let the user pick whether to drill across all lines or only a specific repertoire.

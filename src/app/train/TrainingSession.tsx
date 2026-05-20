@@ -29,8 +29,6 @@ import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { normalizeNotation } from '@/lib/chess/notation';
-import { getMoveSound } from '@/lib/preferences';
-import { playMoveSound } from '@/lib/sound/moveSound';
 
 type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 type LinePhase = 'browse' | 'drill' | 'line-done';
@@ -214,8 +212,6 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
         const chess = new Chess(step.parentFen + ' 0 1');
         const result = chess.move({ from, to, promotion: promotion ?? 'q' });
         if (!result) return;
-        playMoveSound(getMoveSound());
-
         const playedUci = from + to + (result.promotion ?? '');
         const correct = playedUci === step.uci || result.san === step.san;
         const responseTimeMs = Date.now() - moveStartTime;

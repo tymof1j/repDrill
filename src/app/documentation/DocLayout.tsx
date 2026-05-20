@@ -24,6 +24,17 @@ const DOC_SEARCH_INDEX = [
     ],
   },
   {
+    href: '/documentation/import-behavior',
+    page: 'Import behavior',
+    title: 'PGN naming and info-only mode',
+    snippets: [
+      'PGN chapter naming fallback ChapterName Event filename when headers are missing',
+      'info-only mode detection ideas games in filename headers comments',
+      'manual chapter line info-only toggle training scheduling',
+      'learn tab one-time view no FSRS memorization for info-only lines',
+    ],
+  },
+  {
     href: '/documentation/notation',
     page: 'Notation',
     title: 'Move notation',
@@ -133,6 +144,7 @@ const docNav = [
   {
     group: 'Topics',
     items: [
+      { href: '/documentation/import-behavior', label: 'PGN import behavior' },
       { href: '/documentation/notation', label: 'Move notation' },
       { href: '/documentation/spaced-repetition', label: 'Spaced repetition' },
       { href: '/documentation/fsrs', label: 'FSRS scheduler' },

@@ -121,6 +121,40 @@ export const ukTranslations: Record<string, string> = {
     'Convex робить робочий простір реактивним, а експорт PGN і JSON зберігає репертуар переносимим. Нотатки, історія повторень і спільні матеріали організовані навколо позицій.',
   'Real-time sync': 'Синхронізація',
   'JSON archive': 'JSON-архів',
+  'PGN import behavior': 'Поведінка імпорту PGN',
+  'PGN naming & info-only mode': 'Іменування PGN і режим info-only',
+  'How chapter names are chosen, how info-only lines are auto-detected, and how manual info-only overrides affect Learn vs FSRS.':
+    'Як обираються назви розділів, як авто-визначаються info-only лінії, і як ручні перемикачі info-only впливають на Learn та FSRS.',
+  'PGN naming and info-only mode': 'Іменування PGN і режим info-only',
+  'How chapter names are chosen during PGN import, detects info-only content, and handles info-only lines in Learn.':
+    'Як під час імпорту PGN обираються назви розділів, як визначається info-only контент і як обробляються info-only лінії в Learn.',
+  'Chapter naming': 'Іменування розділів',
+  'Info-only detection': 'Визначення info-only',
+  'How info-only differs': 'Чим відрізняється info-only',
+  'Manual override': 'Ручне перевизначення',
+  'This page explains exactly how chapter names are chosen during PGN import and how info-only chapters/lines behave in viewer and Learn flows.':
+    'Ця сторінка точно пояснює, як обираються назви розділів під час імпорту PGN і як info-only розділи/лінії поводяться у viewer та Learn.',
+  'Use ChapterName PGN header if present and not ?.': 'Використати заголовок PGN ChapterName, якщо він є і не дорівнює ?.',
+  'Otherwise use Event PGN header if present and not ?.': 'Інакше використати заголовок PGN Event, якщо він є і не дорівнює ?.',
+  'Otherwise use White PGN header if present and not ?.': 'Інакше використати заголовок PGN White, якщо він є і не дорівнює ?.',
+  'Otherwise, for single-file upload, use uploaded filename without extension (for example All Lines in One File.pgn → All Lines in One File).':
+    'Інакше, для завантаження одного файлу, використати назву файлу без розширення (наприклад All Lines in One File.pgn → All Lines in One File).',
+  'If none of the above are available, fallback to Chapter N.':
+    'Якщо нічого з цього немає, запасний варіант — Chapter N.',
+  'RepDrill auto-marks imported content as info-only if it sees any of these keywords:':
+    'RepDrill автоматично позначає імпортований контент як info-only, якщо бачить будь-яке з ключових слів:',
+  'Detection checks: uploaded filename, PGN headers, and PGN comments.':
+    'Перевірка виконується за: назвою завантаженого файлу, заголовками PGN та коментарями PGN.',
+  'Visible in course viewer and repertoire viewer like normal lines.':
+    'Видимі у перегляді курсу та репертуару як звичайні лінії.',
+  'Included in Learn as a one-time view item.':
+    'Показуються в Learn як одноразовий елемент для перегляду.',
+  'Not scheduled with FSRS (no memorization queue behavior).':
+    'Не плануються через FSRS (без поведінки черги запамʼятовування).',
+  'After Learn shows it once, it is marked viewed for that user and hidden next time.':
+    'Після одного показу в Learn позначаються як переглянуті для цього користувача і наступного разу ховаються.',
+  'In course detail you can manually toggle both chapter and individual lines between training and info-only. Use this when auto-detection is not what you want.':
+    'У деталях курсу можна вручну перемикати і розділ, і окремі лінії між training та info-only. Використовуйте це, коли авто-визначення не підходить.',
   'Study starts from the game you just played.': 'Навчання починається з партії, яку ти щойно зіграв.',
   'The intended routine is simple: keep your opening files in RepDrill, train the lines that are due, then use online games to discover exactly which positions need attention.':
     'Рутина проста: тримай дебютні файли в RepDrill, тренуй лінії на сьогодні, а потім використовуй онлайн-партії, щоб точно знайти позиції, які потребують уваги.',

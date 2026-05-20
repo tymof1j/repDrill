@@ -5,6 +5,7 @@ import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { Config } from 'chessground/config';
 import type { Key, Piece } from 'chessground/types';
+import type { BoardBrushes } from '@/lib/preferences';
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
 import 'chessground/assets/chessground.cburnett.css';
@@ -38,6 +39,7 @@ type Props = {
   };
   onMove?: (orig: string, dest: string, captured?: Piece) => void;
   onPremoveSet?: (orig: string, dest: string) => void;
+  brushes?: BoardBrushes;
   size?: number; // explicit px size, overrides default max-w
 };
 
@@ -66,6 +68,7 @@ function buildConfig(props: {
   premovable?: Props['premovable'];
   onMove?: Props['onMove'];
   onPremoveSet?: Props['onPremoveSet'];
+  brushes?: Props['brushes'];
 }): Config {
   const turnColor = props.fen.split(/\s+/)[1] === 'b' ? 'black' : 'white';
   const canMove = !props.viewOnly;
@@ -83,6 +86,7 @@ function buildConfig(props: {
       eraseOnClick: true,
       defaultSnapToValidMove: false,
       autoShapes: buildAutoShapes(props.arrows, props.squareMarks),
+      ...(props.brushes ? { brushes: props.brushes } : {}),
     },
     movable: {
       free: false,
@@ -108,8 +112,7 @@ function buildConfig(props: {
   };
   if (canMove && props.onMove) {
     config.events = {
-      move: (orig, dest, captured) =>
-        props.onMove!(orig as string, dest as string, captured),
+      move: (orig, dest, captured) => props.onMove!(orig as string, dest as string, captured),
     };
   }
   return config;
@@ -126,6 +129,7 @@ export function ChessBoard({
   premovable,
   onMove,
   onPremoveSet,
+  brushes,
   size,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -139,6 +143,7 @@ export function ChessBoard({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const container = containerRef.current;
     const config = buildConfig({
       fen,
       orientation,
@@ -150,11 +155,12 @@ export function ChessBoard({
       premovable,
       onMove: (orig, dest, captured) => onMoveRef.current?.(orig, dest, captured),
       onPremoveSet,
+      brushes,
     });
-    apiRef.current = Chessground(containerRef.current, config);
+    apiRef.current = Chessground(container, config);
 
     const ro = new ResizeObserver(() => apiRef.current?.redrawAll());
-    ro.observe(containerRef.current);
+    ro.observe(container);
     previousFenRef.current = fen;
 
     return () => {
@@ -181,6 +187,7 @@ export function ChessBoard({
         eraseOnClick: true,
         defaultSnapToValidMove: false,
         autoShapes: buildAutoShapes(arrows, squareMarks),
+        ...(brushes ? { brushes } : {}),
       },
       movable: {
         free: false,
@@ -206,7 +213,7 @@ export function ChessBoard({
     });
     previousFenRef.current = fen;
     apiRef.current.playPremove();
-  }, [fen, orientation, viewOnly, lastMove, arrows, squareMarks, movable, premovable, onPremoveSet]);
+  }, [fen, orientation, viewOnly, lastMove, arrows, squareMarks, movable, premovable, onPremoveSet, brushes]);
 
   return (
     <div

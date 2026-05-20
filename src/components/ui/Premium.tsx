@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { MouseEventHandler, ReactNode } from 'react';
 
 /*
  * Shared RepDrill primitives.
@@ -223,7 +223,7 @@ export function GhostButton({
   children: ReactNode;
   type?: 'button' | 'submit';
   disabled?: boolean;
-  onClick?: () => void;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
   className?: string;
 }) {
   return (

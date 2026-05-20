@@ -9,6 +9,15 @@ import {
 } from '@/app/repertoires/actions';
 import { GhostButton, SecondaryButton, Stamp } from '@/components/ui/Premium';
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
+import {
+  type ArrowTheme,
+  PREFERENCES_EVENT,
+  getArrowBrushes,
+  getBoardBrushes,
+  getArrowTheme,
+  getHintBrush,
+  normalizeArrowTheme,
+} from '@/lib/preferences';
 
 export type MergedMove = {
   id: string;
@@ -48,7 +57,6 @@ type Props = {
 };
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
-const ARROW_BRUSHES = ['green', 'blue', 'red', 'yellow', 'paleGreen', 'paleBlue', 'paleRed'];
 
 export function MergedRepertoireViewer({
   repertoireId,
@@ -141,25 +149,27 @@ export function MergedRepertoireViewer({
 
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
+  const [arrowTheme, setArrowTheme] = useState<ArrowTheme>(() => getArrowTheme());
 
   const arrows = useMemo(() => {
     if (!showArrows || grouped.length <= 1) return [];
+    const brushes = getArrowBrushes(arrowTheme);
     return grouped.map((g, i) => ({
       orig: g.uci.slice(0, 2) as `${string}`,
       dest: g.uci.slice(2, 4) as `${string}`,
-      brush: ARROW_BRUSHES[i % ARROW_BRUSHES.length],
+      brush: brushes[i % brushes.length],
     }));
-  }, [showArrows, grouped]);
+  }, [showArrows, grouped, arrowTheme]);
 
   const squareMarks = useMemo(() => {
     if (!showHighlights || grouped.length === 0) return [];
     return grouped.flatMap((g) => {
       const dest = g.uci.slice(2, 4);
       return g.moves.some((m) => m.moveType === 'repertoire')
-        ? [{ orig: dest, brush: 'green' }]
+        ? [{ orig: dest, brush: getHintBrush(arrowTheme) }]
         : [];
     });
-  }, [showHighlights, grouped]);
+  }, [showHighlights, grouped, arrowTheme]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -173,7 +183,17 @@ export function MergedRepertoireViewer({
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const prefHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ arrowTheme?: string }>).detail;
+      setArrowTheme(normalizeArrowTheme(detail?.arrowTheme ?? getArrowTheme()));
+    };
+    window.addEventListener(PREFERENCES_EVENT, prefHandler as EventListener);
+    window.addEventListener('storage', prefHandler as EventListener);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener(PREFERENCES_EVENT, prefHandler as EventListener);
+      window.removeEventListener('storage', prefHandler as EventListener);
+    };
   }, []);
 
   const setPreferred = (move: MergedMove) => {
@@ -265,7 +285,14 @@ export function MergedRepertoireViewer({
 
         <div className="-mx-5 md:mx-0">
           <ResizableDiagramFrame caption={`§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}>
-            <ChessBoard fen={currentFen + ' 0 1'} orientation={orientation} lastMove={lastMove} arrows={arrows} squareMarks={squareMarks} />
+            <ChessBoard
+              fen={currentFen + ' 0 1'}
+              orientation={orientation}
+              lastMove={lastMove}
+              arrows={arrows}
+              squareMarks={squareMarks}
+              brushes={getBoardBrushes(arrowTheme)}
+            />
           </ResizableDiagramFrame>
         </div>
 

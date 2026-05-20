@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { updateLanguageAction } from '@/app/settings/actions';
 import { CustomSelect } from '@/components/ui/CustomSelect';
+import {
+  type ArrowTheme,
+  getArrowTheme,
+  normalizeArrowTheme,
+  setArrowTheme,
+  emitPreferencesChanged,
+} from '@/lib/preferences';
 
 interface SettingsPopoverProps {
   email: string | null;
@@ -18,6 +25,7 @@ const copy = {
     saving: 'Saving',
     saved: 'Saved',
     data: 'Other settings & export',
+    arrowTheme: 'Arrow colors',
     signOut: 'Sign out',
   },
   uk: {
@@ -26,6 +34,7 @@ const copy = {
     saving: 'Збереження',
     saved: 'Збережено',
     data: 'Інші налаштування та експорт',
+    arrowTheme: 'Колір стрілок',
     signOut: 'Вийти',
   },
 };
@@ -45,6 +54,7 @@ export function SettingsPopover({
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [optimisticLanguage, setOptimisticLanguage] = useState<'en' | 'uk' | null>(null);
+  const [arrowTheme, setArrowThemeState] = useState<ArrowTheme>(() => getArrowTheme());
   const { signOut } = useAuthActions();
   const selectedLanguage = optimisticLanguage ?? normalizeLanguage(language);
   const text = copy[selectedLanguage];
@@ -91,6 +101,13 @@ export function SettingsPopover({
       setSaved(true);
       router.refresh();
     });
+  };
+
+  const handleArrowThemeChange = (nextValue: string) => {
+    const next = normalizeArrowTheme(nextValue);
+    setArrowThemeState(next);
+    setArrowTheme(next);
+    emitPreferencesChanged({ arrowTheme: next });
   };
 
   return (
@@ -162,6 +179,21 @@ export function SettingsPopover({
                   options={[
                     { value: 'en', label: 'English' },
                     { value: 'uk', label: 'Українська' },
+                  ]}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 flex h-5 items-center justify-between font-mono text-[9px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                  {text.arrowTheme}
+                </span>
+                <CustomSelect
+                  compact
+                  value={arrowTheme}
+                  onChange={(value) => handleArrowThemeChange(value)}
+                  options={[
+                    { value: 'sapphire', label: selectedLanguage === 'uk' ? 'Сапфірова' : 'Sapphire' },
+                    { value: 'sage', label: selectedLanguage === 'uk' ? 'Шавлієва' : 'Sage' },
+                    { value: 'electric', label: selectedLanguage === 'uk' ? 'Електрична' : 'Electric' },
                   ]}
                 />
               </label>

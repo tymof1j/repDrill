@@ -14,6 +14,14 @@ import {
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import dynamic from 'next/dynamic';
 import { ShareDialog } from '@/components/share/ShareDialog';
+import {
+  type ArrowTheme,
+  PREFERENCES_EVENT,
+  getArrowBrushes,
+  getBoardBrushes,
+  getArrowTheme,
+  normalizeArrowTheme,
+} from '@/lib/preferences';
 
 const ChessBoard = dynamic(
   () => import('@/components/board/ChessBoard').then((m) => ({ default: m.ChessBoard })),
@@ -655,6 +663,7 @@ export function DeviationViewer({
   const [sharePending, startShare] = useTransition();
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
+  const [arrowTheme, setArrowTheme] = useState<ArrowTheme>(() => getArrowTheme());
 
   useEffect(() => {
     let cancelled = false;
@@ -768,7 +777,17 @@ export function DeviationViewer({
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const prefHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ arrowTheme?: string }>).detail;
+      setArrowTheme(normalizeArrowTheme(detail?.arrowTheme ?? getArrowTheme()));
+    };
+    window.addEventListener(PREFERENCES_EVENT, prefHandler as EventListener);
+    window.addEventListener('storage', prefHandler as EventListener);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(PREFERENCES_EVENT, prefHandler as EventListener);
+      window.removeEventListener('storage', prefHandler as EventListener);
+    };
   }, [ply, setPly, totalPlies]);
 
   useEffect(() => {
@@ -808,7 +827,7 @@ export function DeviationViewer({
       arrows.push({
         orig: devUci.slice(0, 2),
         dest: devUci.slice(2, 4),
-        brush: 'red',
+        brush: getArrowBrushes(arrowTheme)[0] ?? 'blue',
       });
     }
   }
@@ -918,6 +937,7 @@ export function DeviationViewer({
               lastMove={showHighlights ? lastMove : undefined}
               viewOnly
               arrows={showArrows ? arrows : []}
+              brushes={getBoardBrushes(arrowTheme)}
             />
           </ResizableDiagramFrame>
           <div className="mt-4 flex items-center justify-between gap-3">

@@ -85,6 +85,12 @@ const shortcutGroups = [
 
 const topics = [
   {
+    href: '/documentation/import-behavior',
+    eyebrow: 'Import',
+    title: 'PGN naming & info-only mode',
+    body: 'How chapter names are chosen, how info-only lines are auto-detected, and how manual info-only overrides affect Learn vs FSRS.',
+  },
+  {
     href: '/documentation/notation',
     eyebrow: 'Input',
     title: 'Move notation',
