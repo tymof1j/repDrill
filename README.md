@@ -24,6 +24,24 @@ For hosted data, point the app at a Convex deployment with `NEXT_PUBLIC_CONVEX_U
 - **Analyze** — review your recent games against your prep and flag departures.
 - **FAQ** — `/documentation` (shortcuts, notation spec, why FSRS, why spaced repetition).
 
+## Chess-board-recognition (planned)
+
+Main product wish: import tactics directly from chess books (PDF page ranges), with screenshot import as a stepping stone while the PDF pipeline matures.
+
+`FEN` (Forsyth-Edwards Notation) is a compact text string that fully describes a chess position (piece placement, side to move, castling rights, en-passant target, and move counters). In this feature, FEN is the canonical format used to convert recognized boards into trainable positions.
+
+Planned workflow:
+1. User uploads a PDF (target flow) or screenshot (early bridge flow).
+2. System extracts board candidates from selected pages/images and converts each into a proposed FEN.
+3. System determines side to move from explicit cues near the diagram: either text like `White to move` / `Black to move`, or a nearby square/triangle marker where marker color indicates the side to move.
+4. If puzzle answers exist, they are captured and attached to each tactic either by reading notation printed near the board, or by copy-pasting the answer block (often from the end of the book) that maps puzzle number -> solution moves (+ comments when present).
+5. Validation checks legality and move parsing.
+6. Output is a structured scan result (positions + side-to-move + mapped solutions) ready for later import into the web platform.
+
+Note: interactive candidate review/editing in the web UI is a separate downstream feature for the platform import flow, not part of the current scan pipeline scope.
+
+(connected files: [docs/tactics-import-plan.md](docs/tactics-import-plan.md), [docs/tactics-import-plan-claude.md](docs/tactics-import-plan-claude.md), [docs/backlog.md](docs/backlog.md), [docs/plan.md](docs/plan.md))
+
 ## Keyboard-first flow
 
 RepDrill is built to be usable without reaching for the mouse. Pretty nice, honestly.
