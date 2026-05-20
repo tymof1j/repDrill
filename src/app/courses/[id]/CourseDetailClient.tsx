@@ -500,17 +500,6 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         </section>
       )}
 
-      {chapters.length === 0 && (
-        <section className="mb-12 border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-8 py-12 text-center">
-          <p className="font-display-italic text-lg leading-relaxed text-[color:var(--ink-soft)]">
-            This course has no chapters. Import a PGN to seed the move tree.
-          </p>
-          <PremiumButton href={`/courses/${course.id}/import`} className="mt-5">
-            Import PGN
-          </PremiumButton>
-        </section>
-      )}
-
       <RepertoireViewer
         key={selectedChapterId ?? 'all-chapters'}
         repertoireColor={course.color as 'white' | 'black'}
