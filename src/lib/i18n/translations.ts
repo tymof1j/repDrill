@@ -125,12 +125,37 @@ export const ukTranslations: Record<string, string> = {
   'PGN naming & info-only mode': 'Іменування PGN і режим info-only',
   'How chapter names are chosen, how info-only lines are auto-detected, and how manual info-only overrides affect Learn vs FSRS.':
     'Як обираються назви розділів, як авто-визначаються info-only лінії, і як ручні перемикачі info-only впливають на Learn та FSRS.',
+  'How chapter names are chosen, how info-only lines are auto-detected, and how Learn/review selects and orders lines (including post-import chapter reorder behavior).':
+    'Як обираються назви розділів, як авто-визначаються info-only лінії, і як Learn/review відбирає та впорядковує лінії (включно з поведінкою після перестановки розділів після імпорту).',
+  'Order of lines in Learn mode': 'Порядок ліній у режимі Learn',
+  'Exactly how Learn/review selects lines, sorts due vs new work, and when chapter reorder is used as a tie-breaker.':
+    'Точно як Learn/review відбирає лінії, сортує роботу due проти new і коли перестановка розділів використовується як тай-брейк.',
   'PGN naming and info-only mode': 'Іменування PGN і режим info-only',
+  'Learn line order': 'Порядок ліній Learn',
+  'Learn order': 'Порядок Learn',
+  'What is the order of lines in Learn mode?': 'Який порядок ліній у режимі Learn?',
+  'How lines are selected': 'Як відбираються лінії',
+  'How lines are ordered': 'Як впорядковуються лінії',
+  'Post-import chapter reorder rule': 'Правило перестановки розділів після імпорту',
+  'Practical notes': 'Практичні нотатки',
+  'Learn/review is urgency-first. RepDrill picks actionable lines first, then sorts them by recall priority.':
+    'У Learn/review пріоритет надається терміновості. RepDrill спочатку бере лінії, з якими треба працювати зараз, а потім сортує їх за пріоритетом повторення.',
+  'Hide already-viewed info-only lines on future Learn sessions for that user.':
+    'Вже переглянуті info-only лінії ховаються в наступних сесіях Learn для цього користувача.',
+  'If you reorder chapters within 10 minutes after importing a course, Learn/review uses that chapter order as a tie-breaker when urgency is equal. This is most noticeable when many lines are still new.':
+    'Якщо переставити розділи протягом 10 хвилин після імпорту курсу, Learn/review використовує цей порядок розділів як тай-брейк, коли терміновість однакова. Це найпомітніше, коли багато ліній ще нові.',
+  'Learn order is not a pure table-of-contents order by default.':
+    'Порядок Learn за замовчуванням не є чистим порядком змісту.',
+  'FSRS urgency still dominates chapter order whenever due/new priority differs.':
+    'Терміновість FSRS все одно має вищий пріоритет за порядок розділів, коли відрізняється пріоритет due/new.',
+  'The import-behavior FAQ also documents this rule from the import perspective.':
+    'FAQ про поведінку імпорту також описує це правило з боку імпорту.',
   'How chapter names are chosen during PGN import, detects info-only content, and handles info-only lines in Learn.':
     'Як під час імпорту PGN обираються назви розділів, як визначається info-only контент і як обробляються info-only лінії в Learn.',
   'Chapter naming': 'Іменування розділів',
   'Info-only detection': 'Визначення info-only',
   'How info-only differs': 'Чим відрізняється info-only',
+  'Learn/review line order': 'Порядок ліній у Learn/review',
   'Manual override': 'Ручне перевизначення',
   'This page explains exactly how chapter names are chosen during PGN import and how info-only chapters/lines behave in viewer and Learn flows.':
     'Ця сторінка точно пояснює, як обираються назви розділів під час імпорту PGN і як info-only розділи/лінії поводяться у viewer та Learn.',
@@ -155,6 +180,18 @@ export const ukTranslations: Record<string, string> = {
     'Після одного показу в Learn позначаються як переглянуті для цього користувача і наступного разу ховаються.',
   'In course detail you can manually toggle both chapter and individual lines between training and info-only. Use this when auto-detection is not what you want.':
     'У деталях курсу можна вручну перемикати і розділ, і окремі лінії між training та info-only. Використовуйте це, коли авто-визначення не підходить.',
+  'In Learn mode, RepDrill first selects lines that are actionable now, then orders them.':
+    'У режимі Learn RepDrill спочатку відбирає лінії, з якими потрібно працювати зараз, а потім впорядковує їх.',
+  'Include training lines that are due now or contain at least one new card.':
+    'Включаються training-лінії, які вже на часі, або містять принаймні одну нову картку.',
+  'Include info-only lines as one-time view items (until viewed once).':
+    'Включаються info-only лінії як одноразові елементи перегляду (до першого перегляду).',
+  'Sort non-new lines before new lines.':
+    'Спочатку сортуються не-нові лінії, потім нові.',
+  'Inside each group, sort by due-count descending (more overdue cards first).':
+    'Усередині кожної групи сортування йде за спаданням due-count (більш прострочені картки першими).',
+  'Special import rule: if you reorder chapters within 10 minutes after importing a course, tie-cases in Learn/review respect that chapter order (instead of fallback traversal order). This is most noticeable when many lines are still new.':
+    'Спеціальне правило імпорту: якщо ти переставиш розділи протягом 10 хвилин після імпорту курсу, у випадках нічиєї в Learn/review буде враховано цей порядок розділів (замість запасного порядку обходу). Найпомітніше це, коли багато ліній ще нові.',
   'Study starts from the game you just played.': 'Навчання починається з партії, яку ти щойно зіграв.',
   'The intended routine is simple: keep your opening files in RepDrill, train the lines that are due, then use online games to discover exactly which positions need attention.':
     'Рутина проста: тримай дебютні файли в RepDrill, тренуй лінії на сьогодні, а потім використовуй онлайн-партії, щоб точно знайти позиції, які потребують уваги.',

@@ -11,6 +11,7 @@ const sections = [
   { id: 'naming', label: 'Chapter naming' },
   { id: 'detecting', label: 'Info-only detection' },
   { id: 'mode', label: 'How info-only differs' },
+  { id: 'learn-order', label: 'Learn/review line order' },
   { id: 'manual', label: 'Manual override' },
 ];
 
@@ -70,6 +71,26 @@ export default function ImportBehaviorDocPage() {
           <li>Not scheduled with FSRS (no memorization queue behavior).</li>
           <li>After Learn shows it once, it is marked viewed for that user and hidden next time.</li>
         </ul>
+      </section>
+
+      <section id="learn-order" className="mt-10 scroll-mt-20">
+        <h2 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[color:var(--ink)]">
+          Learn/review line order
+        </h2>
+        <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
+          In Learn mode, RepDrill first selects lines that are actionable now, then orders them.
+        </p>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
+          <li>Include training lines that are due now or contain at least one new card.</li>
+          <li>Include info-only lines as one-time view items (until viewed once).</li>
+          <li>Sort non-new lines before new lines.</li>
+          <li>Inside each group, sort by due-count descending (more overdue cards first).</li>
+        </ol>
+        <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
+          Special import rule: if you reorder chapters within 10 minutes after importing a course,
+          tie-cases in Learn/review respect that chapter order (instead of fallback traversal
+          order). This is most noticeable when many lines are still new.
+        </p>
       </section>
 
       <section id="manual" className="mt-10 scroll-mt-20">

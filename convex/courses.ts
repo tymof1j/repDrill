@@ -255,6 +255,36 @@ export const renameChapter = mutation({
   },
 });
 
+export const reorderChapters = mutation({
+  args: {
+    courseId: v.id("courses"),
+    chapterIds: v.array(v.id("chapters")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const course = await ctx.db.get(args.courseId);
+    if (!course || course.userId !== userId) throw new Error("Not found");
+
+    const chapters = await ctx.db
+      .query("chapters")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .collect();
+    if (chapters.length !== args.chapterIds.length) throw new Error("Invalid chapter list");
+
+    const ownedIds = new Set(chapters.map((chapter) => chapter._id));
+    for (const chapterId of args.chapterIds) {
+      if (!ownedIds.has(chapterId)) throw new Error("Invalid chapter list");
+    }
+
+    for (const [index, chapterId] of args.chapterIds.entries()) {
+      await ctx.db.patch(chapterId, { sortOrder: index });
+    }
+    await ctx.db.patch(args.courseId, { lastChapterReorderAt: Date.now(), updatedAt: Date.now() });
+  },
+});
+
 export const deleteChapter = mutation({
   args: { id: v.id("chapters") },
   handler: async (ctx, args) => {

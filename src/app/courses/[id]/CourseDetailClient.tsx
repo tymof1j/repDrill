@@ -1,7 +1,10 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Pencil } from 'lucide-react';
+import { GripVertical, Pencil } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import {
   RepertoireViewer,
   type ViewerMove,
@@ -24,6 +27,7 @@ import {
   updateAnnotationAction,
   setChapterTypeAction,
   setLineInfoOnlyAction,
+  reorderChaptersAction,
 } from '../actions';
 import { ShareDialog } from '@/components/share/ShareDialog';
 
@@ -149,12 +153,30 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
   const [chaptersOpen, setChaptersOpen] = useState(true);
   const [chapterQuery, setChapterQuery] = useState('');
+  const [chapterOrderOverride, setChapterOrderOverride] = useState<string[] | null>(null);
+  const [draggingChapterId, setDraggingChapterId] = useState<string | null>(null);
+  const [dragArmedChapterId, setDragArmedChapterId] = useState<string | null>(null);
+  const courseImports = useQuery(api.import.listCourseImports, { courseId: course.id as Id<'courses'> }) ?? [];
+  const activeImport = courseImports.find((item) => item.status === 'queued' || item.status === 'processing') ?? null;
+
+  const baseChapterOrder = useMemo(() => chapters.map((chapter) => chapter.id), [chapters]);
+  const chapterOrder = useMemo(() => {
+    if (!chapterOrderOverride || chapterOrderOverride.length !== baseChapterOrder.length) return baseChapterOrder;
+    const expected = new Set(baseChapterOrder);
+    if (chapterOrderOverride.some((id) => !expected.has(id))) return baseChapterOrder;
+    return chapterOrderOverride;
+  }, [baseChapterOrder, chapterOrderOverride]);
+  const chaptersById = useMemo(() => new Map(chapters.map((chapter) => [chapter.id, chapter])), [chapters]);
+  const orderedChapters = useMemo(
+    () => chapterOrder.map((id) => chaptersById.get(id)).filter((chapter): chapter is (typeof chapters)[number] => Boolean(chapter)),
+    [chapterOrder, chaptersById],
+  );
 
   const linesByChapter = useMemo(
     () => buildChapterLines(rootPositionId, chapters, moves),
     [chapters, moves, rootPositionId],
   );
-  const selectedChapter = chapters.find((chapter) => chapter.id === selectedChapterId) ?? null;
+  const selectedChapter = orderedChapters.find((chapter) => chapter.id === selectedChapterId) ?? null;
   const selectedChapterLines = useMemo(
     () => (selectedChapterId ? (linesByChapter.get(selectedChapterId) ?? []) : []),
     [linesByChapter, selectedChapterId],
@@ -169,7 +191,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
       { type: 'resource', label: 'Whole course', description: 'All chapters and lines' },
     ];
     scopes.push(
-      ...chapters.map((chapter) => ({
+      ...orderedChapters.map((chapter) => ({
         type: 'chapter' as const,
         id: chapter.id,
         label: selectedChapterId === chapter.id ? `This chapter: ${chapter.name}` : `Chapter: ${chapter.name}`,
@@ -177,7 +199,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
       })),
     );
     return scopes;
-  }, [chapters, linesByChapter, selectedChapterId]);
+  }, [orderedChapters, linesByChapter, selectedChapterId]);
   const visibleMoves = useMemo(
     () =>
       selectedChapterId
@@ -258,6 +280,15 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     });
   };
 
+  const persistChapterOrder = (nextOrder: string[]) => {
+    const fd = new FormData();
+    fd.set('courseId', course.id);
+    fd.set('chapterIds', JSON.stringify(nextOrder));
+    startTransition(() => {
+      void reorderChaptersAction(fd);
+    });
+  };
+
   return (
     <AppSurface>
       <BackLink href="/courses">Courses</BackLink>
@@ -315,7 +346,54 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         }
       />
 
-      {chapters.length > 0 && (
+      {activeImport && (
+        <section className="mb-10 border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-5 md:px-7">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--paper-rule)] pb-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)]">
+              Import in progress
+            </p>
+            <p className="font-display-italic text-sm text-[color:var(--ink-soft)]">
+              {activeImport.completedChapters}/{activeImport.totalChapters} chapters ready
+            </p>
+          </div>
+          <div className="mt-4 h-2 w-full overflow-hidden bg-[color:var(--paper-edge)]">
+            <div
+              className="h-full bg-[color:var(--margin-red)] transition-all duration-300"
+              style={{
+                width: `${Math.max(3, Math.round((activeImport.completedChapters / Math.max(1, activeImport.totalChapters)) * 100))}%`,
+              }}
+            />
+          </div>
+          <ul className="mt-4 space-y-2">
+            {activeImport.chapters.map((chapter) => {
+              const tone =
+                chapter.status === 'done'
+                  ? 'text-[color:var(--ink)]'
+                  : chapter.status === 'failed'
+                    ? 'text-[color:var(--margin-red)]'
+                    : 'text-[color:var(--ink-faint)]';
+              const statusText =
+                chapter.status === 'done'
+                  ? 'ready'
+                  : chapter.status === 'failed'
+                    ? 'failed'
+                    : chapter.status === 'processing'
+                      ? `processing ${chapter.processedMoves}/${chapter.totalMoves}`
+                      : 'queued';
+              return (
+                <li key={chapter._id} className="flex items-baseline justify-between gap-4">
+                  <span className={`truncate font-display text-base ${tone}`}>{chapter.chapterName}</span>
+                  <span className={`shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] ${tone}`}>
+                    {statusText}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {orderedChapters.length > 0 && (
         <section className="mb-12 border-y border-[color:var(--paper-edge)]">
           <div className="flex items-center justify-between gap-4 border-b border-[color:var(--paper-rule)] px-5 py-3 md:px-7">
             <button
@@ -328,7 +406,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                 Table of contents
               </span>
               <span className="font-display-italic text-base text-[color:var(--ink)]">
-                {chapters.length} chapter{chapters.length === 1 ? '' : 's'}
+                {orderedChapters.length} chapter{orderedChapters.length === 1 ? '' : 's'}
               </span>
               <span
                 aria-hidden
@@ -363,15 +441,47 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
               </div>
 
               <ul className="divide-y divide-[color:var(--paper-rule)] border-t border-[color:var(--paper-rule)]">
-                {chapters.filter((ch) =>
+                {orderedChapters.filter((ch) =>
                   !chapterQuery.trim() || ch.name.toLowerCase().includes(chapterQuery.toLowerCase())
                 ).map((ch) => {
-                  const originalIdx = chapters.indexOf(ch);
+                  const originalIdx = chapterOrder.indexOf(ch.id);
                   const lineCount = linesByChapter.get(ch.id)?.length ?? 0;
                   const active = selectedChapterId === ch.id;
                   return (
                     <li
                       key={ch.id}
+                      draggable={active && !pending && dragArmedChapterId === ch.id}
+                      onDragStart={(e) => {
+                        if (!active || pending) {
+                          e.preventDefault();
+                          return;
+                        }
+                        setDraggingChapterId(ch.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', ch.id);
+                      }}
+                      onDragOver={(e) => {
+                        if (!draggingChapterId || draggingChapterId === ch.id) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={(e) => {
+                        if (!draggingChapterId || draggingChapterId === ch.id) return;
+                        e.preventDefault();
+                        const fromIndex = chapterOrder.indexOf(draggingChapterId);
+                        const toIndex = chapterOrder.indexOf(ch.id);
+                        if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+                        const nextOrder = [...chapterOrder];
+                        const [moved] = nextOrder.splice(fromIndex, 1);
+                        nextOrder.splice(toIndex, 0, moved);
+                        setChapterOrderOverride(nextOrder);
+                        setDraggingChapterId(null);
+                        persistChapterOrder(nextOrder);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingChapterId(null);
+                        setDragArmedChapterId(null);
+                      }}
                       className={`px-5 transition-colors duration-200 md:px-7 ${
                         active ? 'bg-[color:var(--paper-shade)]' : 'hover:bg-[color:var(--paper-shade)]'
                       }`}
@@ -397,12 +507,29 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                         </div>
                       ) : (
                         <div className="grid grid-cols-[2.5rem_1fr_auto] items-baseline gap-4 py-4">
-                          <span
-                            className={`font-display text-base italic ${active ? 'text-[color:var(--margin-red)]' : 'text-[color:var(--ink-faint)]'}`}
-                            style={{ fontFeatureSettings: '"onum"' }}
-                          >
-                            {String(originalIdx + 1).padStart(2, '0')}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {active && (
+                              <button
+                                type="button"
+                                className="cursor-grab text-[color:var(--ink-faint)] active:cursor-grabbing"
+                                title="Drag to reorder chapter"
+                                aria-label="Drag to reorder chapter"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  setDragArmedChapterId(ch.id);
+                                }}
+                                onMouseUp={() => setDragArmedChapterId(null)}
+                              >
+                                <GripVertical size={15} />
+                              </button>
+                            )}
+                            <span
+                              className={`font-display text-base italic ${active ? 'text-[color:var(--margin-red)]' : 'text-[color:var(--ink-faint)]'}`}
+                              style={{ fontFeatureSettings: '"onum"' }}
+                            >
+                              {String(originalIdx + 1).padStart(2, '0')}
+                            </span>
+                          </div>
                           <button
                             type="button"
                             onClick={() => {

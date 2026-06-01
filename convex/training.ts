@@ -154,7 +154,10 @@ export type LineStep = {
 
 export type TrainingLine = {
   lineId: string;
+  courseId: string;
   chapterId: string;
+  chapterSortOrder: number;
+  chapterLineIndex: number;
   lineKey: string;
   courseName: string;
   courseColor: "white" | "black";
@@ -175,6 +178,7 @@ export type CourseLineStatus = {
 };
 
 const ROOT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
+const REORDER_FOLLOWS_IMPORT_WINDOW_MS = 10 * 60 * 1000;
 
 export const getTrainingLines = query({
   args: {
@@ -203,6 +207,28 @@ export const getTrainingLines = query({
     }
     if (userCourses.length === 0)
       return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
+
+    const latestImportByCourseId = new Map<string, number>();
+    for (const course of userCourses) {
+      const imports = await ctx.db
+        .query("courseImports")
+        .withIndex("by_course_and_created_at", (q) => q.eq("courseId", course._id))
+        .collect();
+      const latestImportAt = imports.length > 0 ? imports[imports.length - 1].createdAt : null;
+      if (latestImportAt != null) latestImportByCourseId.set(course._id as string, latestImportAt);
+    }
+    const preferChapterOrderByCourseId = new Map<string, boolean>();
+    for (const course of userCourses) {
+      const courseId = course._id as string;
+      const latestImportAt = latestImportByCourseId.get(courseId);
+      const reorderAt = course.lastChapterReorderAt;
+      const shouldPrefer =
+        latestImportAt != null &&
+        reorderAt != null &&
+        reorderAt >= latestImportAt &&
+        reorderAt - latestImportAt <= REORDER_FOLLOWS_IMPORT_WINDOW_MS;
+      preferChapterOrderByCourseId.set(courseId, shouldPrefer);
+    }
 
     // Load chapters
     const allChapters: Doc<"chapters">[] = [];
@@ -384,7 +410,10 @@ export const getTrainingLines = query({
 
         allExtracted.push({
           lineId: `${chapterId}-${i}`,
+          courseId: chapter.courseId as string,
           chapterId,
+          chapterSortOrder: chapter.sortOrder ?? 0,
+          chapterLineIndex: i,
           lineKey,
           courseName: course.name,
           courseColor: course.color,
@@ -399,7 +428,17 @@ export const getTrainingLines = query({
 
     allExtracted.sort((a, b) => {
       if (a.isNew !== b.isNew) return a.isNew ? 1 : -1;
-      return b.dueCount - a.dueCount;
+      if (a.dueCount !== b.dueCount) return b.dueCount - a.dueCount;
+
+      const preferA = preferChapterOrderByCourseId.get(a.courseId) === true;
+      const preferB = preferChapterOrderByCourseId.get(b.courseId) === true;
+      if (preferA && preferB) {
+        if (a.chapterSortOrder !== b.chapterSortOrder) return a.chapterSortOrder - b.chapterSortOrder;
+        if (a.chapterLineIndex !== b.chapterLineIndex) return a.chapterLineIndex - b.chapterLineIndex;
+      } else if (preferA !== preferB) {
+        return preferA ? -1 : 1;
+      }
+      return 0;
     });
 
     let newSeen = 0;

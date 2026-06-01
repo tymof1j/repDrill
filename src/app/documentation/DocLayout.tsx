@@ -32,6 +32,18 @@ const DOC_SEARCH_INDEX = [
       'info-only mode detection ideas games in filename headers comments',
       'manual chapter line info-only toggle training scheduling',
       'learn tab one-time view no FSRS memorization for info-only lines',
+      'learn review order due lines new lines tie breaks chapter order after import',
+    ],
+  },
+  {
+    href: '/documentation/learn-order',
+    page: 'Learn order',
+    title: 'What is the order of lines in Learn mode?',
+    snippets: [
+      'learn review line order due new priority',
+      'selection includes due now or new cards',
+      'info-only one-time view items hidden after viewed',
+      'chapter reorder within 10 minutes after import used as tie-breaker',
     ],
   },
   {
@@ -145,6 +157,7 @@ const docNav = [
     group: 'Topics',
     items: [
       { href: '/documentation/import-behavior', label: 'PGN import behavior' },
+      { href: '/documentation/learn-order', label: 'Learn line order' },
       { href: '/documentation/notation', label: 'Move notation' },
       { href: '/documentation/spaced-repetition', label: 'Spaced repetition' },
       { href: '/documentation/fsrs', label: 'FSRS scheduler' },

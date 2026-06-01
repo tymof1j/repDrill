@@ -88,7 +88,13 @@ const topics = [
     href: '/documentation/import-behavior',
     eyebrow: 'Import',
     title: 'PGN naming & info-only mode',
-    body: 'How chapter names are chosen, how info-only lines are auto-detected, and how manual info-only overrides affect Learn vs FSRS.',
+    body: 'How chapter names are chosen, how info-only lines are auto-detected, and how Learn/review selects and orders lines (including post-import chapter reorder behavior).',
+  },
+  {
+    href: '/documentation/learn-order',
+    eyebrow: 'Learn',
+    title: 'Order of lines in Learn mode',
+    body: 'Exactly how Learn/review selects lines, sorts due vs new work, and when chapter reorder is used as a tie-breaker.',
   },
   {
     href: '/documentation/notation',

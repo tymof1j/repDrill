@@ -245,7 +245,10 @@ export function BackLink({ href, children }: { href: string; children: ReactNode
       className={`mb-8 inline-flex items-center gap-2 rounded-md font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink-faint)] ${motion} hover:text-[color:var(--library-green)] ${focusRing}`}
     >
       <span aria-hidden className="text-[color:var(--paper-edge)]">←</span>
-      <span className="underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:decoration-[color:var(--library-green)]">
+      <span
+        suppressHydrationWarning
+        className="underline decoration-[color:var(--paper-edge)] underline-offset-[6px] hover:decoration-[color:var(--library-green)]"
+      >
         {children}
       </span>
     </Link>

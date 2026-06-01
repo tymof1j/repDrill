@@ -27,6 +27,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     isPublic: v.boolean(),
     shareToken: v.optional(v.string()),
+    lastChapterReorderAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]).index("by_share_token", ["shareToken"]),
@@ -127,6 +128,54 @@ export default defineSchema({
     moveType: v.union(v.literal('repertoire'), v.literal('opponent'), v.literal('alternative')),
     sortOrder: v.number(),
   }).index("by_chapter", ["chapterId"]).index("by_parent", ["parentPositionId"]),
+
+  courseImports: defineTable({
+    courseId: v.id("courses"),
+    userId: v.id("users"),
+    status: v.union(v.literal("queued"), v.literal("processing"), v.literal("done"), v.literal("failed")),
+    totalChapters: v.number(),
+    completedChapters: v.number(),
+    failedChapters: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_course_and_created_at", ["courseId", "createdAt"]).index("by_user_and_created_at", ["userId", "createdAt"]),
+
+  courseImportChapters: defineTable({
+    importId: v.id("courseImports"),
+    courseId: v.id("courses"),
+    userId: v.id("users"),
+    chapterName: v.string(),
+    chapterType: v.union(v.literal("training"), v.literal("info_only")),
+    sortOrder: v.number(),
+    courseColor: v.union(v.literal("white"), v.literal("black")),
+    rootFen: v.string(),
+    status: v.union(v.literal("queued"), v.literal("processing"), v.literal("done"), v.literal("failed")),
+    totalMoves: v.number(),
+    processedMoves: v.number(),
+    moveChunkCount: v.number(),
+    createdChapterId: v.optional(v.id("chapters")),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_import_and_sort_order", ["importId", "sortOrder"]).index("by_course_and_created_at", ["courseId", "createdAt"]),
+
+  courseImportMoveChunks: defineTable({
+    chapterImportId: v.id("courseImportChapters"),
+    chunkIndex: v.number(),
+    moves: v.array(
+      v.object({
+        parentFen: v.string(),
+        fen: v.string(),
+        san: v.string(),
+        uci: v.string(),
+        moveNumber: v.number(),
+        colorToMove: v.union(v.literal("white"), v.literal("black")),
+        comment: v.optional(v.string()),
+        isMainLine: v.boolean(),
+      }),
+    ),
+    createdAt: v.number(),
+  }).index("by_chapter_import_and_chunk_index", ["chapterImportId", "chunkIndex"]),
 
   reviewCards: defineTable({
     userId: v.id("users"),

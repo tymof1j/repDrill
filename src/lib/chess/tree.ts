@@ -34,7 +34,10 @@ function walk(chess: Chess, nodes: PgnMoveNode[], out: TreeMove[], onMainLine: b
     const parentFen = normalizeFen(parentFenFull);
     const moveResult = chess.move(node.san);
     if (!moveResult) {
-      throw new Error(`Illegal move "${node.san}" at ${parentFen}`);
+      // Some large PGNs contain malformed SAN tokens or branch corruption.
+      // Stop this branch instead of crashing the whole import.
+      console.warn(`[PGN import] Illegal move "${node.san}" at ${parentFen}; skipping remaining moves in this branch.`);
+      return;
     }
     const fen = normalizeFen(chess.fen());
     const uci = moveResult.from + moveResult.to + (moveResult.promotion ?? '');

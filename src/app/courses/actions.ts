@@ -80,6 +80,25 @@ export async function importPgnAction(formData: FormData): Promise<void> {
   const games = parsePgn(pgnText);
   if (games.length === 0) throw new Error('No games found in PGN');
 
+  const chapters: Array<{
+    chapterName: string;
+    chapterType: 'training' | 'info_only';
+    sortOrder: number;
+    courseColor: 'white' | 'black';
+    rootFen: string;
+    moves: Array<{
+      parentFen: string;
+      fen: string;
+      san: string;
+      uci: string;
+      moveNumber: number;
+      colorToMove: 'white' | 'black';
+      comment?: string;
+      isMainLine: boolean;
+    }>;
+  }> = [];
+
+  let invalidGames = 0;
   for (const [i, game] of games.entries()) {
     const chapterNameFromHeaders =
       game.headers.ChapterName ||
@@ -89,17 +108,15 @@ export async function importPgnAction(formData: FormData): Promise<void> {
       chapterNameFromHeaders && chapterNameFromHeaders !== '?'
         ? chapterNameFromHeaders
         : fallbackFilename || `Chapter ${i + 1}`;
-    const chapterType = looksLikeInfoContent(fallbackFilename) ||
+    const chapterType: 'training' | 'info_only' = looksLikeInfoContent(fallbackFilename) ||
       Object.values(game.headers).some((value) => looksLikeInfoContent(value))
       || gameContainsInfoHints(game.moves)
       ? 'info_only'
       : 'training';
 
-    const tree = buildTree(game);
-    await fetchMutation(
-      api.import.importTreeIntoChapter,
-      {
-        courseId,
+    try {
+      const tree = buildTree(game);
+      chapters.push({
         chapterName,
         chapterType,
         sortOrder: i,
@@ -115,10 +132,25 @@ export async function importPgnAction(formData: FormData): Promise<void> {
           comment: m.comment,
           isMainLine: m.isMainLine,
         })),
-      },
-      { token }
-    );
+      });
+    } catch (error) {
+      invalidGames++;
+      console.warn('[PGN import] skipped invalid game', {
+        index: i,
+        chapterName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
+
+  if (chapters.length === 0) {
+    throw new Error('No valid games found in PGN. At least one game contains invalid SAN/move order.');
+  }
+  if (invalidGames > 0) {
+    console.warn(`[PGN import] skipped ${invalidGames} invalid game(s), importing ${chapters.length} valid game(s).`);
+  }
+
+  await fetchMutation(api.import.createCourseImport, { courseId, chapters }, { token });
 
   revalidatePath(`/courses/${courseId}`);
   redirect(`/courses/${courseId}`);
@@ -153,6 +185,19 @@ export async function deleteChapterAction(formData: FormData): Promise<void> {
   if (!id) throw new Error('Missing id');
 
   await fetchMutation(api.courses.deleteChapter, { id }, { token });
+  revalidatePath(`/courses/${courseId}`);
+}
+
+export async function reorderChaptersAction(formData: FormData): Promise<void> {
+  const token = await requireToken();
+  const courseId = String(formData.get('courseId') ?? '') as Id<'courses'>;
+  const chapterIdsRaw = String(formData.get('chapterIds') ?? '').trim();
+  if (!courseId || !chapterIdsRaw) throw new Error('Missing courseId or chapterIds');
+
+  const chapterIds = JSON.parse(chapterIdsRaw) as Id<'chapters'>[];
+  if (!Array.isArray(chapterIds) || chapterIds.length === 0) throw new Error('Invalid chapterIds');
+
+  await fetchMutation(api.courses.reorderChapters, { courseId, chapterIds }, { token });
   revalidatePath(`/courses/${courseId}`);
 }
 
