@@ -17,6 +17,9 @@ export type CourseListItem = {
   name: string;
   color: string;
   description: string | null;
+  href?: string;
+  mode?: 'theory' | 'puzzles';
+  isBuiltIn?: boolean;
 };
 
 type Props = {
@@ -42,7 +45,7 @@ export function CourseLibrarySearch({ courses }: Props) {
   const fuse = useMemo(
     () =>
       new Fuse(courses, {
-        keys: ['name', 'description', 'color'],
+        keys: ['name', 'description', 'color', 'mode'],
         threshold: 0.35,
         ignoreLocation: true,
       }),
@@ -129,15 +132,15 @@ export function CourseLibrarySearch({ courses }: Props) {
                   </div>
                 ) : (
                   <Link
-                    href={`/courses/${course.id}`}
+                    href={course.href ?? `/courses/${course.id}`}
                     className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
                   >
                     <div className="flex items-baseline gap-3">
                       <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
                         {course.name}
                       </h2>
-                      <Stamp tone={course.color === 'white' ? 'ink' : 'red'}>
-                        {course.color}
+                      <Stamp tone={course.mode === 'puzzles' ? 'red' : course.color === 'white' ? 'ink' : 'red'}>
+                        {course.mode === 'puzzles' ? 'puzzles' : course.color}
                       </Stamp>
                     </div>
                     {course.description && (
@@ -149,13 +152,27 @@ export function CourseLibrarySearch({ courses }: Props) {
                 )}
 
                 <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
-                  Open to manage chapters,
-                  <br />
-                  annotations, and lines.
+                  {course.mode === 'puzzles' ? (
+                    <>
+                      Open to solve positions,
+                      <br />
+                      track progress, and review.
+                    </>
+                  ) : (
+                    <>
+                      Open to manage chapters,
+                      <br />
+                      annotations, and lines.
+                    </>
+                  )}
                 </p>
 
                 <div className="col-start-2 flex items-center gap-3 md:col-start-4 md:justify-self-end">
-                  {isDeleting ? (
+                  {course.isBuiltIn ? (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">
+                      Included
+                    </span>
+                  ) : isDeleting ? (
                     <form action={deleteCourseAction} className="flex items-center gap-3">
                       <input type="hidden" name="id" value={course.id} />
                       <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--margin-red)]">

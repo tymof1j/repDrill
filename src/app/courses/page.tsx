@@ -52,6 +52,26 @@ export default function CoursesListPage() {
     color: item.color,
     description: item.description ?? null,
   }));
+  courses.unshift({
+    id: 'woodpecker-method-2',
+    name: 'The Woodpecker Method 2',
+    color: 'both',
+    mode: 'puzzles',
+    href: '/courses/woodpecker-2',
+    isBuiltIn: true,
+    description:
+      '1,000 positional exercises from Axel Smith on priyomes and rules of thumb, with full book explanations and author-guided cycles.',
+  });
+  courses.unshift({
+    id: 'woodpecker-method',
+    name: 'The Woodpecker Method',
+    color: 'both',
+    mode: 'puzzles',
+    href: '/courses/woodpecker',
+    isBuiltIn: true,
+    description:
+      '1,128 tactical positions from Axel Smith and Hans Tikkanen, with the original game, year, book explanation, and interactive solution.',
+  });
   const sharedCourses: CourseListItem[] = sharedItems.map((item) => ({
     id: item.resource._id,
     name: item.resource.name,
@@ -63,9 +83,9 @@ export default function CoursesListPage() {
   return (
     <AppSurface>
       <PageHeader
-        eyebrow="Part I — Courses"
-        title="The library."
-        body="One course is one body of opening theory for one color — a self-contained chapter of preparation, like 'My Grünfeld' or 'Sicilian as Black'."
+        eyebrow="Your training library"
+        title="Choose what to train."
+        body="Open a puzzle course to solve positions, or a theory course to learn and remember your opening lines."
         action={<SecondaryButton href="/courses/new">New course</SecondaryButton>}
       />
 

@@ -1,5 +1,6 @@
 import { SettingsForm } from './SettingsForm';
 import { DataPanel } from './DataPanel';
+import { BookMethodSettings } from './BookMethodSettings';
 import { AppSurface, PageHeader, PremiumPanel } from '@/components/ui/Premium';
 
 export default async function SettingsPage() {
@@ -22,6 +23,9 @@ export default async function SettingsPage() {
       >
         <a className="hover:text-[color:var(--ink)]" href="#accounts">
           · Accounts
+        </a>
+        <a className="hover:text-[color:var(--ink)]" href="#book-methods">
+          · Book methods
         </a>
         <a className="hover:text-[color:var(--ink)]" href="#data">
           · Other settings & export
@@ -48,6 +52,28 @@ export default async function SettingsPage() {
 
         <PremiumPanel className="max-w-2xl" innerClassName="px-6 py-7 md:px-8 md:py-8">
           <SettingsForm />
+        </PremiumPanel>
+      </section>
+
+      <section
+        id="book-methods"
+        aria-labelledby="book-methods-heading"
+        className="mb-12 scroll-mt-24"
+      >
+        <header className="mb-5">
+          <h2
+            id="book-methods-heading"
+            className="font-display text-2xl font-semibold tracking-[-0.01em] text-[color:var(--ink)] md:text-3xl"
+          >
+            Book training methods
+          </h2>
+          <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
+            RepDrill follows each book’s recommended cadence by default. Turn either method off
+            in one click to restore random access and train without cycle guidance.
+          </p>
+        </header>
+        <PremiumPanel className="max-w-3xl" innerClassName="px-6 py-7 md:px-8 md:py-8">
+          <BookMethodSettings />
         </PremiumPanel>
       </section>
 

@@ -85,6 +85,12 @@ const shortcutGroups = [
 
 const topics = [
   {
+    href: '/documentation/woodpecker-method',
+    eyebrow: 'Book methods',
+    title: 'How to use both Woodpecker courses',
+    body: 'The authors’ cycle schedule, recommended starter sets, solution-review rules, and what RepDrill changes when guidance is enabled.',
+  },
+  {
     href: '/documentation/import-behavior',
     eyebrow: 'Import',
     title: 'PGN naming & info-only mode',

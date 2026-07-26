@@ -77,6 +77,17 @@ const DOC_SEARCH_INDEX = [
       'stability difficulty elapsed days lapses reps review cards',
     ],
   },
+  {
+    href: '/documentation/woodpecker-method',
+    page: 'Book methods',
+    title: 'How to use both Woodpecker courses',
+    snippets: [
+      'Woodpecker Method seven cycles four weeks two weeks halve time break one day one week',
+      'tactical starter set 250 positions calculate full line final cycles pattern speed',
+      'Woodpecker Method 2 positional priyomes starter set 296 understand solutions first two cycles',
+      'author method settings one-click free mode random order cadence pace tracking',
+    ],
+  },
 ];
 
 type SearchResult = { href: string; page: string; title: string; matchedSnippet: string };
@@ -161,6 +172,7 @@ const docNav = [
       { href: '/documentation/notation', label: 'Move notation' },
       { href: '/documentation/spaced-repetition', label: 'Spaced repetition' },
       { href: '/documentation/fsrs', label: 'FSRS scheduler' },
+      { href: '/documentation/woodpecker-method', label: 'Woodpecker book methods' },
     ],
   },
 ];
