@@ -29,9 +29,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'RepDrill — Chess Opening Memory',
+  title: 'RepDrill — Remember the Chess You Study',
   description:
-    'A Convex-backed chess opening repertoire trainer for annotated lines, FSRS recall, game review, and portable PGN/JSON exports.',
+    'Turn chess books, opening files, and real games into focused position training you can remember over the board.',
 };
 
 export default async function RootLayout({

@@ -8,12 +8,9 @@ import { updateLanguageAction } from '@/app/settings/actions';
 import type { Language } from '@/lib/i18n/translations';
 
 const navLinks = [
-  { href: '/#use-cases', label: 'Use cases' },
-  { href: '/#platform', label: 'Platform' },
-  { href: '/#workflow', label: 'Workflow' },
-  { href: '/#benefits', label: 'Benefits' },
-  { href: '/#comparison', label: 'Compare' },
-  { href: '/#ownership', label: 'Ownership' },
+  { href: '/#how-it-helps', label: 'How it helps' },
+  { href: '/#book-training', label: 'Books to puzzles' },
+  { href: '/#routine', label: 'Your routine' },
 ];
 
 export function LandingNav({ ctaHref, ctaLabel, isLoggedIn }: { ctaHref: string; ctaLabel: string; isLoggedIn?: boolean }) {

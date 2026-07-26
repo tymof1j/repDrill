@@ -11,6 +11,86 @@ export function normalizeLanguage(value: string | null | undefined): Language {
 }
 
 export const ukTranslations: Record<string, string> = {
+  'How it helps': 'Як це допомагає',
+  'Books to puzzles': 'Книги у задачі',
+  'Your routine': 'Твій ритм',
+  'Chess study that comes back when you need it': 'Шахове навчання, яке повертається в потрібний момент',
+  'Stop collecting.': 'Годі колекціонувати.',
+  'Start remembering.': 'Почни памʼятати.',
+  'RepDrill turns the positions you care about into focused practice — so your books, openings, and game lessons show up over the board.':
+    'RepDrill перетворює важливі для тебе позиції на сфокусоване тренування — щоб знання з книг, дебютів і зіграних партій зʼявлялися за дошкою.',
+  'Build my training library': 'Створити мою бібліотеку',
+  'See how it fits your study': 'Як це працює в навчанні',
+  'Begin with one course. No new study system to learn.': 'Почни з одного курсу. Не треба опановувати ще одну систему.',
+  'Today’s position': 'Позиція на сьогодні',
+  'Find White’s strongest move': 'Знайди найсильніший хід білих',
+  'from your book': 'з твоєї книги',
+  Source: 'Джерело',
+  Context: 'Контекст',
+  'Made for the way players actually study': 'Створено під те, як шахісти справді навчаються',
+  'Your chess material should become moves you can find.': 'Твої шахові матеріали мають стати ходами, які ти знаходиш.',
+  'Turn good material into practice': 'Перетвори хороші матеріали на практику',
+  'Keep the positions worth remembering from books, courses, and coach files — then solve them instead of letting them disappear into a folder.':
+    'Зберігай варті запамʼятовування позиції з книг, курсів і файлів тренера — і розвʼязуй їх, замість ховати в папці.',
+  'Remember your openings in real games': 'Памʼятай дебюти в реальних партіях',
+  'Train the exact decisions you need to make. RepDrill brings weak positions back before your memory drops them.':
+    'Тренуй саме ті рішення, які доведеться приймати. RepDrill повертає слабкі позиції до того, як ти їх забудеш.',
+  'Learn from every surprise': 'Навчайся з кожного сюрпризу',
+  'After a game, find where you left familiar territory and turn that moment into tomorrow’s training.':
+    'Після партії знайди момент виходу зі знайомої позиції й перетвори його на завтрашнє тренування.',
+  'New · Book puzzle courses': 'Нове · Курси задач із книг',
+  'A great chess book is only useful if you do the work.': 'Сильна шахова книга працює лише тоді, коли працюєш ти.',
+  'RepDrill keeps each diagram together with the players, event, year, and author’s explanation. You see the position first. The answer stays hidden until you commit to a move.':
+    'RepDrill зберігає кожну діаграму разом із гравцями, подією, роком і поясненням автора. Спершу ти бачиш позицію. Відповідь залишається прихованою, доки ти не зробиш хід.',
+  'Try the included Woodpecker course': 'Спробувати вбудований курс Woodpecker',
+  'A study routine you can keep': 'Навчальний ритм, якого легко дотримуватися',
+  'Less deciding what to study. More finding the move.': 'Менше вибору, що вчити. Більше пошуку ходу.',
+  'Bring one useful source': 'Додай одне корисне джерело',
+  'A puzzle book, an opening file, or a game you just played.': 'Книгу задач, дебютний файл або щойно зіграну партію.',
+  'Solve, don’t reread': 'Розвʼязуй, а не перечитуй',
+  'Make the move on the board before you see the answer.': 'Зроби хід на дошці до того, як побачиш відповідь.',
+  'Return at the right time': 'Повертайся вчасно',
+  'Short reviews keep important positions available when a real game asks for them.':
+    'Короткі повторення тримають важливі позиції напоготові до реальної партії.',
+  'Make your next study session count.': 'Нехай наступне тренування має значення.',
+  'Start with the chess material you already trust.': 'Почни з матеріалів, яким уже довіряєш.',
+  'Your training library': 'Твоя бібліотека тренувань',
+  'Choose what to train.': 'Обери, що тренувати.',
+  'Open a puzzle course to solve positions, or a theory course to learn and remember your opening lines.':
+    'Відкрий курс задач, щоб розвʼязувати позиції, або курс теорії, щоб вивчати й памʼятати дебютні лінії.',
+  'Puzzle course · Complete book': 'Курс задач · Повна книга',
+  'Start solving': 'Почати розвʼязувати',
+  'book positions': 'позицій із книги',
+  'interactive solutions': 'інтерактивних рішень',
+  'games represented': 'роки представлених партій',
+  'Every position keeps its players, event, year, book page, and original explanation.':
+    'Кожна позиція зберігає гравців, подію, рік, сторінку книги й оригінальне пояснення.',
+  'Build speed and pattern recognition with compact combinations.':
+    'Розвивай швидкість і розпізнавання патернів на компактних комбінаціях.',
+  'Calculate deeper positions where the first move is less obvious.':
+    'Розраховуй глибші позиції, де перший хід менш очевидний.',
+  'Longer, demanding combinations selected for serious calculation work.':
+    'Довші й складніші комбінації для серйозної роботи над розрахунком.',
+  'Open set': 'Відкрити набір',
+  'Course overview': 'Огляд курсу',
+  'Puzzle mode': 'Режим задач',
+  solved: 'розвʼязано',
+  'White to move': 'Хід білих',
+  'Black to move': 'Хід чорних',
+  Random: 'Випадкова',
+  'From the game': 'З партії',
+  'That move misses the idea. The position is reset — calculate once more.':
+    'Цей хід не знаходить ідею. Позицію відновлено — порахуй ще раз.',
+  'The book explanation is available, but this line could not be converted into a fully legal interactive sequence.':
+    'Пояснення з книги доступне, але цю лінію не вдалося перетворити на повністю легальну інтерактивну послідовність.',
+  Solved: 'Розвʼязано',
+  'Solution revealed': 'Рішення відкрито',
+  'Next position': 'Наступна позиція',
+  'Find the strongest move and play it on the board. RepDrill will answer with the book line.':
+    'Знайди найсильніший хід і зроби його на дошці. RepDrill відповість лінією з книги.',
+  'Show solution': 'Показати рішення',
+  '← Previous': '← Попередня',
+  'Next →': 'Наступна →',
   'RepDrill — Chess Opening Memory': 'RepDrill — памʼять шахових дебютів',
   'A self-hosted chess opening repertoire trainer for annotated lines, FSRS recall, and game review.':
     'Самохостинговий тренажер шахового дебютного репертуару для нотаток, FSRS-повторення та аналізу партій.',
