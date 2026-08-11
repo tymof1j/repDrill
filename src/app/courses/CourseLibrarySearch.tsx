@@ -145,7 +145,7 @@ export function CourseLibrarySearch({ courses }: Props) {
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {visibleCourses.map((course, index) => (
             <CourseCard
-              key={course.id}
+              key={`${course.id}:${progressByCourseId.get(course.id)?.total ?? 'pending'}:${progressByCourseId.get(course.id)?.learned ?? 'pending'}:${progressByCourseId.get(course.id)?.due ?? 'pending'}`}
               course={course}
               featured={index === 0 && !query.trim() && filter === 'all'}
               isDeleting={deleteTargetId === course.id}
@@ -298,7 +298,10 @@ function getProgress(
       dueLabel: missed > 0 ? `${missed} missed` : 'Ready when you are',
     };
   }
-  if (!summary || summary.total === 0) {
+  if (!summary) {
+    return { percent: 0, label: 'Loading progress', variationLabel: 'Reading course positions…', due: 0, dueLabel: 'Please wait' };
+  }
+  if (summary.total === 0) {
     return { percent: 0, label: 'Ready to train', variationLabel: 'Open course to create review cards', due: 0, dueLabel: 'Ready when you are' };
   }
   const percent = (summary.learned / summary.total) * 100;

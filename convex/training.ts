@@ -768,9 +768,7 @@ export const getCourseLineProgress = query({
       if (card.state === 0 || card.due <= now) summary.due += 1;
     }
 
-    const result = Array.from(summaries.values());
-    console.log("course progress summary", JSON.stringify({ version: args.version ?? 1, result }));
-    return result;
+    return Array.from(summaries.values());
   },
 });
 
