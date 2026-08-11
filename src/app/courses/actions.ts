@@ -201,11 +201,11 @@ export async function setLineInfoOnlyAction(formData: FormData): Promise<void> {
   const token = await requireToken();
   const courseId = String(formData.get('courseId') ?? '');
   const chapterId = String(formData.get('chapterId') ?? '') as Id<"chapters">;
-  const lineIndex = Number(formData.get('lineIndex') ?? -1);
+  const lineKey = String(formData.get('lineKey') ?? '').trim();
   const infoOnly = String(formData.get('infoOnly') ?? '') === 'true';
-  if (!chapterId || !Number.isFinite(lineIndex) || lineIndex < 0) throw new Error('Invalid line target');
+  if (!chapterId || !lineKey) throw new Error('Invalid line target');
 
-  await fetchMutation(api.courses.setLineInfoOnly, { chapterId, lineIndex, infoOnly }, { token });
+  await fetchMutation(api.courses.setLineInfoOnly, { chapterId, lineKey, infoOnly }, { token });
   revalidatePath(`/courses/${courseId}`);
 }
 

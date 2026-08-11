@@ -52,6 +52,7 @@ type Props = {
   lineStatuses: {
     chapterId: string;
     lineIndex: number;
+    lineKey: string;
     grade: 'A' | 'B' | 'C' | 'D' | 'N';
     category: 'new' | 'learning' | 'review' | 'due' | 'mastered' | 'info';
     nextReviewAt: number | null;
@@ -227,7 +228,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     return roots.includes(rootPositionId) ? rootPositionId : (roots[0] ?? rootPositionId);
   }, [moves, rootPositionId, selectedChapterId]);
   const lineStatusMap = useMemo(
-    () => new Map(lineStatuses.map((status) => [`${status.chapterId}:${status.lineIndex}`, status])),
+    () => new Map(lineStatuses.map((status) => [`${status.chapterId}:${status.lineKey}`, status])),
     [lineStatuses],
   );
   const courseMeta = useMemo(
@@ -305,11 +306,11 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     });
   };
 
-  const handleSetLineInfoOnly = (chapterId: string, lineIndex: number, infoOnly: boolean) => {
+  const handleSetLineInfoOnly = (chapterId: string, lineKey: string, infoOnly: boolean) => {
     const fd = new FormData();
     fd.set('courseId', course.id);
     fd.set('chapterId', chapterId);
-    fd.set('lineIndex', String(lineIndex));
+    fd.set('lineKey', lineKey);
     fd.set('infoOnly', infoOnly ? 'true' : 'false');
     startTransition(() => {
       void setLineInfoOnlyAction(fd);
@@ -616,7 +617,9 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                           </div>
                           <ol className="grid gap-2 lg:grid-cols-2">
                             {selectedChapterLines.map((line, lIdx) => {
-                              const status = lineStatusMap.get(`${selectedChapterId}:${lIdx}`);
+                              const lineKey = line.moves.map((move) => move.uci).join(' ');
+                              const status = lineStatusMap.get(`${selectedChapterId}:${lineKey}`);
+                              const isInfoOnly = status?.isInfoOnly === true;
                               return (
                               <li key={line.id}>
                                 <div className="flex w-full items-stretch border border-[color:var(--paper-edge)] bg-[color:var(--paper)] transition-colors duration-200 hover:bg-[color:var(--paper-deep)]">
@@ -650,12 +653,15 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                                     )}
                                   </button>
                                   <span className="flex shrink-0 items-center border-l border-[color:var(--paper-edge)] px-2">
+                                    <span className="mr-2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--ink-faint)]">
+                                      {isInfoOnly ? 'Info-only' : 'Training'}
+                                    </span>
                                     <GhostButton
-                                      onClick={() => handleSetLineInfoOnly(ch.id, lIdx, !status?.isInfoOnly)}
+                                      onClick={() => handleSetLineInfoOnly(ch.id, lineKey, !isInfoOnly)}
                                       disabled={pending}
                                       className="px-2 text-[9px]"
                                     >
-                                      {status?.isInfoOnly ? 'Training' : 'Info-only'}
+                                      {isInfoOnly ? 'Set training' : 'Set info-only'}
                                     </GhostButton>
                                   </span>
                                 </div>

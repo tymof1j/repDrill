@@ -220,6 +220,7 @@ export type TrainingLine = {
 export type CourseLineStatus = {
   chapterId: string;
   lineIndex: number;
+  lineKey: string;
   grade: "A" | "B" | "C" | "D" | "N";
   category: "new" | "learning" | "review" | "due" | "mastered" | "info";
   nextReviewAt: number | null;
@@ -624,6 +625,7 @@ export const getCourseLineStatuses = query({
           result.push({
             chapterId,
             lineIndex,
+            lineKey,
             grade: "N",
             category: "info",
             nextReviewAt: null,
@@ -638,6 +640,7 @@ export const getCourseLineStatuses = query({
           result.push({
             chapterId,
             lineIndex,
+            lineKey,
             grade: "N",
             category: "new",
             nextReviewAt: null,
@@ -660,6 +663,7 @@ export const getCourseLineStatuses = query({
         result.push({
           chapterId,
           lineIndex,
+          lineKey,
           grade,
           category,
           nextReviewAt: Number.isFinite(minDue) ? minDue : null,

@@ -391,7 +391,7 @@ function buildLineKey(moves: Doc<"moves">[]) {
 export const setLineInfoOnly = mutation({
   args: {
     chapterId: v.id("chapters"),
-    lineIndex: v.number(),
+    lineKey: v.string(),
     infoOnly: v.boolean(),
   },
   handler: async (ctx, args) => {
@@ -406,8 +406,6 @@ export const setLineInfoOnly = mutation({
       .query("moves")
       .withIndex("by_chapter", (q) => q.eq("chapterId", args.chapterId))
       .collect();
-    moves.sort((a, b) => Number(b.isMainLine) - Number(a.isMainLine) || a.sortOrder - b.sortOrder);
-
     const byParent = new Map<string, Doc<"moves">[]>();
     for (const move of moves) {
       const siblings = byParent.get(move.parentPositionId as string) ?? [];
@@ -446,7 +444,7 @@ export const setLineInfoOnly = mutation({
       walk(rootId, []);
     }
 
-    const target = lines[args.lineIndex];
+    const target = lines.find((line) => buildLineKey(line) === args.lineKey);
     if (!target || target.length === 0) throw new Error("Line not found");
     const lineKey = buildLineKey(target);
 
