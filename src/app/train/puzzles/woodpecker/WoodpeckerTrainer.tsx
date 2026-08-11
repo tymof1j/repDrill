@@ -43,9 +43,9 @@ type PuzzleSolution = { solutionSan: string[]; solutionUci: string[] };
 type TrainerStatus = 'ready' | 'wrong' | 'correct' | 'revealed';
 
 const forcedRecheckExercise = 110;
-// Leave just enough time for the player's move to render before the prepared
-// reply lands; a longer pause feels like network latency during a drill.
-const COMPUTER_REPLY_DELAY_MS = 120;
+// Schedule the prepared reply on the next event-loop turn. This keeps the
+// player's move committed without adding a perceptible artificial pause.
+const COMPUTER_REPLY_DELAY_MS = 0;
 
 export function WoodpeckerTrainer({
   puzzle,
