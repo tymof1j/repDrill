@@ -1,4 +1,5 @@
 export type BookTrainingKey = 'woodpecker-method' | 'woodpecker-method-2';
+export type LearnQuizPasses = 1 | 2 | 3;
 
 export type BookMethodProgress = {
   cycle: number;
@@ -23,6 +24,8 @@ export const BOOK_METHODS = {
 
 const enabledKey = (book: BookTrainingKey) => `repdrill:${book}:author-method`;
 const progressKey = (book: BookTrainingKey) => `repdrill:${book}:method-progress`;
+const learnQuizPassesKey = 'repdrill:learn-quiz-passes';
+const learnResumeKey = (courseId: string) => `repdrill:learn-resume:${courseId}`;
 
 export function isBookMethodEnabled(book: BookTrainingKey) {
   if (typeof window === 'undefined') return true;
@@ -72,3 +75,25 @@ export function startNextBookMethodCycle(book: BookTrainingKey) {
   return next;
 }
 
+export function readLearnQuizPasses(): LearnQuizPasses {
+  if (typeof window === 'undefined') return 1;
+  const value = Number(window.localStorage.getItem(learnQuizPassesKey));
+  return value === 2 || value === 3 ? value : 1;
+}
+
+export function setLearnQuizPasses(value: LearnQuizPasses) {
+  window.localStorage.setItem(learnQuizPassesKey, String(value));
+  window.dispatchEvent(new CustomEvent('repdrill:learn-quiz-passes', { detail: { value } }));
+}
+
+export function readLearnResume(courseId: string): string | null {
+  if (typeof window === 'undefined') return null;
+  const value = window.localStorage.getItem(learnResumeKey(courseId));
+  return value?.trim() || null;
+}
+
+export function recordLearnResume(courseId: string, lineId: string | null) {
+  if (typeof window === 'undefined') return;
+  if (lineId) window.localStorage.setItem(learnResumeKey(courseId), lineId);
+  else window.localStorage.removeItem(learnResumeKey(courseId));
+}

@@ -77,6 +77,7 @@ export default function CoursesListPage() {
     name: item.resource.name,
     color: item.resource.color,
     description: `Shared by ${item.owner?.name ?? item.owner?.email ?? 'another RepDrill user'} · ${item.invitation.access}`,
+    isShared: true,
   }));
   const visibleStats = stats;
 

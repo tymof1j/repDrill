@@ -76,8 +76,16 @@ function buildConfig(props: {
     fen: props.fen,
     orientation: props.orientation,
     turnColor,
-    viewOnly: false,
+    // Keep Chessground's own viewOnly flag in sync with the caller.  The
+    // previous implementation only disabled the movable pieces while still
+    // leaving Chessground's event surface active, which made a study board
+    // unexpectedly selectable on touch devices.
+    viewOnly: props.viewOnly,
     disableContextMenu: true,
+    // Keep a touch drag on the board from handing the gesture to the page.
+    // Only interactive positions opt in; study/feedback boards remain
+    // scrollable when the user starts a gesture on an empty square.
+    blockTouchScroll: canMove && Boolean(props.movable?.color),
     coordinates: true,
     animation: { enabled: false, duration: 0 },
     lastMove: props.lastMove as Key[] | undefined,
@@ -89,14 +97,14 @@ function buildConfig(props: {
       ...(props.brushes ? { brushes: props.brushes } : {}),
     },
     movable: {
-      free: false,
+      free: props.movable?.free ?? false,
       color: canMove ? props.movable?.color ?? undefined : undefined,
       dests: canMove ? props.movable?.dests as Map<Key, Key[]> | undefined : undefined,
       showDests: canMove ? props.movable?.showDests ?? true : false,
     },
     premovable: {
       enabled: canMove ? props.premovable?.enabled ?? true : false,
-      events: canMove && props.onPremoveSet
+      events: canMove && props.premovable?.enabled !== false && props.onPremoveSet
         ? {
             set: (orig, dest) => props.onPremoveSet?.(orig as string, dest as string),
           }
@@ -135,11 +143,16 @@ export function ChessBoard({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const apiRef = useRef<Api | null>(null);
   const onMoveRef = useRef<Props['onMove']>(onMove);
+  const onPremoveSetRef = useRef<Props['onPremoveSet']>(onPremoveSet);
   const previousFenRef = useRef(fen);
 
   useEffect(() => {
     onMoveRef.current = onMove;
   }, [onMove]);
+
+  useEffect(() => {
+    onPremoveSetRef.current = onPremoveSet;
+  }, [onPremoveSet]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -154,7 +167,7 @@ export function ChessBoard({
       movable,
       premovable,
       onMove: (orig, dest, captured) => onMoveRef.current?.(orig, dest, captured),
-      onPremoveSet,
+      onPremoveSet: (orig, dest) => onPremoveSetRef.current?.(orig, dest),
       brushes,
     });
     apiRef.current = Chessground(container, config);
@@ -178,8 +191,9 @@ export function ChessBoard({
       ...(fenChanged ? { fen } : {}),
       orientation,
       ...(fenChanged ? { turnColor: fen.split(/\s+/)[1] === 'b' ? 'black' : 'white' } : {}),
-      viewOnly: false,
+      viewOnly,
       disableContextMenu: true,
+      blockTouchScroll: !viewOnly && Boolean(movable?.color),
       animation: { enabled: false, duration: 0 },
       lastMove: lastMove as Key[] | undefined,
       drawable: {
@@ -190,16 +204,16 @@ export function ChessBoard({
         ...(brushes ? { brushes } : {}),
       },
       movable: {
-        free: false,
+        free: movable?.free ?? false,
         color: !viewOnly ? movable?.color ?? undefined : undefined,
         dests: !viewOnly ? movable?.dests as Map<Key, Key[]> | undefined : undefined,
         showDests: !viewOnly ? movable?.showDests ?? true : false,
       },
       premovable: {
         enabled: !viewOnly ? premovable?.enabled ?? true : false,
-        events: !viewOnly && onPremoveSet
+        events: !viewOnly && premovable?.enabled !== false
           ? {
-              set: (orig, dest) => onPremoveSet(orig as string, dest as string),
+              set: (orig, dest) => onPremoveSetRef.current?.(orig as string, dest as string),
             }
           : undefined,
       },
@@ -208,12 +222,14 @@ export function ChessBoard({
         showGhost: !viewOnly,
       },
       selectable: {
+        // Chessground supports both drag-and-drop and click-source/click-
+        // target moves when selectable and draggable are enabled together.
         enabled: !viewOnly,
       },
     });
     previousFenRef.current = fen;
     apiRef.current.playPremove();
-  }, [fen, orientation, viewOnly, lastMove, arrows, squareMarks, movable, premovable, onPremoveSet, brushes]);
+  }, [fen, orientation, viewOnly, lastMove, arrows, squareMarks, movable, premovable, brushes]);
 
   return (
     <div

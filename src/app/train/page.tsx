@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/Premium';
 import { TrainingSession } from './TrainingSession';
 import type { Id } from '@convex/_generated/dataModel';
+import { readLearnResume } from '@/lib/bookTrainingPreferences';
 
 type Selection =
   | { type: 'all' }
@@ -25,10 +26,39 @@ export default function TrainPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromParam = searchParams.get('from') ?? undefined;
+  const courseParam = searchParams.get('courseId') ?? undefined;
+  const chapterParam = searchParams.get('chapterId') ?? undefined;
+  const learnMode = searchParams.get('mode') === 'learn';
 
   const [cardsReady, setCardsReady] = useState(false);
-  const [selection, setSelection] = useState<Selection>({ type: 'all' });
+  const [resumeLineId, setResumeLineId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(() =>
+    courseParam
+      ? { type: 'course', id: courseParam as Id<'courses'> }
+      : { type: 'all' },
+  );
   const ensureCards = useMutation(api.training.ensureCards);
+
+  // Keep deep links (and client-side navigation between course cards) in sync
+  // with the selector.  This runs only when the URL parameter changes, so a
+  // user can still switch filters locally while staying on the same URL.
+  useEffect(() => {
+    // The URL is an external source of truth; reset the local filter only when
+    // that source changes (not on every render).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelection(courseParam ? { type: 'course', id: courseParam as Id<'courses'> } : { type: 'all' });
+  }, [courseParam]);
+
+  useEffect(() => {
+    if (!learnMode || !courseParam || chapterParam) {
+      setResumeLineId(null);
+      return;
+    }
+    // Resume is intentionally local: it is immediate, works offline while
+    // the queue is loading, and does not leak a user's study position to a
+    // shared course owner.
+    setResumeLineId(readLearnResume(courseParam));
+  }, [courseParam, chapterParam, learnMode]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -50,6 +80,8 @@ export default function TrainPage() {
   const queryArgs = cardsReady && courses !== undefined && repertoires !== undefined
     ? {
         fromPositionId: fromParam as Id<'positions'> | undefined,
+        chapterId: chapterParam as Id<'chapters'> | undefined,
+        learnMode,
         courseId:
           selection.type === 'course'
             ? selection.id
@@ -150,5 +182,24 @@ export default function TrainPage() {
     );
   }
 
-  return <TrainingSession initialLines={result.lines} filterBar={filterBar} />;
+  const sessionKey = selection.type === 'course'
+    ? `course:${selection.id}`
+    : selection.type === 'repertoire'
+      ? `repertoire:${selection.id}`
+      : 'all';
+  const sessionScopeKey = `${sessionKey}|from:${fromParam ?? ''}|chapter:${chapterParam ?? ''}|mode:${learnMode ? 'learn' : 'review'}`;
+
+  // The session intentionally snapshots its queue so a completed line cannot
+  // disappear underneath the user when Convex updates card due dates.  A key
+  // makes an explicit filter switch start a fresh queue while preserving that
+  // snapshot behavior during a session.
+  return (
+    <TrainingSession
+      key={sessionScopeKey}
+      initialLines={result.lines}
+      filterBar={filterBar}
+      studyMode={learnMode}
+      initialLineId={resumeLineId}
+    />
+  );
 }

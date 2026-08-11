@@ -1,16 +1,29 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Pencil } from 'lucide-react';
 import Fuse from 'fuse.js';
+import { useQuery } from 'convex/react';
+import type { Id } from '@convex/_generated/dataModel';
+import { api } from '@convex/_generated/api';
 import {
   EmptyState,
   GhostButton,
   SecondaryButton,
-  Stamp,
 } from '@/components/ui/Premium';
 import { deleteCourseAction, renameCourseAction } from './actions';
+import {
+  CourseCover,
+  ProgressBar,
+  getCourseMeta,
+  type CourseKind,
+} from './CourseVisuals';
+import {
+  getBookProgressEventName,
+  readBookPuzzleProgress,
+  type BookPuzzleProgress,
+} from '@/lib/woodpeckerProgress';
+import type { BookTrainingKey } from '@/lib/bookTrainingPreferences';
 
 export type CourseListItem = {
   id: string;
@@ -20,14 +33,26 @@ export type CourseListItem = {
   href?: string;
   mode?: 'theory' | 'puzzles';
   isBuiltIn?: boolean;
+  isShared?: boolean;
+};
+
+export type CourseLineProgressSummary = {
+  courseId: string;
+  total: number;
+  learned: number;
+  due: number;
+  newLines: number;
 };
 
 type Props = {
   courses: CourseListItem[];
 };
 
+type LibraryFilter = 'all' | CourseKind;
+
 export function CourseLibrarySearch({ courses }: Props) {
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<LibraryFilter>('all');
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -54,164 +79,274 @@ export function CourseLibrarySearch({ courses }: Props) {
 
   const visibleCourses = useMemo(() => {
     const trimmed = query.trim();
-    if (!trimmed) return courses;
-    return fuse.search(trimmed).map((result) => result.item);
-  }, [courses, fuse, query]);
-
+    const searched = trimmed ? fuse.search(trimmed).map((result) => result.item) : courses;
+    if (filter === 'all') return searched;
+    return searched.filter((course) => getCourseMeta(course.name, course.description, course.mode).kind === filter);
+  }, [courses, filter, fuse, query]);
+  // One batched subscription keeps the library responsive when a course has
+  // hundreds of branches.  Built-in puzzle pages and shared read-only cards
+  // do not have theory line progress in the user's review queue.
+  const trainableCourseIds = useMemo(
+    () => courses
+      .filter((course) => !course.isBuiltIn && !course.isShared)
+      .map((course) => course.id as Id<'courses'>),
+    [courses],
+  );
+  const progressRows = useQuery(
+    api.training.getCourseLineProgress,
+    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds } : 'skip',
+  ) as CourseLineProgressSummary[] | undefined;
+  const progressByCourseId = useMemo(
+    () => new Map((progressRows ?? []).map((row) => [row.courseId, row])),
+    [progressRows],
+  );
   if (courses.length === 0) {
-    return (
-      <EmptyState>
-        No courses yet. Begin by importing a PGN or a Lichess study to seed
-        your first body of theory.
-      </EmptyState>
-    );
+    return <EmptyState>No courses yet. Import a PGN or a Lichess study to seed your first body of theory.</EmptyState>;
   }
 
   return (
     <div>
-      {/* Search — single ruled line, no chrome */}
-      <div className="mb-10 flex flex-wrap items-baseline gap-x-6 gap-y-3 border-b border-[color:var(--paper-edge)] pb-3">
-        <label className="flex flex-1 min-w-[260px] items-baseline gap-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-            Find
-          </span>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Title, color, or note…"
-            className="font-display flex-1 bg-transparent text-2xl italic text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none"
-          />
-        </label>
-        <p className="font-mono text-[10px] uppercase tracking-[0.20em] text-[color:var(--ink-faint)] tabular-nums">
-          {visibleCourses.length} / {courses.length}
-        </p>
+      <div className="mb-8 rounded-[1.35rem] border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-3 shadow-[0_16px_45px_rgba(47,58,50,0.05)] sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <label className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-3 focus-within:border-[color:var(--library-green)]">
+            <span aria-hidden className="font-mono text-sm text-[color:var(--ink-faint)]">/</span>
+            <span className="sr-only">Search courses</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search your opening library"
+              className="min-w-0 flex-1 bg-transparent text-sm text-[color:var(--ink)] outline-none placeholder:text-[color:var(--ink-ghost)]"
+            />
+            <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)] sm:inline">{visibleCourses.length} shown</span>
+          </label>
+          <div className="flex shrink-0 items-center gap-1 rounded-xl bg-[color:var(--paper-shade)] p-1" role="tablist" aria-label="Course type">
+            {([
+              ['all', 'All'],
+              ['opening', 'Openings'],
+              ['theory', 'Theory'],
+              ['puzzles', 'Puzzles'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={filter === value}
+                onClick={() => setFilter(value)}
+                className={`rounded-lg px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-[background-color,color,transform] duration-200 active:scale-[0.98] ${filter === value ? 'bg-[color:var(--ink)] text-[color:var(--paper)] shadow-sm' : 'text-[color:var(--ink-faint)] hover:text-[color:var(--ink)]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {visibleCourses.length === 0 ? (
-        <div className="border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-8 py-12 text-center">
-          <p className="font-display-italic text-lg text-[color:var(--ink-soft)]">
-            Nothing in the index matches that.
-          </p>
-          <SecondaryButton onClick={() => setQuery('')} className="mt-5">
-            Clear
-          </SecondaryButton>
+        <div className="rounded-[1.5rem] border border-dashed border-[color:var(--paper-edge)] bg-[color:var(--surface-soft)] px-8 py-16 text-center">
+          <p className="font-display text-lg text-[color:var(--ink-soft)]">No course matches that filter.</p>
+          <SecondaryButton onClick={() => { setQuery(''); setFilter('all'); }} className="mt-5">Reset filters</SecondaryButton>
         </div>
       ) : (
-        <ol className="divide-y divide-[color:var(--paper-rule)] border-y border-[color:var(--paper-edge)]">
-          {visibleCourses.map((course, idx) => {
-            const num = String(idx + 1).padStart(2, '0');
-            const isDeleting = deleteTargetId === course.id;
-            const isRenaming = renameTargetId === course.id;
-            return (
-              <li
-                key={course.id}
-                className="group relative grid grid-cols-[3rem_1fr_auto] items-baseline gap-x-5 gap-y-2 py-6 transition-colors duration-200 hover:bg-[color:var(--paper-shade)] md:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] md:gap-x-8 md:py-7"
-              >
-                <span
-                  className="font-display text-2xl italic text-[color:var(--ink-faint)] group-hover:text-[color:var(--margin-red)]"
-                  style={{ fontFeatureSettings: '"onum"' }}
-                >
-                  {num}
-                </span>
-
-                {isRenaming ? (
-                  <div className="flex flex-wrap items-baseline gap-3">
-                    <input
-                      value={renameDraft}
-                      onChange={(e) => setRenameDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveRename(course.id);
-                        if (e.key === 'Escape') setRenameTargetId(null);
-                      }}
-                      className="font-display text-2xl font-medium bg-transparent border-b border-[color:var(--ink)] text-[color:var(--ink)] outline-none md:text-[1.65rem]"
-                      autoFocus
-                    />
-                    <GhostButton onClick={() => saveRename(course.id)}>Save</GhostButton>
-                    <GhostButton onClick={() => setRenameTargetId(null)}>Cancel</GhostButton>
-                  </div>
-                ) : (
-                  <Link
-                    href={course.href ?? `/courses/${course.id}`}
-                    className="block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
-                  >
-                    <div className="flex items-baseline gap-3">
-                      <h2 className="font-display text-2xl font-medium leading-tight text-[color:var(--ink)] underline decoration-transparent decoration-1 underline-offset-[6px] transition-colors duration-200 group-hover:decoration-[color:var(--margin-red)] md:text-[1.65rem]">
-                        {course.name}
-                      </h2>
-                      <Stamp tone={course.mode === 'puzzles' ? 'red' : course.color === 'white' ? 'ink' : 'red'}>
-                        {course.mode === 'puzzles' ? 'puzzles' : course.color}
-                      </Stamp>
-                    </div>
-                    {course.description && (
-                      <p className="mt-2 font-display-italic max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
-                        {course.description}
-                      </p>
-                    )}
-                  </Link>
-                )}
-
-                <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)] md:block">
-                  {course.mode === 'puzzles' ? (
-                    <>
-                      Open to solve positions,
-                      <br />
-                      track progress, and review.
-                    </>
-                  ) : (
-                    <>
-                      Open to manage chapters,
-                      <br />
-                      annotations, and lines.
-                    </>
-                  )}
-                </p>
-
-                <div className="col-start-2 flex items-center gap-3 md:col-start-4 md:justify-self-end">
-                  {course.isBuiltIn ? (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">
-                      Included
-                    </span>
-                  ) : isDeleting ? (
-                    <form action={deleteCourseAction} className="flex items-center gap-3">
-                      <input type="hidden" name="id" value={course.id} />
-                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--margin-red)]">
-                        Confirm?
-                      </span>
-                      <GhostButton
-                        type="button"
-                        onClick={() => setDeleteTargetId(null)}
-                      >
-                        Cancel
-                      </GhostButton>
-                      <button
-                        type="submit"
-                        className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--margin-red)] underline decoration-[color:var(--margin-red)] decoration-1 underline-offset-[6px] hover:opacity-80"
-                      >
-                        Delete
-                      </button>
-                    </form>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        title="Rename"
-                        onClick={() => { setRenameDraft(course.name); setRenameTargetId(course.id); setDeleteTargetId(null); }}
-                        className="text-[color:var(--ink-faint)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-[color:var(--ink)]"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <GhostButton onClick={() => setDeleteTargetId(course.id)}>
-                        Delete
-                      </GhostButton>
-                    </>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {visibleCourses.map((course, index) => (
+            <CourseCard
+              key={course.id}
+              course={course}
+              featured={index === 0 && !query.trim() && filter === 'all'}
+              isDeleting={deleteTargetId === course.id}
+              isRenaming={renameTargetId === course.id}
+              renameDraft={renameDraft}
+              onRenameDraftChange={setRenameDraft}
+              onRename={() => { setRenameDraft(course.name); setRenameTargetId(course.id); setDeleteTargetId(null); }}
+              onRenameSave={() => saveRename(course.id)}
+              onRenameCancel={() => setRenameTargetId(null)}
+              onDelete={() => setDeleteTargetId(course.id)}
+              onDeleteCancel={() => setDeleteTargetId(null)}
+              lineProgress={progressByCourseId.get(course.id)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
+}
+
+function CourseCard({
+  course,
+  featured,
+  isDeleting,
+  isRenaming,
+  renameDraft,
+  onRenameDraftChange,
+  onRename,
+  onRenameSave,
+  onRenameCancel,
+  onDelete,
+  onDeleteCancel,
+  lineProgress,
+}: {
+  course: CourseListItem;
+  featured: boolean;
+  isDeleting: boolean;
+  isRenaming: boolean;
+  renameDraft: string;
+  onRenameDraftChange: (value: string) => void;
+  onRename: () => void;
+  onRenameSave: () => void;
+  onRenameCancel: () => void;
+  onDelete: () => void;
+  onDeleteCancel: () => void;
+  lineProgress?: CourseLineProgressSummary;
+}) {
+  const meta = getCourseMeta(course.name, course.description, course.mode);
+  const bookProgress = useBuiltInBookProgress(course);
+  const progress = getProgress(course, lineProgress, bookProgress);
+  const href = course.href ?? `/courses/${course.id}`;
+  const learnHref = course.isBuiltIn
+    ? course.href ?? href
+    : `/train?courseId=${encodeURIComponent(course.id)}&mode=learn`;
+  const reviewHref = course.mode === 'puzzles'
+    ? course.href ?? '/train'
+    : `/train?courseId=${encodeURIComponent(course.id)}`;
+
+  return (
+    <article className={`group flex min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-[color:var(--paper-rule)] bg-[color:var(--surface)] shadow-[0_18px_50px_rgba(47,58,50,0.06)] transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-[color:var(--library-green-soft)] hover:shadow-[0_24px_58px_rgba(47,58,50,0.12)] ${featured ? 'md:col-span-2 md:grid md:grid-cols-[minmax(15rem,0.82fr)_minmax(0,1.18fr)]' : ''}`}>
+      <Link href={href} className={`block p-3 pb-0 ${featured ? 'md:p-4 md:pr-0 md:pb-4' : 'sm:p-4 sm:pb-0'}`} aria-label={`Open ${course.name}`}>
+        <CourseCover name={course.name} kind={meta.kind} compact={!featured} />
+      </Link>
+
+      <div className={`flex min-w-0 flex-1 flex-col p-5 sm:p-6 ${featured ? 'md:p-7' : ''}`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ink-soft)]">{meta.kindLabel}</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">{course.color === 'both' ? 'White + Black' : `${course.color} repertoire`}</span>
+            </div>
+            {isRenaming ? (
+              <div className="space-y-3">
+                <input
+                  value={renameDraft}
+                  onChange={(event) => onRenameDraftChange(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') onRenameSave(); if (event.key === 'Escape') onRenameCancel(); }}
+                  className="w-full border-b border-[color:var(--ink)] bg-transparent pb-1 font-display text-xl font-semibold text-[color:var(--ink)] outline-none"
+                  autoFocus
+                />
+                <div className="flex gap-3"><SecondaryButton onClick={onRenameSave}>Save</SecondaryButton><GhostButton onClick={onRenameCancel}>Cancel</GhostButton></div>
+              </div>
+            ) : (
+              <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)] focus-visible:ring-offset-2">
+                <h2 className="line-clamp-2 font-display text-[1.38rem] font-semibold leading-[1.1] tracking-[-0.035em] text-[color:var(--ink)]">{course.name}</h2>
+              </Link>
+            )}
+          </div>
+          {!course.isBuiltIn && !course.isShared && !isRenaming && (
+            <button type="button" onClick={onRename} title="Rename course" aria-label={`Rename ${course.name}`} className="shrink-0 rounded-lg p-2 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-ghost)] opacity-60 transition-colors hover:bg-[color:var(--paper-shade)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)]">
+              Edit
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-[color:var(--paper-shade)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--ink-faint)]">{meta.openingLabel}</span>
+          {meta.theoryLabels.slice(0, 2).map((label) => <span key={label} className="rounded-full bg-[color:var(--paper-shade)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--ink-faint)]">{label}</span>)}
+        </div>
+
+        <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-[color:var(--ink-soft)]">{meta.shortDescription}</p>
+
+        <div className="mt-6 border-t border-[color:var(--paper-rule)] pt-5">
+          <ProgressBar value={progress.percent} tone={progress.due > 0 ? 'red' : 'green'} label={progress.label} />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--ink-faint)]">
+            <span>{progress.variationLabel}</span>
+            <span className={progress.due > 0 ? 'text-[color:var(--margin-red)]' : ''}>{progress.due > 0 ? `${progress.due} due` : 'Ready when you are'}</span>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          <Link href={learnHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[color:var(--ink)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)] active:translate-y-0">Learn<span aria-hidden className="ml-2">→</span></Link>
+          <Link href={reviewHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ink)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0">Review{progress.due > 0 ? ` · ${progress.due}` : ''}</Link>
+        </div>
+
+        {course.isBuiltIn ? (
+          <span className="mt-4 font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--library-green)]">Included with RepDrill</span>
+        ) : course.isShared ? (
+          <span className="mt-4 font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--gilt)]">Shared study</span>
+        ) : isDeleting ? (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-[color:var(--paper-shade)] px-3 py-2"><span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">Delete this course?</span><div className="flex items-center gap-2"><GhostButton onClick={onDeleteCancel}>Cancel</GhostButton><form action={deleteCourseAction}><input type="hidden" name="id" value={course.id} /><button type="submit" className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--margin-red)] hover:underline">Delete</button></form></div></div>
+        ) : (
+          <button type="button" onClick={onDelete} className="mt-4 self-start font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)] transition-colors hover:text-[color:var(--margin-red)]">Manage course · Delete</button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function getProgress(
+  course: CourseListItem,
+  summary: CourseLineProgressSummary | undefined,
+  bookProgress: BookPuzzleProgress | null = null,
+) {
+  if (course.isBuiltIn) {
+    const count = course.name.toLowerCase().includes('woodpecker method 2') ? 1000 : course.name.toLowerCase().includes('woodpecker') ? 1128 : 0;
+    const solved = bookProgress?.solved.length ?? 0;
+    const missed = bookProgress?.missed.length ?? 0;
+    const percent = count ? (solved / count) * 100 : 0;
+    return {
+      percent,
+      label: solved ? `${Math.round(percent)}%` : 'Not started',
+      variationLabel: count ? `${solved.toLocaleString()} / ${count.toLocaleString()} positions` : 'Progress not started',
+      due: missed,
+    };
+  }
+  if (!summary) {
+    // This bundled archive has 335 browsable branches; the Introduction is
+    // deliberately info-only, leaving 334 trainable variations. Keep its card
+    // informative while the realtime aggregate is still warming up.
+    if (course.name.toLowerCase().includes('english breakfast')) {
+      return { percent: 0, label: 'Not started', variationLabel: '0 / 334 variations', due: 0 };
+    }
+    return { percent: 0, label: 'Not started', variationLabel: '0 / — variations', due: 0 };
+  }
+  const percent = summary.total ? (summary.learned / summary.total) * 100 : 0;
+  return {
+    percent,
+    label: `${Math.round(percent)}%`,
+    variationLabel: `${summary.learned} / ${summary.total} variations`,
+    due: summary.due,
+  };
+}
+
+function useBuiltInBookProgress(course: CourseListItem): BookPuzzleProgress | null {
+  const book = getBuiltInBookKey(course);
+  const [progress, setProgress] = useState<BookPuzzleProgress | null>(() => (
+    book ? readBookPuzzleProgress(book) : null
+  ));
+
+  useEffect(() => {
+    if (!book) {
+      setProgress(null);
+      return;
+    }
+    const refresh = () => setProgress(readBookPuzzleProgress(book));
+    const eventName = getBookProgressEventName();
+    window.addEventListener(eventName, refresh);
+    window.addEventListener('storage', refresh);
+    refresh();
+    return () => {
+      window.removeEventListener(eventName, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, [book]);
+
+  return progress;
+}
+
+function getBuiltInBookKey(course: CourseListItem): BookTrainingKey | null {
+  if (!course.isBuiltIn) return null;
+  const normalized = `${course.id} ${course.name}`.toLowerCase();
+  if (normalized.includes('woodpecker-method-2') || normalized.includes('woodpecker method 2')) {
+    return 'woodpecker-method-2';
+  }
+  if (normalized.includes('woodpecker')) return 'woodpecker-method';
+  return null;
 }

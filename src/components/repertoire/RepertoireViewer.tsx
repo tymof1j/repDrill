@@ -93,6 +93,30 @@ export function RepertoireViewer({
 
   const currentPosition = positionsById.get(currentPositionId);
   const currentFen = currentPosition?.fen ?? STARTING_FEN;
+  const [preview, setPreview] = useState<{
+    positionId: string;
+    fen: string;
+    lastMove: [string, string];
+  } | null>(null);
+  // The position id makes previews self-invalidating whenever the canonical
+  // tree navigation changes, without an effect that races the board render.
+  const activePreview = preview?.positionId === currentPositionId ? preview : null;
+  const displayedFen = activePreview?.fen ?? currentFen;
+
+  const previewNotationMove = (san: string) => {
+    try {
+      const chess = new Chess(completeFen(displayedFen));
+      const result = chess.move(san, { strict: false });
+      if (!result) return;
+      setPreview({
+        positionId: currentPositionId,
+        fen: chess.fen(),
+        lastMove: [result.from, result.to],
+      });
+    } catch {
+      // A prose token may be SAN-shaped but illegal from this position.
+    }
+  };
 
   const [showArrows, setShowArrows] = useState(true);
   const [showHighlights, setShowHighlights] = useState(true);
@@ -181,7 +205,7 @@ export function RepertoireViewer({
       return;
     }
     try {
-      const chess = new Chess(currentFen + ' 0 1');
+      const chess = new Chess(completeFen(currentFen));
       const result = chess.move({ from: orig, to: dest, promotion: 'q' });
       if (!result) return;
       const fallback = nextMoves.find((m) => m.san === result.san);
@@ -269,13 +293,13 @@ export function RepertoireViewer({
             caption={selectedChapterName ? `Filtered to: ${selectedChapterName}` : `§ ${path.length === 0 ? 'opening' : `move ${Math.ceil((path.length + 1) / 2)}`}`}
           >
             <ChessBoard
-              fen={currentFen + ' 0 1'}
+              fen={completeFen(displayedFen)}
               orientation={repertoireColor}
-              lastMove={lastMove}
+              lastMove={activePreview ? activePreview.lastMove : lastMove}
               arrows={arrows}
               squareMarks={movablePieceMarks}
               brushes={getBoardBrushes(arrowTheme)}
-              viewOnly={false}
+              viewOnly={Boolean(activePreview)}
               movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
               onMove={onBoardMove}
             />
@@ -308,6 +332,15 @@ export function RepertoireViewer({
             Forward ▶
           </button>
         </div>
+        {activePreview && (
+          <button
+            type="button"
+            onClick={() => setPreview(null)}
+            className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)] underline decoration-1 underline-offset-4"
+          >
+            Return to line position
+          </button>
+        )}
 
         {/* Annotation — narrow screens only: right below nav controls */}
         <section className="mt-4 md:hidden">
@@ -334,9 +367,7 @@ export function RepertoireViewer({
               </div>
             </div>
           ) : currentPosition?.annotation ? (
-            <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
-              {currentPosition.annotation}
-            </p>
+            <StudyAnnotation text={currentPosition.annotation} onNotationMove={previewNotationMove} />
           ) : (
             <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
               No annotation.{' '}
@@ -481,9 +512,7 @@ export function RepertoireViewer({
               </div>
             </div>
           ) : currentPosition?.annotation ? (
-            <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
-              {currentPosition.annotation}
-            </p>
+            <StudyAnnotation text={currentPosition.annotation} onNotationMove={previewNotationMove} />
           ) : (
             <p className="mt-4 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
               No annotation.{' '}
@@ -510,5 +539,51 @@ export function RepertoireViewer({
         </section>
       </div>
     </div>
+  );
+}
+
+const SAN_TOKEN = /^(?:O-O(?:-O)?|0-0(?:-0)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h]x[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8](?:=[QRBN])?[+#]?)$/i;
+
+function completeFen(fen: string) {
+  const fields = fen.trim().split(/\s+/);
+  if (fields.length >= 6) return fields.slice(0, 6).join(' ');
+  if (fields.length === 5) return `${fields.join(' ')} 1`;
+  if (fields.length === 4) return `${fields.join(' ')} 0 1`;
+  return `${STARTING_FEN} 0 1`;
+}
+
+function splitNotationToken(token: string) {
+  const match = token.match(/^([([{]*)(?:(?:\d+\.{1,3}|\.{3})?)([^\s]+?)([.,;:!?)}\]]*)$/);
+  if (!match) return null;
+  const [, prefix, rawMove, suffix] = match;
+  const move = rawMove.replace(/[.,;:!?)}\]]+$/, '');
+  if (!SAN_TOKEN.test(move)) return null;
+  return { prefix, move, suffix };
+}
+
+function StudyAnnotation({ text, onNotationMove }: { text: string; onNotationMove: (san: string) => void }) {
+  const parts = text.split(/(\s+)/);
+  return (
+    <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
+      {parts.map((part, index) => {
+        if (/^\s+$/.test(part)) return <span key={`space-${index}`}>{part}</span>;
+        const parsed = splitNotationToken(part);
+        if (!parsed) return <span key={`text-${index}`}>{part}</span>;
+        return (
+          <span key={`move-${index}`}>
+            {parsed.prefix}
+            <button
+              type="button"
+              className="notation rounded px-0.5 text-[color:var(--library-green)] underline decoration-[color:var(--library-green-soft)] decoration-1 underline-offset-4 transition-colors hover:bg-[color:var(--library-green)]/10"
+              title={`Preview ${parsed.move}`}
+              onClick={() => onNotationMove(parsed.move)}
+            >
+              {parsed.move}
+            </button>
+            {parsed.suffix}
+          </span>
+        );
+      })}
+    </p>
   );
 }

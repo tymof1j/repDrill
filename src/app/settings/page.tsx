@@ -45,8 +45,8 @@ export default async function SettingsPage() {
             Accounts
           </h2>
           <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
-            Connect chess accounts so RepDrill can pull your recent games and mark each departure
-            from preparation.
+            Connect chess accounts and choose how many short quiz passes Learn should run after
+            each line overview.
           </p>
         </header>
 

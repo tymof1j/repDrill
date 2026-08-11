@@ -25,17 +25,30 @@ import {
 } from '@/components/ui/Premium';
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import type { TrainingLine, LineStep } from './types';
+import { parseStudyMarkup, toCompleteFen } from './annotation';
 import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { normalizeNotation } from '@/lib/chess/notation';
+import {
+  readLearnQuizPasses,
+  recordLearnResume,
+  type LearnQuizPasses,
+} from '@/lib/bookTrainingPreferences';
 
 type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 type LinePhase = 'browse' | 'drill' | 'line-done';
 type SessionPhase = 'playing' | 'done';
-type Props = { initialLines: TrainingLine[]; filterBar?: React.ReactNode };
+type Props = {
+  initialLines: TrainingLine[];
+  filterBar?: React.ReactNode;
+  /** Guided Learn mode starts every line in the one-move-at-a-time overview. */
+  studyMode?: boolean;
+  /** Last line id saved by Learn mode, used to resume the course. */
+  initialLineId?: string | null;
+};
 
-export function TrainingSession({ initialLines, filterBar }: Props) {
+export function TrainingSession({ initialLines, filterBar, studyMode = false, initialLineId = null }: Props) {
   const [lines] = useState(initialLines);
   const [lineIndex, setLineIndex] = useState(0);
   const [linePhase, setLinePhase] = useState<LinePhase>('browse');
@@ -44,6 +57,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   const [browseIndex, setBrowseIndex] = useState(0);
   const [drillRun, setDrillRun] = useState(1);
   const [drillPassCount, setDrillPassCount] = useState(1);
+  const [configuredQuizPasses, setConfiguredQuizPasses] = useState<LearnQuizPasses>(() => readLearnQuizPasses());
   const [drill1Stats, setDrill1Stats] = useState<{ correct: number; wrong: number } | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [waitingForUser, setWaitingForUser] = useState(false);
@@ -52,7 +66,9 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   const [lineResults, setLineResults] = useState<MoveResult[]>([]);
   const [lineCorrect, setLineCorrect] = useState(0);
   const [lineWrong, setLineWrong] = useState(0);
-  const [moveStartTime, setMoveStartTime] = useState(0);
+  // Timing is telemetry only; keeping it in a ref avoids a render for every
+  // prompt transition while preserving the exact response-time measurement.
+  const moveStartTimeRef = useRef(0);
   const [inErrorRecovery, setInErrorRecovery] = useState(false);
   const [errorQueue, setErrorQueue] = useState<number[]>([]);
   const [errorCorrectStreak, setErrorCorrectStreak] = useState(0);
@@ -80,6 +96,23 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   });
 
   const line = lines[lineIndex] ?? null;
+
+  useEffect(() => {
+    if (!studyMode || !initialLineId) return;
+    const index = lines.findIndex((candidate) => candidate.lineId === initialLineId);
+    if (index >= 0) setLineIndex(index);
+  }, [initialLineId, lines, studyMode]);
+
+  useEffect(() => {
+    const onPasses = () => setConfiguredQuizPasses(readLearnQuizPasses());
+    window.addEventListener('repdrill:learn-quiz-passes', onPasses);
+    return () => window.removeEventListener('repdrill:learn-quiz-passes', onPasses);
+  }, []);
+
+  useEffect(() => {
+    if (!studyMode || !line) return;
+    recordLearnResume(line.courseId, line.lineId);
+  }, [line, studyMode]);
   const userStepIndexes = useMemo(
     () => (line ? line.steps.map((s, i) => (s.isUserMove ? i : -1)).filter((i) => i >= 0) : []),
     [line],
@@ -90,13 +123,28 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   const step: LineStep | null = line && currentStepIndex >= 0 ? line.steps[currentStepIndex] ?? null : null;
   const playerColor = line?.courseColor ?? 'white';
 
+  // Parse study drawings once per position.  The markup is intentionally
+  // derived before any phase-specific early return so hook ordering remains
+  // stable while Convex transitions from loading to a populated queue.
+  const browseMarkup = useMemo(
+    () => {
+      const browseStep = linePhase === 'browse' && browseIndex > 0 ? line?.steps[browseIndex - 1] : undefined;
+      return parseStudyMarkup(browseStep?.annotation, browseStep?.annotations);
+    },
+    [line, linePhase, browseIndex],
+  );
+  const drillMarkup = useMemo(
+    () => parseStudyMarkup(step?.annotation, step?.annotations),
+    [step?.annotation, step?.annotations],
+  );
+
   useEffect(() => {
     if (!line) return;
     const firstFen = line.steps[0]?.parentFen ?? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
-    setBoardFen(firstFen + ' 0 1');
+    setBoardFen(toCompleteFen(firstFen));
     setBrowseIndex(0);
     setDrillRun(1);
-    setDrillPassCount(line.isNew ? 2 : 1);
+    setDrillPassCount(studyMode ? configuredQuizPasses : line.isNew ? 2 : 1);
     setDrill1Stats(null);
     setQuestionIndex(0);
     setWaitingForUser(false);
@@ -105,7 +153,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     setLineResults([]);
     setLineCorrect(0);
     setLineWrong(0);
-    setMoveStartTime(0);
+    moveStartTimeRef.current = 0;
     setInErrorRecovery(false);
     setErrorQueue([]);
     setErrorCorrectStreak(0);
@@ -117,27 +165,27 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     setNeedsManualNext(false);
     setTracePreviewIndex(null);
     setQueuedPremove(null);
-    setLinePhase(line.isInfoOnly || line.isNew ? 'browse' : 'drill');
-  }, [line, lineIndex]);
+    setLinePhase(studyMode || line.isInfoOnly || line.isNew ? 'browse' : 'drill');
+  }, [configuredQuizPasses, line, lineIndex, studyMode]);
 
   useEffect(() => {
     if (linePhase !== 'browse' || !line || line.steps.length === 0) return;
     if (browseIndex === 0) {
-      setBoardFen(line.steps[0].parentFen + ' 0 1');
+      setBoardFen(toCompleteFen(line.steps[0].parentFen));
       setLastMoveUci(undefined);
     } else {
       const s = line.steps[browseIndex - 1];
-      setBoardFen(s.childFen + ' 0 1');
+      setBoardFen(toCompleteFen(s.childFen));
       setLastMoveUci([s.uci.slice(0, 2), s.uci.slice(2, 4)]);
     }
   }, [linePhase, browseIndex, line]);
 
   useEffect(() => {
     if (linePhase !== 'drill' || !step || feedback) return;
-    setBoardFen(step.parentFen + ' 0 1');
+    setBoardFen(toCompleteFen(step.parentFen));
     setLastMoveUci(undefined);
     setWaitingForUser(true);
-    setMoveStartTime(Date.now());
+    moveStartTimeRef.current = Date.now();
     if (inputMode === 'keyboard') {
       setTimeout(() => notationRef.current?.focus(), 50);
     }
@@ -209,12 +257,12 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     (from: string, to: string, promotion?: string) => {
       if (!line || !step || linePhase !== 'drill' || !waitingForUser) return;
       try {
-        const chess = new Chess(step.parentFen + ' 0 1');
+        const chess = new Chess(toCompleteFen(step.parentFen));
         const result = chess.move({ from, to, promotion: promotion ?? 'q' });
         if (!result) return;
         const playedUci = from + to + (result.promotion ?? '');
         const correct = playedUci === step.uci || result.san === step.san;
-        const responseTimeMs = Date.now() - moveStartTime;
+        const responseTimeMs = Math.max(0, Date.now() - moveStartTimeRef.current);
 
         if (step.cardId) {
           setLineResults((prev) => [...prev, { cardId: step.cardId!, correct, responseTimeMs }]);
@@ -222,7 +270,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
         if (correct) setLineCorrect((c) => c + 1);
         else setLineWrong((c) => c + 1);
 
-        setBoardFen(step.childFen + ' 0 1');
+        setBoardFen(toCompleteFen(step.childFen));
         setLastMoveUci([step.uci.slice(0, 2), step.uci.slice(2, 4)]);
         setWaitingForUser(false);
         setNotationInput('');
@@ -230,8 +278,11 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
         setTracePreviewIndex(null);
 
         if (correct) {
+          const hasStudyMarkup = Boolean(
+            step.annotation?.trim() || step.annotations?.arrows?.length || step.annotations?.circles?.length,
+          );
           setFeedback({ type: 'correct', text: step.san });
-          setShowAnnotation(!!step.annotation);
+          setShowAnnotation(hasStudyMarkup);
           setNeedsManualNext(false);
           if (inErrorRecovery) {
             const nextStreak = errorCorrectStreak + 1;
@@ -241,7 +292,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
               setErrorCorrectStreak(0);
             }
           }
-          const delay = step.annotation ? 1500 : 650;
+          const delay = hasStudyMarkup ? 1500 : 650;
           setTimeout(() => {
             setFeedback(null);
             setShowAnnotation(false);
@@ -254,7 +305,9 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
           type: 'wrong',
           text: `You played ${result.san}. Correct: ${step.san}`,
         });
-        setShowAnnotation(!!step.annotation);
+        setShowAnnotation(Boolean(
+          step.annotation?.trim() || step.annotations?.arrows?.length || step.annotations?.circles?.length,
+        ));
         setNeedsManualNext(true);
         if (!inErrorRecovery) {
           setErrorQueue((prev) => (prev.includes(currentStepIndex) ? prev : [...prev, currentStepIndex]));
@@ -265,7 +318,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
         // invalid move
       }
     },
-    [line, step, linePhase, waitingForUser, moveStartTime, inErrorRecovery, currentStepIndex, errorCorrectStreak],
+    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, errorCorrectStreak],
   );
 
   const onBoardMove = useCallback((orig: string, dest: string) => tryMove(orig, dest), [tryMove]);
@@ -275,7 +328,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     const input = notationInput.trim();
     if (!input) return;
     try {
-      const fen = step.parentFen + ' 0 1';
+      const fen = toCompleteFen(step.parentFen);
       const normalized = normalizeNotation(input, fen);
       const chess = new Chess(fen);
       const result = chess.move(normalized, { strict: false });
@@ -292,7 +345,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   const legalDests = useMemo(() => {
     if (!step || !waitingForUser || linePhase !== 'drill') return undefined;
     try {
-      const chess = new Chess(step.parentFen + ' 0 1');
+      const chess = new Chess(toCompleteFen(step.parentFen));
       const dests = new Map<string, string[]>();
       for (const move of chess.moves({ verbose: true })) {
         const arr = dests.get(move.from) ?? [];
@@ -305,6 +358,39 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     }
   }, [step, waitingForUser, linePhase]);
 
+  const boardInteractive = linePhase === 'drill' && Boolean(step) && waitingForUser && inputMode === 'mouse';
+  const boardMovable = useMemo(() => {
+    if (!boardInteractive) return undefined;
+    return { free: false, dests: legalDests, color: playerColor, showDests: true };
+  }, [boardInteractive, legalDests, playerColor]);
+  const boardPremovable = useMemo(
+    () => ({ enabled: boardInteractive }),
+    [boardInteractive],
+  );
+  const boardArrows = useMemo(() => {
+    if (linePhase === 'browse') return browseMarkup.arrows;
+    if (!feedback || !step) return [];
+    const reveal = [...drillMarkup.arrows];
+    if (feedback.type === 'wrong') {
+      const expected = {
+        orig: step.uci.slice(0, 2),
+        dest: step.uci.slice(2, 4),
+        brush: 'green',
+      };
+      if (!reveal.some((arrow) => arrow.orig === expected.orig && arrow.dest === expected.dest)) {
+        reveal.push(expected);
+      }
+    }
+    return reveal;
+  }, [browseMarkup.arrows, drillMarkup.arrows, feedback, linePhase, step]);
+  const boardSquareMarks = useMemo(
+    () => linePhase === 'browse' ? browseMarkup.squareMarks : feedback ? drillMarkup.squareMarks : [],
+    [browseMarkup.squareMarks, drillMarkup.squareMarks, feedback, linePhase],
+  );
+  const onPremoveSet = useCallback((orig: string, dest: string) => {
+    setQueuedPremove({ from: orig, to: dest });
+  }, []);
+
   const startDrilling = useCallback(() => {
     if (!line) return;
     if (line.isInfoOnly || userStepIndexes.length === 0) {
@@ -313,6 +399,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     }
     setLinePhase('drill');
     setDrillRun(1);
+    setDrillPassCount(studyMode ? readLearnQuizPasses() : line.isNew ? 2 : 1);
     setQuestionIndex(0);
     setInErrorRecovery(false);
     setErrorQueue([]);
@@ -324,9 +411,9 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     setLineWrong(0);
     setLineResults([]);
     const firstUserStep = line.steps[userStepIndexes[0]];
-    setBoardFen((firstUserStep?.parentFen ?? line.steps[0]?.parentFen ?? '') + ' 0 1');
+    setBoardFen(toCompleteFen(firstUserStep?.parentFen ?? line.steps[0]?.parentFen));
     setLastMoveUci(undefined);
-  }, [line, userStepIndexes]);
+  }, [line, studyMode, userStepIndexes]);
 
   const continueAfterWrong = useCallback(() => {
     if (!needsManualNext) return;
@@ -342,9 +429,14 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   const nextLine = useCallback(() => {
     if (!lineSaved) return;
     const next = lineIndex + 1;
-    if (next >= lines.length) setSessionPhase('done');
-    else setLineIndex(next);
-  }, [lineSaved, lineIndex, lines.length]);
+    if (next >= lines.length) {
+      if (studyMode && line) recordLearnResume(line.courseId, null);
+      setSessionPhase('done');
+    } else {
+      setLineIndex(next);
+      if (studyMode && line) recordLearnResume(line.courseId, lines[next]?.lineId ?? null);
+    }
+  }, [line, lineSaved, lineIndex, lines, studyMode]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -424,6 +516,20 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
     };
   }, []);
 
+  const handleStudyNotationMove = useCallback((san: string) => {
+    if (linePhase !== 'browse') return;
+    try {
+      const chess = new Chess(toCompleteFen(boardFen));
+      const result = chess.move(san, { strict: false });
+      if (!result) return;
+      setBoardFen(toCompleteFen(chess.fen()));
+      setLastMoveUci([result.from, result.to]);
+    } catch {
+      // A prose token can look like SAN while not being legal from the
+      // current position. Leave the canonical study position untouched.
+    }
+  }, [boardFen, linePhase]);
+
   if (sessionPhase === 'done') {
     const elapsed = Math.round((Date.now() - sessionStats.startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);
@@ -454,19 +560,26 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
 
   if (!line) return null;
 
+  // Keep every render branch on one phase snapshot.  The phase subtree is
+  // keyed below so a browse -> drill transition cannot leave stale study DOM
+  // next to the newly interactive drill controls during a concurrent commit.
+  const isBrowsing = linePhase === 'browse';
+  const isDrilling = linePhase === 'drill';
+  const isLineDone = linePhase === 'line-done';
+  const phaseKey = `${lineIndex}:${linePhase}`;
   const userMovesInLine = userStepIndexes.length;
   const playedUserMoves = lineCorrect + lineWrong;
-  const betweenDrills = linePhase === 'drill' && !inErrorRecovery && drillRun === 1 && questionIndex >= userMovesInLine && !feedback;
+  const betweenDrills = isDrilling && !inErrorRecovery && drillRun === 1 && questionIndex >= userMovesInLine && !feedback;
   const recoveryResolved = userMovesInLine - errorQueue.length;
   const drillProgressBase = inErrorRecovery ? recoveryResolved : questionIndex;
-  const lineProgress = linePhase === 'browse'
+  const lineProgress = isBrowsing
     ? Math.round((browseIndex / Math.max(line.steps.length, 1)) * 100)
-    : linePhase === 'line-done'
+    : isLineDone
       ? 100
       : Math.round((drillProgressBase / Math.max(userMovesInLine, 1)) * 100);
-  const phaseLabel = linePhase === 'browse'
+  const phaseLabel = isBrowsing
     ? `Study · ${browseIndex}/${line.steps.length}`
-    : linePhase === 'line-done'
+    : isLineDone
       ? 'Line complete'
       : betweenDrills
         ? 'Starting next pass…'
@@ -475,8 +588,8 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
           : waitingForUser
             ? `Your move · ${playerColor}`
             : `Drill ${drillRun}/${drillPassCount}`;
-  const browseAnnotation = linePhase === 'browse' && browseIndex > 0 ? line.steps[browseIndex - 1]?.annotation ?? null : null;
-  const traceUpTo = linePhase === 'line-done'
+  const browseAnnotation = isBrowsing && browseIndex > 0 ? browseMarkup.text || null : null;
+  const traceUpTo = isLineDone
     ? line.steps.length
     : Math.min((userStepIndexes[questionIndex] ?? line.steps.length) + (waitingForUser ? 0 : 1), line.steps.length);
   const drillTraceTokens = line.steps.slice(0, traceUpTo).map((s, i) => {
@@ -487,12 +600,22 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
   const browseTraceTokens = line.steps.map((s, i) => {
     const sideToMove = s.parentFen.split(/\s+/)[1] === 'w' ? 'white' : 'black';
     const prefix = sideToMove === 'white' ? `${s.moveNumber}.` : '';
-    return { key: `browse-${i}-${s.uci}`, text: `${prefix}${s.san}`, childFen: s.childFen, uci: s.uci, index: i, hasAnnotation: Boolean(s.annotation?.trim()) };
+    return {
+      key: `browse-${i}-${s.uci}`,
+      text: `${prefix}${s.san}`,
+      childFen: s.childFen,
+      uci: s.uci,
+      index: i,
+      hasAnnotation: Boolean(
+        s.annotation?.trim() || s.annotations?.arrows?.length || s.annotations?.circles?.length,
+      ),
+    };
   });
 
   return (
     <AppSurface>
       {filterBar}
+      <div key={phaseKey} data-training-phase={linePhase} className="contents">
       <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
           Training · Line <span className="font-display italic text-[color:var(--ink)]">{lineIndex + 1}</span> of {lines.length}
@@ -501,13 +624,13 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
           {line.courseName} <span className="text-[color:var(--ink-ghost)]">·</span> {line.chapterName}
         </p>
         <div className="flex items-center gap-3">
-          <Stamp tone={linePhase === 'browse' ? 'gold' : linePhase === 'line-done' ? 'green' : betweenDrills ? 'gold' : 'red'}>
-            {linePhase === 'browse' ? 'Study' : linePhase === 'line-done' ? 'Done' : betweenDrills ? 'Pass done' : inErrorRecovery ? 'Recovery' : `Drill ${drillRun}/${drillPassCount}`}
+          <Stamp tone={isBrowsing ? 'gold' : isLineDone ? 'green' : betweenDrills ? 'gold' : 'red'}>
+            {isBrowsing ? 'Study' : isLineDone ? 'Done' : betweenDrills ? 'Pass done' : inErrorRecovery ? 'Recovery' : `Drill ${drillRun}/${drillPassCount}`}
           </Stamp>
-          {linePhase === 'drill' && !betweenDrills && (
+          {isDrilling && !betweenDrills && (
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)] tabular-nums">{playedUserMoves}/{userMovesInLine}</span>
           )}
-          {linePhase === 'line-done' && (
+          {isLineDone && (
             <PremiumButton onClick={nextLine} disabled={!lineSaved || lineSaving}>
               {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? 'Next line' : 'Finish session'}
             </PremiumButton>
@@ -526,27 +649,31 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">{phaseLabel}</p>
           </div>
 
-          <div className="-mx-5 md:mx-0">
-            <ResizableDiagramFrame caption={linePhase === 'browse' ? `Move ${browseIndex} / ${line.steps.length}` : `Move ${Math.min(questionIndex + 1, userMovesInLine)} / ${userMovesInLine}`}>
+          <div className="-mx-5 overflow-x-clip md:mx-0">
+            <ResizableDiagramFrame
+              className="-mx-2 md:mx-0"
+              caption={isBrowsing ? `Move ${browseIndex} / ${line.steps.length}` : `Move ${Math.min(questionIndex + 1, userMovesInLine)} / ${userMovesInLine}`}
+            >
               <ChessBoard
                 fen={boardFen}
                 orientation={playerColor}
-                viewOnly={linePhase === 'browse' || betweenDrills}
+                // Keep one Chessground instance for an entire drill pass.
+                // `movable`/`premovable` are empty while feedback is shown,
+                // so the board stays inert without an avoidable remount for
+                // every answer.
+                viewOnly={isBrowsing || isLineDone}
                 lastMove={lastMoveUci}
-                movable={linePhase === 'drill' && !betweenDrills && inputMode === 'mouse'
-                  ? waitingForUser
-                    ? { free: false, dests: legalDests, color: playerColor, showDests: true }
-                    : { free: false, color: playerColor, showDests: true }
-                  : undefined}
-                premovable={{ enabled: linePhase === 'drill' && !betweenDrills }}
+                movable={boardMovable}
+                premovable={boardPremovable}
                 onMove={onBoardMove}
-                onPremoveSet={(orig, dest) => { setQueuedPremove({ from: orig, to: dest }); }}
-                arrows={feedback?.type === 'wrong' && step ? [{ orig: step.uci.slice(0, 2), dest: step.uci.slice(2, 4), brush: 'green' }] : undefined}
+                onPremoveSet={onPremoveSet}
+                arrows={boardArrows}
+                squareMarks={boardSquareMarks}
               />
             </ResizableDiagramFrame>
           </div>
 
-          {linePhase === 'browse' && (
+          {isBrowsing && (
             <div className="mt-6">
               <div className="grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 <button type="button" onClick={() => setBrowseIndex((i) => Math.max(0, i - 1))} disabled={browseIndex === 0} className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:opacity-30">← Back</button>
@@ -556,14 +683,14 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
             </div>
           )}
 
-          {linePhase === 'browse' && browseAnnotation && (
+          {isBrowsing && browseAnnotation && (
             <section className="mt-4 lg:hidden">
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Annotation</p>
-              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">{browseAnnotation}</p>
+              <StudyAnnotation text={browseAnnotation} onNotationMove={handleStudyNotationMove} />
             </section>
           )}
 
-          {linePhase === 'drill' && !betweenDrills && waitingForUser && (
+          {isDrilling && !betweenDrills && waitingForUser && (
             <div className="mt-6 space-y-4">
               <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 {(['mouse', 'keyboard'] as const).map((mode) => (
@@ -599,13 +726,13 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
           <section>
             <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Prompt</p>
             <p className="mt-5 font-display text-3xl font-medium leading-[1.15] tracking-[-0.01em] text-[color:var(--ink)] md:text-4xl">
-              {linePhase === 'browse'
+              {isBrowsing
                 ? browseIndex === 0
                   ? <>Study this <span className="font-display-italic">line</span>.</>
                   : browseIndex >= line.steps.length
                     ? <>End of line — ready to <span className="font-display-italic">drill?</span></>
                     : <>Move {browseIndex} of {line.steps.length}.</>
-                : linePhase === 'line-done'
+                : isLineDone
                   ? lineWrong === 0
                     ? <>A <span className="font-display-italic">perfect</span> line.</>
                     : <>{lineCorrect}/{lineCorrect + lineWrong} <span className="font-display-italic">correct</span>.</>
@@ -616,9 +743,9 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
                       : <>Waiting…</>}
             </p>
             <p className="mt-3 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
-              {linePhase === 'browse'
+              {isBrowsing
                 ? 'Navigate with ← → · read the annotations · press Enter or Start drill when ready.'
-                : linePhase === 'line-done'
+                : isLineDone
                   ? 'Review the result, then continue.'
                   : betweenDrills
                     ? `Pass 1: ${drill1Stats?.correct ?? 0}/${(drill1Stats?.correct ?? 0) + (drill1Stats?.wrong ?? 0)} correct.`
@@ -639,14 +766,18 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
             </section>
           )}
 
-          {((linePhase === 'browse' && browseAnnotation) || (linePhase === 'drill' && showAnnotation && step?.annotation)) && (
+          {((isBrowsing && browseAnnotation) || (isDrilling && showAnnotation && drillMarkup.text)) && (
             <section>
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Annotation</p>
-              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">{linePhase === 'browse' ? browseAnnotation : step?.annotation}</p>
+            {isBrowsing ? (
+              <StudyAnnotation text={browseAnnotation ?? ''} onNotationMove={handleStudyNotationMove} />
+            ) : (
+              <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">{drillMarkup.text}</p>
+            )}
             </section>
           )}
 
-          {linePhase === 'browse' && browseTraceTokens.length > 0 && (
+          {isBrowsing && browseTraceTokens.length > 0 && (
             <section>
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Line</p>
               <ol className="mt-4 flex flex-wrap gap-2">
@@ -659,7 +790,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
             </section>
           )}
 
-          {linePhase === 'drill' && drillTraceTokens.length > 0 && (
+          {isDrilling && drillTraceTokens.length > 0 && (
             <section>
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Trace</p>
               <ol className="mt-4 flex flex-wrap gap-2">
@@ -667,7 +798,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
                   <li key={token.key} className={`notation rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 md:text-[17px] ${tracePreviewIndex === token.index ? 'bg-[color:var(--ink-faint)] text-[color:var(--paper)]' : 'bg-transparent text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]'} ${needsManualNext && feedback?.type === 'wrong' ? 'cursor-pointer' : 'cursor-default'}`} onClick={() => {
                     if (!(needsManualNext && feedback?.type === 'wrong')) return;
                     setTracePreviewIndex(token.index);
-                    setBoardFen(token.childFen + ' 0 1');
+                    setBoardFen(toCompleteFen(token.childFen));
                     setLastMoveUci([token.uci.slice(0, 2), token.uci.slice(2, 4)]);
                   }}>
                     {token.text}
@@ -677,7 +808,7 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
             </section>
           )}
 
-          {linePhase === 'line-done' && (
+          {isLineDone && (
             <section>
               <div className="grid grid-cols-2 gap-x-2 gap-y-6 border-y border-[color:var(--paper-edge)] py-6 md:grid-cols-4">
                 {drill1Stats && (
@@ -693,6 +824,46 @@ export function TrainingSession({ initialLines, filterBar }: Props) {
           )}
         </div>
       </div>
+      </div>
     </AppSurface>
+  );
+}
+
+const SAN_TOKEN = /^(?:O-O(?:-O)?|0-0(?:-0)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h]x[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8](?:=[QRBN])?[+#]?)$/i;
+
+function splitNotationToken(token: string) {
+  const match = token.match(/^([([{]*)(?:(?:\d+\.{1,3}|\.{3})?)([^\s]+?)([.,;:!?)}\]]*)$/);
+  if (!match) return null;
+  const [, prefix, rawMove, suffix] = match;
+  const move = rawMove.replace(/[.,;:!?)}\]]+$/, '');
+  if (!SAN_TOKEN.test(move)) return null;
+  return { prefix, move, suffix };
+}
+
+/** Render book prose while making SAN-looking tokens useful in study mode. */
+function StudyAnnotation({ text, onNotationMove }: { text: string; onNotationMove: (san: string) => void }) {
+  const parts = text.split(/(\s+)/);
+  return (
+    <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">
+      {parts.map((part, index) => {
+        if (/^\s+$/.test(part)) return <span key={`space-${index}`}>{part}</span>;
+        const parsed = splitNotationToken(part);
+        if (!parsed) return <span key={`text-${index}`}>{part}</span>;
+        return (
+          <span key={`move-${index}`}>
+            {parsed.prefix}
+            <button
+              type="button"
+              className="notation rounded px-0.5 text-[color:var(--library-green)] underline decoration-[color:var(--library-green-soft)] decoration-1 underline-offset-4 transition-colors hover:bg-[color:var(--library-green)]/10"
+              title={`Preview ${parsed.move}`}
+              onClick={() => onNotationMove(parsed.move)}
+            >
+              {parsed.move}
+            </button>
+            {parsed.suffix}
+          </span>
+        );
+      })}
+    </p>
   );
 }

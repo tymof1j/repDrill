@@ -14,12 +14,18 @@ import {
   AppSurface,
   BackLink,
   GhostButton,
-  PageHeader,
   PremiumButton,
   SecondaryButton,
   Stamp,
   fieldClassName,
 } from '@/components/ui/Premium';
+import {
+  CourseCover,
+  ProgressBar,
+  formatFenSummary,
+  getCourseCoverUrl,
+  getCourseMeta,
+} from '../CourseVisuals';
 import {
   renameCourseAction,
   renameChapterAction,
@@ -211,6 +217,33 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     () => new Map(lineStatuses.map((status) => [`${status.chapterId}:${status.lineIndex}`, status])),
     [lineStatuses],
   );
+  const courseMeta = useMemo(
+    () => getCourseMeta(course.name, course.description),
+    [course.description, course.name],
+  );
+  const rootFen = useMemo(
+    () => positions.find((position) => position.id === rootPositionId)?.fen ?? null,
+    [positions, rootPositionId],
+  );
+  const courseProgress = useMemo(() => {
+    const total = Array.from(linesByChapter.values()).reduce((sum, lines) => sum + lines.length, 0);
+    const trainable = lineStatuses.filter((status) => !status.isInfoOnly && status.category !== 'info');
+    const learned = trainable.filter((status) => status.category !== 'new').length;
+    const due = trainable.filter((status) => status.category === 'due').length;
+    const percent = total > 0 ? (learned / total) * 100 : 0;
+    return { total, learned, due, percent };
+  }, [lineStatuses, linesByChapter]);
+  const chapterProgress = useMemo(() => {
+    const result = new Map<string, { total: number; learned: number; due: number; percent: number }>();
+    for (const chapter of orderedChapters) {
+      const total = linesByChapter.get(chapter.id)?.length ?? 0;
+      const statuses = lineStatuses.filter((status) => status.chapterId === chapter.id && !status.isInfoOnly && status.category !== 'info');
+      const learned = statuses.filter((status) => status.category !== 'new').length;
+      const due = statuses.filter((status) => status.category === 'due').length;
+      result.set(chapter.id, { total, learned, due, percent: total > 0 ? (learned / total) * 100 : 0 });
+    }
+    return result;
+  }, [lineStatuses, linesByChapter, orderedChapters]);
 
   const saveName = () => {
     if (!nameDraft.trim()) return;
@@ -293,58 +326,61 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     <AppSurface>
       <BackLink href="/courses">Courses</BackLink>
 
-      <PageHeader
-        eyebrow={`Course · ${course.color}`}
-        title={
-          editingName ? (
-            <input
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveName();
-                if (e.key === 'Escape') setEditingName(false);
-              }}
-              className="block w-full max-w-3xl bg-transparent font-display text-[2.75rem] font-medium leading-[1.02] tracking-[-0.01em] text-[color:var(--ink)] outline-none focus:border-b focus:border-[color:var(--ink)] md:text-[4rem]"
-              autoFocus
+      <section className="mb-10 overflow-hidden rounded-[1.75rem] border border-[color:var(--paper-rule)] bg-[color:var(--surface)] shadow-[0_24px_70px_rgba(47,58,50,0.08)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(13rem,0.34fr)_minmax(0,1fr)_minmax(14rem,0.34fr)]">
+          <div className="p-4 sm:p-5 lg:p-6">
+            <CourseCover
+              name={course.name}
+              kind={courseMeta.kind}
+              coverUrl={getCourseCoverUrl(course.name, courseMeta.kind)}
             />
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setNameDraft(course.name);
-                setEditingName(true);
-              }}
-              className="group/name flex items-baseline gap-3 text-left transition-colors duration-200 hover:text-[color:var(--margin-red)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
-              title="Click to rename"
-            >
-              {course.name}
-              <Pencil size={16} className="mb-0.5 shrink-0 self-center opacity-0 transition-opacity group-hover/name:opacity-40" />
-            </button>
-          )
-        }
-        body={course.description ?? 'Navigate the imported tree, edit annotations, and search critical notes.'}
-        action={
-          editingName ? (
-            <>
-              <PremiumButton onClick={saveName} disabled={pending}>
-                Save
-              </PremiumButton>
-              <SecondaryButton onClick={() => setEditingName(false)}>Cancel</SecondaryButton>
-            </>
-          ) : (
-            <>
-              <PremiumButton href={`/courses/${course.id}/import`}>Import PGN</PremiumButton>
-              <SecondaryButton href={`/api/export/course?id=${course.id}`}>Export PGN</SecondaryButton>
-              <ShareDialog
-                resourceType="course"
-                resourceId={course.id}
-                title={course.name}
-                scopes={shareScopes}
-              />
-            </>
-          )
-        }
-      />
+          </div>
+          <div className="min-w-0 border-t border-[color:var(--paper-rule)] p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-10">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[color:var(--ink)] px-3 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-[color:var(--paper)]">{courseMeta.kindLabel}</span>
+              <span className="rounded-full border border-[color:var(--paper-rule)] px-3 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">{course.color === 'both' ? 'White + Black' : `${course.color} repertoire`}</span>
+            </div>
+            {editingName ? (
+              <div className="mt-6 space-y-4">
+                <input
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+                  className="block w-full border-b border-[color:var(--ink)] bg-transparent pb-2 font-display text-[2.25rem] font-semibold leading-[1.03] tracking-[-0.055em] text-[color:var(--ink)] outline-none sm:text-[3.4rem]"
+                  autoFocus
+                />
+                <div className="flex flex-wrap gap-2"><PremiumButton onClick={saveName} disabled={pending}>Save</PremiumButton><SecondaryButton onClick={() => setEditingName(false)}>Cancel</SecondaryButton></div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setNameDraft(course.name); setEditingName(true); }}
+                className="group/name mt-6 block text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--library-green)] focus-visible:ring-offset-4"
+                title="Click to rename"
+              >
+                <span className="block font-display text-[2.25rem] font-semibold leading-[1.03] tracking-[-0.055em] text-[color:var(--ink)] transition-colors group-hover/name:text-[color:var(--library-green)] sm:text-[3.4rem]">{course.name}</span>
+                <span className="mt-2 inline-flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]"><Pencil size={12} /> Edit title</span>
+              </button>
+            )}
+            <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">{course.description ?? courseMeta.shortDescription}</p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <span className="rounded-full bg-[color:var(--paper-shade)] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">{courseMeta.openingLabel}</span>
+              {courseMeta.theoryLabels.map((label) => <span key={label} className="rounded-full bg-[color:var(--paper-shade)] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">{label}</span>)}
+            </div>
+            {rootFen && <p className="mt-6 border-l-2 border-[color:var(--library-green)] pl-3 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-[color:var(--ink-faint)]"><span className="text-[color:var(--ink-soft)]">Position model · </span>{formatFenSummary(rootFen)}</p>}
+          </div>
+          <aside className="flex flex-col border-t border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-7">
+            <div className="flex items-center justify-between gap-4"><span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">Course progress</span><span className="font-display text-3xl font-semibold tracking-[-0.05em] text-[color:var(--library-green)]">{Math.round(courseProgress.percent)}%</span></div>
+            <div className="mt-4"><ProgressBar value={courseProgress.percent} label={`${courseProgress.learned} / ${courseProgress.total || '—'} variations`} tone={courseProgress.due > 0 ? 'red' : 'green'} /></div>
+            <div className="mt-6 grid grid-cols-2 gap-3 border-y border-[color:var(--paper-rule)] py-5"><Metric value={orderedChapters.length} label="Chapters" /><Metric value={courseProgress.due} label="Due now" tone={courseProgress.due > 0 ? 'red' : 'ink'} /></div>
+            <div className="mt-auto flex flex-col gap-2 pt-6 lg:sticky lg:top-6">
+              <PremiumButton href={`/train?courseId=${encodeURIComponent(course.id)}`}>Review due lines <span className="ml-1">→</span></PremiumButton>
+              <SecondaryButton href={`/train?courseId=${encodeURIComponent(course.id)}&mode=learn`}>Learn course <span className="ml-1">→</span></SecondaryButton>
+              <div className="mt-2 flex flex-wrap gap-2"><PremiumButton href={`/courses/${course.id}/import`} className="min-h-9 px-3 py-2 text-[10px]">Import PGN</PremiumButton><SecondaryButton href={`/api/export/course?id=${course.id}`} className="min-h-9 px-3 py-2 text-[10px]">Export</SecondaryButton><ShareDialog resourceType="course" resourceId={course.id} title={course.name} scopes={shareScopes} /></div>
+            </div>
+          </aside>
+        </div>
+      </section>
 
       {activeImport && (
         <section className="mb-10 border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-5 md:px-7">
@@ -394,25 +430,25 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
       )}
 
       {orderedChapters.length > 0 && (
-        <section className="mb-12 border-y border-[color:var(--paper-edge)]">
-          <div className="flex items-center justify-between gap-4 border-b border-[color:var(--paper-rule)] px-5 py-3 md:px-7">
+        <section id="chapters" className="mb-12 overflow-hidden rounded-[1.5rem] border border-[color:var(--paper-rule)] bg-[color:var(--surface)] shadow-[0_18px_50px_rgba(47,58,50,0.05)]">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-5 py-5 md:px-7">
             <button
               type="button"
               onClick={() => setChaptersOpen((v) => !v)}
               className="group flex items-baseline gap-3 text-left focus-visible:outline-none"
               aria-expanded={chaptersOpen}
             >
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-                Table of contents
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+                Curriculum
               </span>
-              <span className="font-display-italic text-base text-[color:var(--ink)]">
-                {orderedChapters.length} chapter{orderedChapters.length === 1 ? '' : 's'}
+              <span className="font-display text-lg font-semibold tracking-[-0.03em] text-[color:var(--ink)]">
+                {orderedChapters.length} chapter{orderedChapters.length === 1 ? '' : 's'} to remember
               </span>
               <span
                 aria-hidden
                 className={`font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)] transition-transform duration-200 ${chaptersOpen ? '' : '-rotate-90'}`}
               >
-                ▾
+                {chaptersOpen ? 'Collapse' : 'Expand'}
               </span>
             </button>
             {selectedChapterId && (
@@ -425,7 +461,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
           {chaptersOpen && (
             <>
               <div className="px-5 py-5 md:px-7">
-                <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
+                <div className="flex items-baseline gap-3 rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-3">
                   <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
                     /
                   </span>
@@ -440,12 +476,13 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                 </div>
               </div>
 
-              <ul className="divide-y divide-[color:var(--paper-rule)] border-t border-[color:var(--paper-rule)]">
+              <ul className="grid gap-3 p-3 sm:grid-cols-2 sm:p-5">
                 {orderedChapters.filter((ch) =>
                   !chapterQuery.trim() || ch.name.toLowerCase().includes(chapterQuery.toLowerCase())
                 ).map((ch) => {
                   const originalIdx = chapterOrder.indexOf(ch.id);
                   const lineCount = linesByChapter.get(ch.id)?.length ?? 0;
+                  const chapterStats = chapterProgress.get(ch.id) ?? { total: lineCount, learned: 0, due: 0, percent: 0 };
                   const active = selectedChapterId === ch.id;
                   return (
                     <li
@@ -482,9 +519,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                         setDraggingChapterId(null);
                         setDragArmedChapterId(null);
                       }}
-                      className={`px-5 transition-colors duration-200 md:px-7 ${
-                        active ? 'bg-[color:var(--paper-shade)]' : 'hover:bg-[color:var(--paper-shade)]'
-                      }`}
+                      className={`min-w-0 rounded-2xl border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-4 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green-soft)] hover:shadow-[0_14px_32px_rgba(47,58,50,0.07)] ${active ? 'bg-[color:var(--paper-shade)] shadow-[0_14px_32px_rgba(47,58,50,0.07)] sm:col-span-2' : ''}`}
                     >
                       {editingChapterId === ch.id ? (
                         <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
@@ -506,7 +541,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                           </div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-[2.5rem_1fr_auto] items-baseline gap-4 py-4">
+                        <div className="grid grid-cols-[2.2rem_minmax(0,1fr)] items-start gap-3">
                           <div className="flex items-center gap-1">
                             {active && (
                               <button
@@ -538,24 +573,39 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                             }}
                             className="block min-w-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
                           >
-                            <span className="block truncate font-display text-lg font-medium text-[color:var(--ink)]">
+                            <span className="block break-words font-display text-lg font-medium leading-snug text-[color:var(--ink)]">
                               {ch.name}
                             </span>
-                            <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
-                              {lineCount} line{lineCount === 1 ? '' : 's'}
+                            <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
+                              {lineCount} variation{lineCount === 1 ? '' : 's'} · {chapterStats.learned} learned
                             </span>
+                            <div className="mt-3 max-w-sm"><ProgressBar value={chapterStats.percent} label={`${Math.round(chapterStats.percent)}%`} tone={chapterStats.due > 0 ? 'red' : 'green'} /></div>
                           </button>
-                          <div className="flex items-center gap-3">
-                            <GhostButton
-                              onClick={() => handleSetChapterType(ch.id, ch.chapterType === 'info_only' ? 'training' : 'info_only')}
-                              disabled={pending}
+                          <div className="col-span-full flex flex-wrap items-center gap-2 border-t border-[color:var(--paper-rule)] pt-3">
+                            <SecondaryButton
+                              href={`/train?courseId=${encodeURIComponent(course.id)}&chapterId=${encodeURIComponent(ch.id)}&mode=learn`}
+                              className="min-h-9 px-3 py-2 text-[10px]"
                             >
-                              {ch.chapterType === 'info_only' ? 'Set training' : 'Set info-only'}
-                            </GhostButton>
-                            <GhostButton onClick={() => startChapterRename(ch)}>Rename</GhostButton>
-                            <GhostButton onClick={() => handleDeleteChapter(ch.id)} disabled={pending}>
-                              Delete
-                            </GhostButton>
+                              Learn chapter <span className="ml-1">→</span>
+                            </SecondaryButton>
+                            <details className="relative">
+                              <summary className="list-none cursor-pointer rounded-lg px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-faint)] transition-colors hover:bg-[color:var(--paper-deep)] hover:text-[color:var(--ink)] [&::-webkit-details-marker]:hidden">
+                                Manage ···
+                              </summary>
+                              <div className="absolute right-0 z-10 mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-2 shadow-[0_18px_40px_rgba(47,58,50,0.14)]">
+                                <GhostButton
+                                  onClick={() => handleSetChapterType(ch.id, ch.chapterType === 'info_only' ? 'training' : 'info_only')}
+                                  disabled={pending}
+                                  className="justify-start"
+                                >
+                                  {ch.chapterType === 'info_only' ? 'Set training' : 'Set info-only'}
+                                </GhostButton>
+                                <GhostButton onClick={() => startChapterRename(ch)} className="justify-start">Rename</GhostButton>
+                                <GhostButton onClick={() => handleDeleteChapter(ch.id)} disabled={pending} className="justify-start text-[color:var(--margin-red)]">
+                                  Delete chapter
+                                </GhostButton>
+                              </div>
+                            </details>
                           </div>
                         </div>
                       )}
@@ -573,46 +623,46 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                               const status = lineStatusMap.get(`${selectedChapterId}:${lIdx}`);
                               return (
                               <li key={line.id}>
-                                <button
-                                  type="button"
-                                  onClick={() => setJumpTarget(line.leafPositionId)}
-                                  className="flex w-full items-baseline gap-3 border border-[color:var(--paper-edge)] bg-[color:var(--paper)] px-3 py-2 text-left transition-colors duration-200 hover:bg-[color:var(--paper-deep)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--ink)]"
-                                >
-                                  <span
-                                    className="font-display text-xs italic text-[color:var(--ink-faint)]"
-                                    style={{ fontFeatureSettings: '"onum"' }}
+                                <div className="flex w-full items-stretch border border-[color:var(--paper-edge)] bg-[color:var(--paper)] transition-colors duration-200 hover:bg-[color:var(--paper-deep)]">
+                                  <button
+                                    type="button"
+                                    onClick={() => setJumpTarget(line.leafPositionId)}
+                                    className="flex min-w-0 flex-1 items-baseline gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[color:var(--ink)]"
                                   >
-                                    {String(lIdx + 1).padStart(2, '0')}
-                                  </span>
-                                  <span className="notation line-clamp-2 text-[12px] leading-snug text-[color:var(--ink)]">
-                                    {line.moves.slice(0, 10).map(formatMove).join(' ')}
-                                    {line.moves.length > 10 ? ' …' : ''}
-                                  </span>
-                                  {status && (
-                                    <span className="ml-auto inline-flex items-center gap-2 whitespace-nowrap">
-                                      <span className="rounded border border-[color:var(--paper-edge)] px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-faint)]">
-                                        {status.grade}
-                                      </span>
-                                      <span className="rounded border border-[color:var(--paper-edge)] px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-faint)]">
-                                        {status.category}
-                                      </span>
-                                      <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-ghost)]">
-                                        {formatNextReview(status.nextReviewAt)}
-                                      </span>
-                                    </span>
-                                  )}
-                                  <span className="ml-2">
-                                    <GhostButton
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSetLineInfoOnly(ch.id, lIdx, !status?.isInfoOnly);
-                                      }}
-                                      disabled={pending}
+                                    <span
+                                      className="font-display text-xs italic text-[color:var(--ink-faint)]"
+                                      style={{ fontFeatureSettings: '"onum"' }}
                                     >
-                                      {status?.isInfoOnly ? 'Set training' : 'Set info-only'}
+                                      {String(lIdx + 1).padStart(2, '0')}
+                                    </span>
+                                    <span className="notation min-w-0 flex-1 line-clamp-2 text-[12px] leading-snug text-[color:var(--ink)]">
+                                      {line.moves.slice(0, 10).map(formatMove).join(' ')}
+                                      {line.moves.length > 10 ? ' …' : ''}
+                                    </span>
+                                    {status && (
+                                      <span className="hidden shrink-0 items-center gap-2 whitespace-nowrap sm:inline-flex">
+                                        <span className="rounded border border-[color:var(--paper-edge)] px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-faint)]">
+                                          {status.grade}
+                                        </span>
+                                        <span className="rounded border border-[color:var(--paper-edge)] px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-faint)]">
+                                          {status.category}
+                                        </span>
+                                        <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-ghost)]">
+                                          {formatNextReview(status.nextReviewAt)}
+                                        </span>
+                                      </span>
+                                    )}
+                                  </button>
+                                  <span className="flex shrink-0 items-center border-l border-[color:var(--paper-edge)] px-2">
+                                    <GhostButton
+                                      onClick={() => handleSetLineInfoOnly(ch.id, lIdx, !status?.isInfoOnly)}
+                                      disabled={pending}
+                                      className="px-2 text-[9px]"
+                                    >
+                                      {status?.isInfoOnly ? 'Training' : 'Info-only'}
                                     </GhostButton>
                                   </span>
-                                </button>
+                                </div>
                               </li>
                             )})}
                           </ol>
@@ -627,18 +677,38 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         </section>
       )}
 
-      <RepertoireViewer
-        key={selectedChapterId ?? 'all-chapters'}
-        repertoireColor={course.color as 'white' | 'black'}
-        rootPositionId={rootPositionId}
-        positions={positions}
-        moves={visibleMoves}
-        chapters={chapters}
-        selectedChapterName={selectedChapter?.name ?? null}
-        onAnnotationSave={handleAnnotationSave}
-        jumpToPositionId={jumpTarget}
-        onJumpDone={() => setJumpTarget(null)}
-      />
+      <section className="overflow-hidden rounded-[1.5rem] border border-[color:var(--paper-rule)] bg-[color:var(--surface)] shadow-[0_18px_50px_rgba(47,58,50,0.05)]">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-5 py-5 md:px-7">
+          <div>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Theory explorer</p>
+            <h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.04em] text-[color:var(--ink)]">Play the position, keep the idea.</h2>
+          </div>
+          <p className="max-w-md text-right text-sm leading-relaxed text-[color:var(--ink-soft)]">Select a chapter above to narrow the tree. Annotations and FEN metadata stay attached to each critical position.</p>
+        </div>
+        <div className="p-3 sm:p-5">
+          <RepertoireViewer
+            key={selectedChapterId ?? 'all-chapters'}
+            repertoireColor={course.color as 'white' | 'black'}
+            rootPositionId={rootPositionId}
+            positions={positions}
+            moves={visibleMoves}
+            chapters={chapters}
+            selectedChapterName={selectedChapter?.name ?? null}
+            onAnnotationSave={handleAnnotationSave}
+            jumpToPositionId={jumpTarget}
+            onJumpDone={() => setJumpTarget(null)}
+          />
+        </div>
+      </section>
     </AppSurface>
+  );
+}
+
+function Metric({ value, label, tone = 'ink' }: { value: number | string; label: string; tone?: 'ink' | 'red' }) {
+  return (
+    <div>
+      <p className={`font-display text-2xl font-semibold tracking-[-0.04em] ${tone === 'red' ? 'text-[color:var(--margin-red)]' : 'text-[color:var(--ink)]'}`}>{value}</p>
+      <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">{label}</p>
+    </div>
   );
 }

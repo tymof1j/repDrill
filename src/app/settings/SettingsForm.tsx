@@ -4,6 +4,11 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { PremiumButton, FieldLabel, fieldClassName } from '@/components/ui/Premium';
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  readLearnQuizPasses,
+  setLearnQuizPasses,
+  type LearnQuizPasses,
+} from '@/lib/bookTrainingPreferences';
 
 export function SettingsForm() {
   const user = useQuery(api.users.current);
@@ -12,6 +17,19 @@ export function SettingsForm() {
   const [saved, setSaved] = useState(false);
   const [lichess, setLichess] = useState('');
   const [chesscom, setChesscom] = useState('');
+  const [learnQuizPasses, setLearnQuizPassesState] = useState<LearnQuizPasses>(1);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setLearnQuizPassesState(readLearnQuizPasses());
+    });
+    const onPasses = () => setLearnQuizPassesState(readLearnQuizPasses());
+    window.addEventListener('repdrill:learn-quiz-passes', onPasses);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('repdrill:learn-quiz-passes', onPasses);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -63,6 +81,34 @@ export function SettingsForm() {
           autoComplete="off"
         />
       </FieldLabel>
+
+      <div className="border-t border-[color:var(--paper-rule)] pt-6">
+        <FieldLabel
+          label="Quiz passes after overview"
+          hint="Learn mode shows the line once, then repeats the moves"
+        >
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Quiz passes after overview">
+            {([1, 2, 3] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={learnQuizPasses === value}
+                onClick={() => {
+                  setLearnQuizPassesState(value);
+                  setLearnQuizPasses(value);
+                }}
+                className={`min-h-11 rounded-lg border px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors ${
+                  learnQuizPasses === value
+                    ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-[color:var(--paper)]'
+                    : 'border-[color:var(--paper-rule)] bg-[color:var(--surface)] text-[color:var(--ink-soft)] hover:border-[color:var(--library-green)] hover:text-[color:var(--ink)]'
+                }`}
+              >
+                {value} {value === 1 ? 'pass' : 'passes'}
+              </button>
+            ))}
+          </div>
+        </FieldLabel>
+      </div>
 
       <div className="flex items-center gap-3 pt-2">
         <PremiumButton type="submit" disabled={isSaving || !isDirty}>

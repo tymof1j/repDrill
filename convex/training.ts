@@ -26,6 +26,20 @@ function scheduleCard(card: Card, rating: Grade, now?: Date) {
   return f.next(card, now ?? new Date(), rating);
 }
 
+/** Convert recall outcome and effort into an FSRS grade.
+ * Wrong moves are always Again; correct moves under three seconds are Easy,
+ * under eight seconds Good, and slower recalls Hard.  Slow-but-correct is
+ * deliberately not treated as a lapse: it reinforces the line without
+ * pretending the recall was effortless.
+ */
+function ratingForRecall(correct: boolean, responseTimeMs: number): Grade {
+  if (!correct) return Rating.Again;
+  const elapsed = Number.isFinite(responseTimeMs) ? Math.max(0, responseTimeMs) : 0;
+  if (elapsed < 3_000) return Rating.Easy;
+  if (elapsed < 8_000) return Rating.Good;
+  return Rating.Hard;
+}
+
 type TrainableCourse = {
   course: Doc<"courses">;
   ownerId: Id<"users">;
@@ -69,6 +83,37 @@ async function getTrainableCourses(
   }
 
   return Array.from(result.values());
+}
+
+/**
+ * Return repertoire move ids that belong to training chapters the user can
+ * currently access.  Review cards are intentionally retained when a chapter
+ * is later switched to info-only, so card-based stats must filter those stale
+ * rows instead of treating them as active training work.
+ */
+async function getTrainableMoveIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+) {
+  const trainableCourses = await getTrainableCourses(ctx, userId);
+  const moveIds = new Set<string>();
+  for (const { course } of trainableCourses) {
+    const chapters = await ctx.db
+      .query("chapters")
+      .withIndex("by_course", (q) => q.eq("courseId", course._id))
+      .collect();
+    for (const chapter of chapters) {
+      if (chapter.chapterType === "info_only") continue;
+      const moves = await ctx.db
+        .query("moves")
+        .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+        .collect();
+      for (const move of moves) {
+        if (move.moveType === "repertoire") moveIds.add(move._id as string);
+      }
+    }
+  }
+  return moveIds;
 }
 
 // --- Ensure review cards exist for all repertoire moves ---
@@ -148,6 +193,18 @@ export type LineStep = {
   moveNumber: number;
   isUserMove: boolean;
   annotation: string | null;
+  annotations?: {
+    nags?: number[];
+    directives?: Array<{
+      name: string;
+      args: Record<string, string>;
+      value?: string;
+      raw: string;
+    }>;
+    arrows?: Array<{ start: string; end: string; color?: string; raw?: string }>;
+    circles?: Array<{ square: string; color?: string; raw?: string }>;
+    clocks?: string[];
+  } | null;
   cardId: string | null;
   isNew: boolean;
 };
@@ -177,20 +234,41 @@ export type CourseLineStatus = {
   isInfoOnly: boolean;
 };
 
-const ROOT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 const REORDER_FOLLOWS_IMPORT_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Return the entry position(s) for one chapter's move graph.  Imported theory
+ * is allowed to start from a FEN tag, so looking up one global standard-board
+ * position silently discarded those chapters.  A chapter root is a position
+ * referenced as a move parent but never reached as a child in that chapter.
+ * Malformed/cyclic imports still get a deterministic fallback to their first
+ * move's parent, preserving the old behavior for repairable data.
+ */
+function chapterRootIds(chapterMoves: Doc<"moves">[]): string[] {
+  if (chapterMoves.length === 0) return [];
+  const parents = new Set<string>();
+  const children = new Set<string>();
+  for (const move of chapterMoves) {
+    parents.add(move.parentPositionId as string);
+    children.add(move.childPositionId as string);
+  }
+  const roots = Array.from(parents).filter((id) => !children.has(id));
+  return roots.length > 0 ? roots : [chapterMoves[0].parentPositionId as string];
+}
 
 export const getTrainingLines = query({
   args: {
     courseId: v.optional(v.id("courses")),
+    chapterId: v.optional(v.id("chapters")),
     repertoireId: v.optional(v.id("repertoires")),
     fromPositionId: v.optional(v.id("positions")),
+    learnMode: v.optional(v.boolean()),
     newLineLimit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
-    const newLineLimit = args.newLineLimit ?? 5;
+    const newLineLimit = args.learnMode ? Number.POSITIVE_INFINITY : args.newLineLimit ?? 5;
 
     // Load courses
     let userCourses = (await getTrainableCourses(ctx, userId)).map((entry) => entry.course);
@@ -237,7 +315,7 @@ export const getTrainingLines = query({
         .query("chapters")
         .withIndex("by_course", (q) => q.eq("courseId", course._id))
         .collect();
-      allChapters.push(...chs);
+      allChapters.push(...chs.filter((chapter) => !args.chapterId || chapter._id === args.chapterId));
     }
     if (allChapters.length === 0)
       return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
@@ -245,6 +323,10 @@ export const getTrainingLines = query({
     // Load all moves
     const allMoves: Doc<"moves">[] = [];
     for (const ch of allChapters) {
+      // Learn mode is a guided overview and includes info-only chapters.
+      // Review mode remains strictly trainable so prose chapters never enter
+      // the FSRS queue.
+      if (ch.chapterType === "info_only" && !args.learnMode) continue;
       const chMoves = await ctx.db
         .query("moves")
         .withIndex("by_chapter", (q) => q.eq("chapterId", ch._id))
@@ -289,10 +371,6 @@ export const getTrainingLines = query({
       infoLineViews.map((row) => `${row.chapterId as string}:${row.lineKey}`),
     );
 
-    const rootPos = allPositions.find((p) => p.fen === ROOT_FEN);
-    if (!rootPos)
-      return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
-
     // Build adjacency per chapter
     const movesByParentByChapter = new Map<
       string,
@@ -329,6 +407,9 @@ export const getTrainingLines = query({
     for (const [chapterId, movesByParent] of movesByParentByChapter) {
       const chapter = chapById.get(chapterId);
       if (!chapter) continue;
+      // Info-only chapters are study material. Learn mode surfaces them in the
+      // guided overview, while ordinary review keeps them out of the queue.
+      if (chapter.chapterType === "info_only" && !args.learnMode) continue;
       const course = courseById.get(chapter.courseId as string);
       if (!course) continue;
 
@@ -366,7 +447,11 @@ export const getTrainingLines = query({
             childPositionId: m.childPositionId as string,
             moveNumber: m.moveNumber,
             isUserMove: m.moveType === "repertoire",
-            annotation: childPos?.annotation ?? null,
+            // New imports keep prose on the move; legacy rows only have the
+            // child-position annotation.  Treat empty comments as absent so a
+            // blank line note cannot mask a useful legacy annotation.
+            annotation: m.comment?.trim() ? m.comment : childPos?.annotation ?? null,
+            annotations: m.annotations ?? null,
             cardId: card ? (card._id as string) : null,
             isNew: card ? card.state === 0 : false,
           });
@@ -376,7 +461,10 @@ export const getTrainingLines = query({
         onPath.delete(posId);
       }
 
-      dfs(rootPos._id as string, []);
+      const chapterMoves = Array.from(movesByParent.values()).flat();
+      for (const rootId of chapterRootIds(chapterMoves)) {
+        dfs(rootId, []);
+      }
 
       for (const [i, rawSteps] of chapterLines.entries()) {
         let steps = rawSteps;
@@ -389,8 +477,11 @@ export const getTrainingLines = query({
         }
         const lineKey = steps.map((s) => s.uci).join(" ");
         const lineSettingKey = `${chapterId}:${lineKey}`;
+        // In review mode chapter-level info-only moves are excluded while
+        // loading the graph; Learn mode keeps them and marks their lines here.
         const lineIsInfoOnly =
-          chapter.chapterType === "info_only" || lineSettingByChapterAndKey.get(lineSettingKey) === true;
+          chapter.chapterType === "info_only" ||
+          lineSettingByChapterAndKey.get(lineSettingKey) === true;
         if (!steps.some((s) => s.isUserMove) && !lineIsInfoOnly) continue;
 
         const lineIsNew = steps.some((s) => s.isNew);
@@ -405,8 +496,8 @@ export const getTrainingLines = query({
         if (lineDueCount > 0 || lineIsNew) dueLines++;
 
         const infoLineAlreadyViewed = viewedInfoLineKeys.has(lineSettingKey);
-        if (lineIsInfoOnly && infoLineAlreadyViewed) continue;
-        if (!lineIsInfoOnly && !args.fromPositionId && lineDueCount === 0 && !lineIsNew) continue;
+        if (lineIsInfoOnly && infoLineAlreadyViewed && !args.learnMode) continue;
+        if (!args.learnMode && !args.fromPositionId && !lineIsInfoOnly && lineDueCount === 0 && !lineIsNew) continue;
 
         allExtracted.push({
           lineId: `${chapterId}-${i}`,
@@ -480,10 +571,6 @@ export const getCourseLineStatuses = query({
     ).flat();
     if (allMoves.length === 0) return [] as CourseLineStatus[];
 
-    const allPositions = await ctx.db
-      .query("positions")
-      .withIndex("by_user_fen", (q) => q.eq("userId", userId))
-      .collect();
     const allCards = await ctx.db
       .query("reviewCards")
       .withIndex("by_user_due", (q) => q.eq("userId", userId))
@@ -496,9 +583,6 @@ export const getCourseLineStatuses = query({
     );
     const cardByMoveId = new Map(allCards.map((c) => [c.moveId as string, c]));
     const now = Date.now();
-
-    const rootPos = allPositions.find((p) => p.fen === ROOT_FEN);
-    if (!rootPos) return [] as CourseLineStatus[];
 
     const movesByParentByChapter = new Map<string, Map<string, Doc<"moves">[]>>();
     for (const move of allMoves) {
@@ -543,7 +627,10 @@ export const getCourseLineStatuses = query({
         }
         onPath.delete(positionId);
       };
-      walk(rootPos._id as string, []);
+      const chapterMoves = Array.from(byParent.values()).flat();
+      for (const rootId of chapterRootIds(chapterMoves)) {
+        walk(rootId, []);
+      }
 
       lines.forEach((line, lineIndex) => {
         const repMoves = line.moves.filter((move) => move.moveType === "repertoire");
@@ -603,7 +690,133 @@ export const getCourseLineStatuses = query({
   },
 });
 
-// --- Quick stats (single index scan, no N+1) ---
+/**
+ * Return compact progress summaries for a batch of courses.
+ *
+ * The library only needs aggregate counts, not every line's grade and review
+ * timestamp.  Keeping this as one query also avoids a realtime subscription
+ * per course card (which made a large imported course sit in the loading state
+ * while its full status array was being built).
+ */
+export type CourseLineProgress = {
+  courseId: string;
+  total: number;
+  learned: number;
+  due: number;
+  newLines: number;
+};
+
+export const getCourseLineProgress = query({
+  args: { courseIds: v.array(v.id("courses")) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId || args.courseIds.length === 0) return [] as CourseLineProgress[];
+
+    // Keep the request bounded even if a caller accidentally repeats ids or
+    // sends a very large library.  Course cards only ever send owned courses.
+    const courseIds = Array.from(new Set(args.courseIds.map((id) => id as string))).slice(0, 100) as Id<"courses">[];
+    const allCards = await ctx.db
+      .query("reviewCards")
+      .withIndex("by_user_due", (q) => q.eq("userId", userId))
+      .collect();
+    const cardByMoveId = new Map(allCards.map((card) => [card.moveId as string, card]));
+    const now = Date.now();
+    const result: CourseLineProgress[] = [];
+
+    for (const courseId of courseIds) {
+      const course = await ctx.db.get(courseId);
+      if (!course || course.userId !== userId) continue;
+
+      const chapters = await ctx.db
+        .query("chapters")
+        .withIndex("by_course", (q) => q.eq("courseId", courseId))
+        .collect();
+      const trainableChapters = chapters.filter((chapter) => chapter.chapterType !== "info_only");
+
+      let total = 0;
+      let learned = 0;
+      let due = 0;
+      let newLines = 0;
+
+      const chapterData = await Promise.all(
+        trainableChapters.map(async (chapter) => {
+          const moves = await ctx.db
+            .query("moves")
+            .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+            .collect();
+          const lineSettings = await ctx.db
+            .query("chapterLineSettings")
+            .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+            .collect();
+          return { chapter, moves, lineSettings };
+        }),
+      );
+
+      for (const { moves, lineSettings } of chapterData) {
+        if (moves.length === 0) continue;
+
+        const lineSettingByKey = new Map(lineSettings.map((row) => [row.lineKey, row.infoOnly]));
+        const movesByParent = new Map<string, Doc<"moves">[]>();
+        for (const move of moves) {
+          const parentId = move.parentPositionId as string;
+          const siblings = movesByParent.get(parentId) ?? [];
+          siblings.push(move);
+          movesByParent.set(parentId, siblings);
+        }
+        for (const siblings of movesByParent.values()) {
+          siblings.sort((a, b) => Number(b.isMainLine) - Number(a.isMainLine) || a.sortOrder - b.sortOrder);
+        }
+
+        const onPath = new Set<string>();
+        const consumeLine = (line: Doc<"moves">[]) => {
+          const lineKey = line.map((move) => move.uci).join(" ");
+          if (lineSettingByKey.get(lineKey) === true) return;
+
+          total++;
+          const cards = line
+            .filter((move) => move.moveType === "repertoire")
+            .map((move) => cardByMoveId.get(move._id as string))
+            .filter(Boolean) as Doc<"reviewCards">[];
+          const hasNew = cards.length === 0 || cards.some((card) => card.state === 0);
+          if (hasNew) {
+            newLines++;
+            return;
+          }
+          learned++;
+          if (cards.some((card) => card.due <= now)) due++;
+        };
+        const walk = (positionId: string, path: Doc<"moves">[]) => {
+          if (onPath.has(positionId)) {
+            if (path.length > 0) consumeLine(path);
+            return;
+          }
+          onPath.add(positionId);
+          const children = movesByParent.get(positionId) ?? [];
+          if (children.length === 0) {
+            if (path.length > 0) consumeLine(path);
+            onPath.delete(positionId);
+            return;
+          }
+          for (const child of children) {
+            path.push(child);
+            walk(child.childPositionId as string, path);
+            path.pop();
+          }
+          onPath.delete(positionId);
+        };
+
+        const chapterMoves = Array.from(movesByParent.values()).flat();
+        for (const rootId of chapterRootIds(chapterMoves)) walk(rootId, []);
+      }
+
+      result.push({ courseId: courseId as string, total, learned, due, newLines });
+    }
+
+    return result;
+  },
+});
+
+// --- Quick stats (card scan plus trainable-chapter filter) ---
 export const getQuickStats = query({
   args: {},
   handler: async (ctx) => {
@@ -615,11 +828,13 @@ export const getQuickStats = query({
       .query("reviewCards")
       .withIndex("by_user_due", (q) => q.eq("userId", userId))
       .collect();
+    const trainableMoveIds = await getTrainableMoveIds(ctx, userId);
+    const activeCards = cards.filter((card) => trainableMoveIds.has(card.moveId as string));
 
     return {
-      totalLines: cards.length,
-      dueLines: cards.filter((c) => c.due <= now || c.state === 0).length,
-      newLines: cards.filter((c) => c.state === 0).length,
+      totalLines: activeCards.length,
+      dueLines: activeCards.filter((c) => c.due <= now || c.state === 0).length,
+      newLines: activeCards.filter((c) => c.state === 0).length,
     };
   },
 });
@@ -651,6 +866,7 @@ export const getLineStats = query({
 
     const allMoves: Doc<"moves">[] = [];
     for (const ch of allChapters) {
+      if (ch.chapterType === "info_only") continue;
       const chMoves = await ctx.db
         .query("moves")
         .withIndex("by_chapter", (q) => q.eq("chapterId", ch._id))
@@ -659,14 +875,6 @@ export const getLineStats = query({
     }
     if (allMoves.length === 0)
       return { totalLines: 0, dueLines: 0, newLines: 0 };
-
-    const rootPos = await ctx.db
-      .query("positions")
-      .withIndex("by_user_fen", (q) =>
-        q.eq("userId", userId).eq("fen", ROOT_FEN)
-      )
-      .first();
-    if (!rootPos) return { totalLines: 0, dueLines: 0, newLines: 0 };
 
     const allCards = await ctx.db
       .query("reviewCards")
@@ -737,7 +945,10 @@ export const getLineStats = query({
         onPath.delete(posId);
       }
 
-      countPaths(rootPos._id as string, false, false, false);
+      const chapterMoves = Array.from(movesByParent.values()).flat();
+      for (const rootId of chapterRootIds(chapterMoves)) {
+        countPaths(rootId, false, false, false);
+      }
     }
 
     return { totalLines, dueLines, newLines: newLinesCount };
@@ -776,7 +987,7 @@ export const submitLineRatings = mutation({
         last_review: row.lastReview ? new Date(row.lastReview) : undefined,
       };
 
-      const rating: Grade = r.correct ? Rating.Good : Rating.Again;
+      const rating = ratingForRecall(r.correct, r.responseTimeMs);
       const now = new Date();
       const result = scheduleCard(card, rating, now);
       const updated = result.card;
@@ -857,15 +1068,17 @@ export const getTrainingStats = query({
       .query("reviewCards")
       .withIndex("by_user_due", (q) => q.eq("userId", userId))
       .collect();
+    const trainableMoveIds = await getTrainableMoveIds(ctx, userId);
+    const activeCards = allCards.filter((card) => trainableMoveIds.has(card.moveId as string));
 
-    const totalCards = allCards.length;
-    const dueNow = allCards.filter((c) => c.due <= now).length;
-    const newCards = allCards.filter((c) => c.state === 0).length;
+    const totalCards = activeCards.length;
+    const dueNow = activeCards.filter((c) => c.due <= now).length;
+    const newCards = activeCards.filter((c) => c.state === 0).length;
 
     // Count today's reviews
     let reviewedToday = 0;
     let correctToday = 0;
-    for (const card of allCards) {
+    for (const card of activeCards) {
       const logs = await ctx.db
         .query("reviewLogs")
         .withIndex("by_card", (q) => q.eq("cardId", card._id))
