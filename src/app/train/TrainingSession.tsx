@@ -317,7 +317,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           );
           setFeedback({ type: 'correct', text: step.san });
           setShowAnnotation(hasStudyMarkup);
-          setNeedsManualNext(false);
+          // Keep the submitted answer on screen so the learner can inspect
+          // the solution with the forward/back controls before continuing.
+          setNeedsManualNext(true);
           if (inErrorRecovery) {
             const nextStreak = errorCorrectStreak + 1;
             setErrorCorrectStreak(nextStreak);
@@ -326,13 +328,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
               setErrorCorrectStreak(0);
             }
           }
-          const delay = hasStudyMarkup ? 1500 : 650;
-          setTimeout(() => {
-            preserveViewportAfterMove();
-            setFeedback(null);
-            setShowAnnotation(false);
-            if (!inErrorRecovery) setQuestionIndex((i) => i + 1);
-          }, delay);
           return;
         }
 
@@ -515,7 +510,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         nextLine();
         return;
       }
-      if (e.key === ' ' && needsManualNext && feedback?.type === 'wrong') {
+      if (e.key === ' ' && needsManualNext && feedback) {
         e.preventDefault();
         continueAfterWrong();
         return;
@@ -767,7 +762,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             </div>
           )}
 
-          {needsManualNext && feedback?.type === 'wrong' && (
+          {needsManualNext && feedback && (
             <div className="mt-4">
               <PremiumButton onClick={continueAfterWrong}>Continue</PremiumButton>
             </div>
