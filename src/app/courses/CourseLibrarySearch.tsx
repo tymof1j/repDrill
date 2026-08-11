@@ -21,6 +21,7 @@ import {
 import { useBookProgress } from '@/lib/hooks/useBookProgress';
 import type { BookProgressSnapshot } from '@/lib/woodpeckerProgress';
 import type { BookTrainingKey } from '@/lib/bookTrainingPreferences';
+import { ShareDialog } from '@/components/share/ShareDialog';
 
 export type CourseListItem = {
   id: string;
@@ -266,6 +267,17 @@ function CourseCard({
           <Link href={learnHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[color:var(--ink)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)] active:translate-y-0">Learn<span aria-hidden className="ml-2">→</span></Link>
           <Link href={reviewHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ink)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0">Review{progress.due > 0 ? ` · ${progress.due}` : ''}</Link>
         </div>
+
+        {!course.isBuiltIn && !course.isShared && (
+          <div className="mt-3">
+            <ShareDialog
+              resourceType="course"
+              resourceId={course.id}
+              title={course.name}
+              buttonClassName="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--paper)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ink-soft)] transition-[background-color,border-color,color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--ink)] active:translate-y-0"
+            />
+          </div>
+        )}
 
         {course.isBuiltIn ? (
           <span className="mt-4 font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--library-green)]">Included with RepDrill</span>
