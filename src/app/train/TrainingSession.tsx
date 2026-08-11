@@ -156,7 +156,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   );
   // Study navigation may reveal the position immediately before the first
   // prepared/user move, but never the continuation that is being tested.
-  const browseLimit = userStepIndexes[0] ?? line?.steps.length ?? 0;
+  const browseLimit = studyMode
+    ? (line?.steps.length ?? 0)
+    : (userStepIndexes[0] ?? line?.steps.length ?? 0);
   const currentStepIndex = inErrorRecovery
     ? (errorQueue[0] ?? -1)
     : (userStepIndexes[questionIndex] ?? -1);
@@ -384,6 +386,19 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [step, waitingForUser, notationInput, tryMove, preserveViewportAfterMove]);
 
+  const onAnalysisMove = useCallback((orig: string, dest: string) => {
+    try {
+      const chess = new Chess(toCompleteFen(boardFen));
+      const result = chess.move({ from: orig, to: dest, promotion: 'q' });
+      if (!result) return;
+      setBoardFen(toCompleteFen(chess.fen()));
+      setLastMoveUci([result.from, result.to]);
+      setSolutionPreviewIndex(null);
+    } catch {
+      // Ignore an invalid free-analysis move.
+    }
+  }, [boardFen]);
+
   const legalDests = useMemo(() => {
     if (!step || !waitingForUser || linePhase !== 'drill') return undefined;
     try {
@@ -401,10 +416,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   }, [step, waitingForUser, linePhase]);
 
   const boardInteractive = linePhase === 'drill' && Boolean(step) && waitingForUser && inputMode === 'mouse';
+  const analysisInteractive = (linePhase === 'browse' || linePhase === 'line-done' || Boolean(feedback)) && inputMode === 'mouse';
   const boardMovable = useMemo(() => {
-    if (!boardInteractive) return undefined;
-    return { free: false, dests: legalDests, color: playerColor, showDests: true };
-  }, [boardInteractive, legalDests, playerColor]);
+    if (boardInteractive) return { free: false, dests: legalDests, color: playerColor, showDests: true };
+    if (analysisInteractive) return { free: true, color: 'both' as const, showDests: true };
+    return undefined;
+  }, [analysisInteractive, boardInteractive, legalDests, playerColor]);
   const boardPremovable = useMemo(
     () => ({ enabled: boardInteractive }),
     [boardInteractive],
@@ -640,6 +657,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
       ),
     };
   });
+  const showInputPicker = isBrowsing || (isDrilling && !betweenDrills && waitingForUser) || isLineDone || Boolean(feedback);
   const shownSolutionPly = Math.min(
     Math.max(solutionPreviewIndex ?? currentStepIndex + 1, 0),
     line.steps.length,
@@ -655,9 +673,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
 
   return (
     <AppSurface className="training-scroll-stable lg:py-8">
-      <div className="relative">
-        {filterBar}
-      </div>
+      {filterBar ? <div className="mb-5 flex min-h-10 items-start justify-end">{filterBar}</div> : null}
       <div key={phaseKey} data-training-phase={linePhase} className="contents">
       <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
@@ -705,11 +721,11 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                 // `movable`/`premovable` are empty while feedback is shown,
                 // so the board stays inert without an avoidable remount for
                 // every answer.
-                viewOnly={isBrowsing || isLineDone}
+                viewOnly={!boardInteractive && !analysisInteractive}
                 lastMove={lastMoveUci}
                 movable={boardMovable}
                 premovable={boardPremovable}
-                onMove={onBoardMove}
+                onMove={analysisInteractive ? onAnalysisMove : onBoardMove}
                 onPremoveSet={onPremoveSet}
                 arrows={boardArrows}
                 squareMarks={boardSquareMarks}
@@ -734,7 +750,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             </section>
           )}
 
-          {isDrilling && !betweenDrills && waitingForUser && (
+          {showInputPicker && (
             <div className="mt-6 space-y-4">
               <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 {(['mouse', 'keyboard'] as const).map((mode) => (
@@ -743,12 +759,17 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                   </button>
                 ))}
               </div>
-              {inputMode === 'keyboard' && (
+              {isDrilling && waitingForUser && inputMode === 'keyboard' && (
                 <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
                   <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">→</span>
                   <input ref={notationRef} type="text" value={notationInput} onChange={(e) => { setNotationInput(e.target.value); setNotationError(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleNotationSubmit(); } }} placeholder="e.g. Nf3" className="notation flex-1 bg-transparent text-lg text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none" autoFocus />
                   <SecondaryButton onClick={handleNotationSubmit}>Play</SecondaryButton>
                 </div>
+              )}
+              {isBrowsing && inputMode === 'keyboard' && (
+                <p className="font-display-italic text-sm text-[color:var(--ink-soft)]">
+                  Notation view selected. Use the move line on the right to inspect the prepared sequence.
+                </p>
               )}
               {notationError && (
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -818,6 +839,17 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                 <a href={`https://lichess.org/analysis/standard/${lichessFen}?color=${playerColor}`} target="_blank" rel="noreferrer" aria-label="Analyze on Lichess" title="Analyze on Lichess" className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-white transition-transform hover:-translate-y-0.5 hover:border-[color:var(--library-green)]">
                   <img src="/lichess-knight.png" alt="" className="h-7 w-7 object-contain" />
                 </a>
+              </div>
+            </section>
+          )}
+
+          {isLineDone && !feedback && (
+            <section className="border-l-2 border-[color:var(--library-green)] pl-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--library-green)]">Review the line</p>
+              <div className="mt-4 inline-flex overflow-hidden rounded-md border border-[color:var(--paper-edge)]">
+                <button type="button" onClick={() => showSolutionPly(shownSolutionPly - 1)} disabled={shownSolutionPly === 0} aria-label="Previous solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">←</button>
+                <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
+                <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
               </div>
             </section>
           )}
