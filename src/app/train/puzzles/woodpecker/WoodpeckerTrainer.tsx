@@ -333,6 +333,11 @@ export function WoodpeckerTrainer({
   const lichessUrl = `https://lichess.org/analysis/standard/${puzzle.fen.replaceAll(' ', '_')}?color=${puzzle.turn}`;
   const cleanSolutionText = puzzle.solutionText.replace(/\uF0FC/g, '').replace(/\s{2,}/g, ' ').trim();
   const next = nextExercise();
+  const goNext = () => {
+    if (!next) return;
+    if (status === 'ready') markMissed();
+    goTo(next);
+  };
 
   return (
     <AppSurface className="pb-8">
@@ -523,12 +528,12 @@ export function WoodpeckerTrainer({
                   </button>
                   <button
                     type="button"
-                    onClick={() => next && goTo(next)}
-                    disabled={!next || status === 'ready'}
+                    onClick={goNext}
+                    disabled={!next}
                     className="rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-3 py-3 text-left font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--paper)] transition-colors hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <span className="block">Next</span>
-                    <span className="mt-1 block font-normal tracking-[0.08em] text-[color:var(--paper)]/70">{next ? `Puzzle ${next}` : 'Set complete'}</span>
+                    <span className="mt-1 block font-normal tracking-[0.08em] text-[color:var(--paper)]/70">{next ? `Puzzle ${next}${status === 'ready' ? ' · skip this one' : ''}` : 'Set complete'}</span>
                   </button>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -542,7 +547,7 @@ export function WoodpeckerTrainer({
 
           <div className="mt-4 flex items-center justify-between gap-3">
             <GhostButton onClick={() => goTo(puzzle.exercise - 1)} disabled={puzzle.exercise <= 1}>← Previous</GhostButton>
-            <GhostButton onClick={() => next && goTo(next)} disabled={!next || status === 'ready'}>
+            <GhostButton onClick={goNext} disabled={!next}>
               Next · {next ?? '—'} →
             </GhostButton>
           </div>
