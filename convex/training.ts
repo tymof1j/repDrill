@@ -762,10 +762,13 @@ export const getCourseLineProgress = query({
       const hasBeenReviewed = card.lastReview !== undefined || card.state !== 0;
       if (hasBeenReviewed) {
         summary.learned += 1;
+        // New cards belong to Learn, not Review. A Review count should only
+        // contain positions the learner has already seen and which are now
+        // due again.
+        if (card.due <= now) summary.due += 1;
       } else {
         summary.newLines += 1;
       }
-      if (card.state === 0 || card.due <= now) summary.due += 1;
     }
 
     return Array.from(summaries.values());

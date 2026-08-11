@@ -89,7 +89,7 @@ export function CourseLibrarySearch({ courses }: Props) {
   );
   const progressRows = useQuery(
     api.training.getCourseLineProgress,
-    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds, version: 2 } : 'skip',
+    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds, version: 3 } : 'skip',
   ) as CourseLineProgressSummary[] | undefined;
   const progressByCourseId = useMemo(
     () => new Map((progressRows ?? []).map((row) => [row.courseId, row])),
@@ -264,7 +264,7 @@ function CourseCard({
           key={`actions-${course.id}-${bookProgress?.updatedAt ?? 'pending'}-${learnHref}-${reviewHref}-${progress.due}`}
           className="mt-6 flex flex-wrap items-center gap-2"
         >
-          <Link href={learnHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[color:var(--ink)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)] active:translate-y-0">Learn<span aria-hidden className="ml-2">→</span></Link>
+          <Link href={learnHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[color:var(--ink)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)] active:translate-y-0">Learn{progress.newLines > 0 ? ` · ${progress.newLines}` : ''}<span aria-hidden className="ml-2">→</span></Link>
           <Link href={reviewHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ink)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0">Review{progress.due > 0 ? ` · ${progress.due}` : ''}</Link>
         </div>
 
@@ -313,14 +313,15 @@ function getProgress(
         ? `${solved.toLocaleString()} / ${count.toLocaleString()} positions${attempts > 0 ? ` · ${attempts.toLocaleString()} attempts` : ''}`
         : 'Progress not started',
       due: missed,
+      newLines: Math.max(0, count - solved),
       dueLabel: missed > 0 ? `${missed} missed` : 'Ready when you are',
     };
   }
   if (!summary) {
-    return { percent: 0, label: 'Loading progress', variationLabel: 'Reading course positions…', due: 0, dueLabel: 'Please wait' };
+    return { percent: 0, label: 'Loading progress', variationLabel: 'Reading course positions…', due: 0, newLines: 0, dueLabel: 'Please wait' };
   }
   if (summary.total === 0) {
-    return { percent: 0, label: 'Ready to train', variationLabel: 'Open course to create review cards', due: 0, dueLabel: 'Ready when you are' };
+    return { percent: 0, label: 'Ready to train', variationLabel: 'Open course to create review cards', due: 0, newLines: 0, dueLabel: 'Ready when you are' };
   }
   const percent = (summary.learned / summary.total) * 100;
   return {
@@ -328,6 +329,7 @@ function getProgress(
     label: `${Math.round(percent)}%`,
     variationLabel: `${summary.learned} / ${summary.total} positions`,
     due: summary.due,
+    newLines: summary.newLines,
     dueLabel: summary.due > 0 ? `${summary.due} due` : 'Ready when you are',
   };
 }
