@@ -258,13 +258,25 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         setInErrorRecovery(true);
         return;
       }
+      const finalStep = line?.steps[line.steps.length - 1];
+      if (finalStep) {
+        setBoardFen(toCompleteFen(finalStep.childFen));
+        setLastMoveUci([finalStep.uci.slice(0, 2), finalStep.uci.slice(2, 4)]);
+      }
+      setSolutionPreviewIndex(line?.steps.length ?? 0);
       setLinePhase('line-done');
       return;
     }
     if (inErrorRecovery && errorQueue.length === 0) {
+      const finalStep = line?.steps[line.steps.length - 1];
+      if (finalStep) {
+        setBoardFen(toCompleteFen(finalStep.childFen));
+        setLastMoveUci([finalStep.uci.slice(0, 2), finalStep.uci.slice(2, 4)]);
+      }
+      setSolutionPreviewIndex(line?.steps.length ?? 0);
       setLinePhase('line-done');
     }
-  }, [linePhase, feedback, inErrorRecovery, questionIndex, userStepIndexes.length, drillRun, drillPassCount, lineCorrect, lineWrong, errorQueue.length]);
+  }, [linePhase, feedback, inErrorRecovery, questionIndex, userStepIndexes.length, drillRun, drillPassCount, lineCorrect, lineWrong, errorQueue.length, line]);
 
   useEffect(() => {
     if (linePhase !== 'line-done' || lineSaving || lineSaved) return;
@@ -486,6 +498,15 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [needsManualNext, inErrorRecovery]);
 
+  // Keep the drill flowing: show the submitted result briefly, then advance
+  // to the next prepared position so intervening computer moves appear
+  // automatically without requiring a manual Continue click.
+  useEffect(() => {
+    if (linePhase !== 'drill' || !feedback || !needsManualNext) return;
+    const timer = window.setTimeout(continueAfterWrong, 900);
+    return () => window.clearTimeout(timer);
+  }, [linePhase, feedback, needsManualNext, continueAfterWrong]);
+
   const nextLine = useCallback(() => {
     if (!lineSaved) return;
     const next = lineIndex + 1;
@@ -657,7 +678,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
       ),
     };
   });
-  const showInputPicker = isBrowsing || (isDrilling && !betweenDrills && waitingForUser) || isLineDone || Boolean(feedback);
+  const showInputPicker = isDrilling && !betweenDrills && (waitingForUser || Boolean(feedback));
   const shownSolutionPly = Math.min(
     Math.max(solutionPreviewIndex ?? currentStepIndex + 1, 0),
     line.steps.length,
@@ -669,7 +690,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setBoardFen(toCompleteFen(shownStep?.childFen ?? line.steps[0]?.parentFen));
     setLastMoveUci(shownStep ? [shownStep.uci.slice(0, 2), shownStep.uci.slice(2, 4)] : undefined);
   };
-  const lichessFen = toCompleteFen(step?.parentFen ?? boardFen).replaceAll(' ', '_');
+  const lichessFen = toCompleteFen(boardFen).replaceAll(' ', '_');
 
   return (
     <AppSurface className="training-surface training-scroll-stable lg:py-5">
@@ -803,23 +824,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                   <SecondaryButton onClick={handleNotationSubmit}>Play</SecondaryButton>
                 </div>
               )}
-              {isBrowsing && inputMode === 'keyboard' && (
-                <p className="font-display-italic text-sm text-[color:var(--ink-soft)]">
-                  Notation view selected. Use the move line on the right to inspect the prepared sequence.
-                </p>
-              )}
               {notationError && (
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <p className="font-display-italic text-sm text-[color:var(--margin-red)]">{notationError}</p>
                   <Link href="/documentation/notation" target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[5px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)]">What notation is accepted?</Link>
                 </div>
               )}
-            </div>
-          )}
-
-          {needsManualNext && feedback && (
-            <div>
-              <PremiumButton onClick={continueAfterWrong}>Continue</PremiumButton>
             </div>
           )}
 
@@ -837,20 +847,22 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                     <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
                   </div>
                 )}
-                <a href={`https://lichess.org/analysis/standard/${lichessFen}?color=${playerColor}`} target="_blank" rel="noreferrer" aria-label="Analyze on Lichess" title="Analyze on Lichess" className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-white transition-transform hover:-translate-y-0.5 hover:border-[color:var(--library-green)]">
-                  <img src="/lichess-knight.png" alt="" className="h-7 w-7 object-contain" />
-                </a>
               </div>
             </section>
           )}
 
-          {isLineDone && !feedback && (
+          {isLineDone && (
             <section className="border-l-2 border-[color:var(--library-green)] pl-4">
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--library-green)]">Review the line</p>
-              <div className="mt-4 inline-flex overflow-hidden rounded-md border border-[color:var(--paper-edge)]">
-                <button type="button" onClick={() => showSolutionPly(shownSolutionPly - 1)} disabled={shownSolutionPly === 0} aria-label="Previous solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">←</button>
-                <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
-                <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="inline-flex overflow-hidden rounded-md border border-[color:var(--paper-edge)]">
+                  <button type="button" onClick={() => showSolutionPly(shownSolutionPly - 1)} disabled={shownSolutionPly === 0} aria-label="Previous solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">←</button>
+                  <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
+                  <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
+                </div>
+                <a href={`https://lichess.org/analysis/standard/${lichessFen}?color=${playerColor}`} target="_blank" rel="noreferrer" aria-label="Analyze on Lichess" title="Analyze on Lichess" className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-white transition-transform hover:-translate-y-0.5 hover:border-[color:var(--library-green)]">
+                  <img src="/lichess-knight.png" alt="" className="h-7 w-7 object-contain" />
+                </a>
               </div>
             </section>
           )}
