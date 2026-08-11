@@ -132,6 +132,20 @@ async function readSnapshot(
     .map((row) => row.puzzle)
     .sort((a, b) => a - b);
 
+  // Older summaries were created before the cycle clock was added. Recover
+  // their start time from the append-only attempt history so existing cycles
+  // also show the elapsed-day counter.
+  const attemptRows = await ctx.db
+    .query("bookPuzzleAttempts")
+    .withIndex("by_user_id_and_book_key_and_cycle_and_puzzle_and_attempt", (q) =>
+      q.eq("userId", userId).eq("bookKey", bookKey).eq("cycle", summary.cycle),
+    )
+    .take(MAX_ATTEMPTS_PER_IMPORT);
+  const firstAttemptAt = attemptRows.reduce<number | undefined>(
+    (earliest, row) => earliest === undefined ? row.recordedAt : Math.min(earliest, row.recordedAt),
+    undefined,
+  );
+
   return {
     bookKey,
     cycle: summary.cycle,
@@ -143,7 +157,7 @@ async function readSnapshot(
     missedCount: summary.missedCount,
     unresolvedMissedCount: summary.unresolvedMissedCount,
     attemptCount: summary.attemptCount,
-    startedAt: summary.startedAt ?? null,
+    startedAt: firstAttemptAt ?? summary.startedAt ?? null,
     updatedAt: summary.updatedAt,
     sourceMarker: summary.sourceMarker ?? null,
   };

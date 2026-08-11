@@ -705,7 +705,6 @@ function MethodProgressCard({
   const solved = progress.solvedCount;
   const complete = solved >= progress.setSize && progress.missedCount === 0;
   const targetDays = method.targetDays[progress.cycle - 1];
-  const lateCycle = progress.cycle >= 6;
   const daysInCycle = progress.startedAt === null
     ? null
     : Math.max(1, Math.ceil(Math.max(0, now - progress.startedAt) / (24 * 60 * 60 * 1_000)));
@@ -719,24 +718,20 @@ function MethodProgressCard({
     <div className="mt-4 rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">Author’s cadence · Cycle {progress.cycle} of 7</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">Cycle {progress.cycle} of 7</p>
           <p className="mt-2 text-sm text-[color:var(--ink-soft)]">
-            {solved}/{progress.setSize} positions · {progress.attemptCount} attempts · target {targetDays} {targetDays === 1 ? 'day' : 'days'}
+            {solved}/{progress.setSize} positions · {progress.attemptCount} attempts
           </p>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
-            {daysInCycle === null
-              ? 'Cycle clock starts with the first position'
-              : `${daysInCycle} ${daysInCycle === 1 ? 'day' : 'days'} in current cycle`}
+            {daysInCycle === null ? 'Days in cycle: —' : `Days in cycle: ${daysInCycle} · target: ${targetDays}`}
           </p>
           {progress.missedCount > 0 && (
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">
-              {progress.missedCount} skipped still to solve
+              {progress.missedCount} skipped
             </p>
           )}
         </div>
-        <Link href="/documentation/woodpecker-method" className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] underline-offset-4">Why this cadence?</Link>
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-[color:var(--ink-faint)]">{method.kind === 'positional' && progress.cycle <= 2 ? 'Take the time to understand the complete explanation; speed becomes the priority in later cycles.' : lateCycle ? 'Prioritize immediate pattern recognition, but still check the critical continuation.' : 'Choose a move in every position and calculate the continuation before committing.'}</p>
       {complete && progress.cycle < 7 && <button type="button" onClick={onAdvance} className="mt-4 border-b border-[color:var(--library-green)] pb-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--library-green)]">Start next cycle after a 1-day to 1-week break →</button>}
     </div>
   );
