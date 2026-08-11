@@ -475,13 +475,15 @@ export const getTrainingLines = query({
           return card && card.due <= now;
         }).length;
 
-        totalLines++;
-        if (lineIsNew) newLinesCount++;
-        if (lineDueCount > 0 || lineIsNew) dueLines++;
-
         const infoLineAlreadyViewed = viewedInfoLineKeys.has(lineSettingKey);
         if (lineIsInfoOnly && infoLineAlreadyViewed && !args.learnMode) continue;
-        if (!args.learnMode && !args.fromPositionId && !lineIsInfoOnly && lineDueCount === 0 && !lineIsNew) continue;
+        // Review/Train now is strictly the FSRS due queue. New material is
+        // available through Learn and must not inflate the repeat count.
+        if (!args.learnMode && !args.fromPositionId && !lineIsInfoOnly && lineDueCount === 0) continue;
+
+        totalLines++;
+        if (lineIsNew) newLinesCount++;
+        if (lineDueCount > 0) dueLines++;
 
         allExtracted.push({
           lineId: `${chapterId}-${i}`,
@@ -778,7 +780,7 @@ export const getQuickStats = query({
 
     return {
       totalLines: activeCards.length,
-      dueLines: activeCards.filter((c) => c.due <= now || c.state === 0).length,
+      dueLines: activeCards.filter((c) => c.due <= now).length,
       newLines: activeCards.filter((c) => c.state === 0).length,
     };
   },
@@ -860,7 +862,7 @@ export const getLineStats = query({
         if (onPath.has(posId)) {
           if (hasRep) {
             totalLines++;
-            if (hasDue || hasNew) dueLines++;
+            if (hasDue) dueLines++;
             if (hasNew) newLinesCount++;
           }
           return;
@@ -870,7 +872,7 @@ export const getLineStats = query({
         if (!children || children.length === 0) {
           if (hasRep) {
             totalLines++;
-            if (hasDue || hasNew) dueLines++;
+            if (hasDue) dueLines++;
             if (hasNew) newLinesCount++;
           }
           onPath.delete(posId);

@@ -90,26 +90,13 @@ export default function CoursesListPage() {
         action={<SecondaryButton href="/courses/new">New course</SecondaryButton>}
       />
 
-      {visibleStats && visibleStats.totalLines > 0 && (
+      {visibleStats && visibleStats.dueLines > 0 && (
         <section className="mb-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-y border-[color:var(--paper-edge)] py-4">
           <div className="flex items-baseline gap-2">
             <span className="font-display text-[2.9rem] font-semibold leading-none tabular-nums text-[color:var(--margin-red)]">
               {visibleStats.dueLines}
             </span>
-            <span className="text-[32px] leading-none text-[color:var(--ink-soft)]">due</span>
-            <span className="text-[color:var(--ink-ghost)]">/</span>
-            <span className="text-[32px] leading-none tabular-nums text-[color:var(--ink-faint)]">
-              {visibleStats.totalLines}
-            </span>
-            <span className="text-[32px] leading-none text-[color:var(--ink-ghost)]">total</span>
-            {visibleStats.newLines > 0 && (
-              <>
-                <span className="ml-1 text-[color:var(--ink-ghost)]">·</span>
-                <span className="font-mono text-[20px] font-medium uppercase tracking-[0.18em] text-[color:var(--gilt)]">
-                  {visibleStats.newLines} new
-                </span>
-              </>
-            )}
+            <span className="text-[32px] leading-none text-[color:var(--ink-soft)]">to repeat now</span>
           </div>
           <Link
             href="/train"

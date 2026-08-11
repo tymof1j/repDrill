@@ -48,6 +48,42 @@ type Props = {
   initialLineId?: string | null;
 };
 
+const STANDARD_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+function escapePgnTag(value: string) {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', ' ');
+}
+
+function buildLinePgn(line: TrainingLine) {
+  if (line.steps.length === 0) return null;
+  try {
+    const startingFen = toCompleteFen(line.steps[0].parentFen);
+    const chess = new Chess(startingFen);
+    const movetext: string[] = [];
+    for (const step of line.steps) {
+      const sideToMove = chess.turn();
+      const result = chess.move({
+        from: step.uci.slice(0, 2),
+        to: step.uci.slice(2, 4),
+        promotion: step.uci.slice(4) || undefined,
+      });
+      if (sideToMove === 'w') movetext.push(`${step.moveNumber}.`);
+      else if (movetext.length === 0) movetext.push(`${step.moveNumber}...`);
+      movetext.push(result.san);
+    }
+    const tags = [
+      `[Event "${escapePgnTag(line.courseName)}"]`,
+      `[Chapter "${escapePgnTag(line.chapterName)}"]`,
+      ...(startingFen !== STANDARD_FEN
+        ? [`[SetUp "1"]`, `[FEN "${escapePgnTag(startingFen)}"]`]
+        : []),
+    ];
+    return `${tags.join('\n')}\n\n${movetext.join(' ')} *`;
+  } catch {
+    return null;
+  }
+}
+
 export function TrainingSession({ initialLines, filterBar, studyMode = false, initialLineId = null }: Props) {
   const [lines] = useState(initialLines);
   const [lineIndex, setLineIndex] = useState(0);
@@ -669,18 +705,25 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     };
   });
   const showInputPicker = isDrilling && !betweenDrills && (waitingForUser || Boolean(feedback));
+  const solutionPreviewLimit = feedback?.type === 'wrong'
+    ? Math.min(currentStepIndex + 1, line.steps.length)
+    : line.steps.length;
   const shownSolutionPly = Math.min(
     Math.max(solutionPreviewIndex ?? currentStepIndex + 1, 0),
-    line.steps.length,
+    solutionPreviewLimit,
   );
   const showSolutionPly = (ply: number) => {
-    const nextPly = Math.min(Math.max(ply, 0), line.steps.length);
+    const nextPly = Math.min(Math.max(ply, 0), solutionPreviewLimit);
     const shownStep = nextPly > 0 ? line.steps[nextPly - 1] : undefined;
     setSolutionPreviewIndex(nextPly);
     setBoardFen(toCompleteFen(shownStep?.childFen ?? line.steps[0]?.parentFen));
     setLastMoveUci(shownStep ? [shownStep.uci.slice(0, 2), shownStep.uci.slice(2, 4)] : undefined);
   };
   const lichessFen = toCompleteFen(boardFen).replaceAll(' ', '_');
+  const linePgn = buildLinePgn(line);
+  const analysisUrl = linePgn
+    ? `https://lichess.org/analysis/pgn/${encodeURIComponent(linePgn)}`
+    : `https://lichess.org/analysis/standard/${lichessFen}?color=${playerColor}`;
 
   return (
     <AppSurface className="training-surface training-scroll-stable lg:py-5">
@@ -833,8 +876,8 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                 {(feedback.type === 'wrong' || isLineDone) && (
                   <div className="inline-flex overflow-hidden rounded-md border border-[color:var(--paper-edge)]">
                     <button type="button" onClick={() => showSolutionPly(shownSolutionPly - 1)} disabled={shownSolutionPly === 0} aria-label="Previous solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">←</button>
-                    <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
-                    <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
+                    <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{solutionPreviewLimit}</span>
+                    <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= solutionPreviewLimit} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
                   </div>
                 )}
                 {feedback.type === 'wrong' && needsManualNext && (
@@ -847,6 +890,14 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                     <span className="font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span>
                   </button>
                 )}
+                <a
+                  href={analysisUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center rounded-md border border-[color:var(--paper-rule)] px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-faint)] transition-colors hover:border-[color:var(--library-green)] hover:text-[color:var(--library-green)]"
+                >
+                  Analyze line
+                </a>
               </div>
             </section>
           )}
@@ -860,8 +911,8 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                   <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
                   <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
                 </div>
-                <a href={`https://lichess.org/analysis/standard/${lichessFen}?color=${playerColor}`} target="_blank" rel="noreferrer" aria-label="Analyze on Lichess" title="Analyze on Lichess" className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-white transition-transform hover:-translate-y-0.5 hover:border-[color:var(--library-green)]">
-                  <img src="/lichess-knight.png" alt="" className="h-7 w-7 object-contain" />
+                <a href={analysisUrl} target="_blank" rel="noreferrer" aria-label="Analyze line on Lichess" title="Analyze line on Lichess" className="inline-flex h-9 items-center justify-center rounded-md border border-[color:var(--paper-rule)] px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-faint)] transition-colors hover:border-[color:var(--library-green)] hover:text-[color:var(--library-green)]">
+                  Analyze line
                 </a>
               </div>
             </section>
