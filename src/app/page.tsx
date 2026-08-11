@@ -115,7 +115,7 @@ export default async function Home() {
             <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[color:var(--paper-rule)] px-1 pt-4 text-sm">
               <div>
                 <p className="text-[color:var(--ink-faint)]">Source</p>
-                <p className="mt-1 font-medium">The Woodpecker Method</p>
+                <p className="mt-1 font-medium">Vienna Chess Society</p>
               </div>
               <div>
                 <p className="text-[color:var(--ink-faint)]">Context</p>
