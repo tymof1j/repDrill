@@ -27,10 +27,31 @@ const needs = [
   },
 ];
 
-const routine = [
-  ['Bring one useful source', 'A puzzle book, an opening file, or a game you just played.'],
-  ['Solve, don’t reread', 'Make the move on the board before you see the answer.'],
-  ['Return at the right time', 'Short reviews keep important positions available when a real game asks for them.'],
+const workflowSteps = [
+  {
+    number: '01',
+    cue: 'PGN import',
+    title: 'Import theory',
+    body: 'Bring in PGN chapters or add your own lines.',
+  },
+  {
+    number: '02',
+    cue: 'Position note',
+    title: 'Attach notes to positions',
+    body: 'Plans and reminders stay with the board, even after transpositions.',
+  },
+  {
+    number: '03',
+    cue: "Today's queue",
+    title: 'Review what is due',
+    body: 'FSRS turns every answer into a next review date.',
+  },
+  {
+    number: '04',
+    cue: 'Game check',
+    title: 'Repair from real games',
+    body: 'Find the first move where your game left the repertoire.',
+  },
 ];
 
 export default async function Home() {
@@ -77,10 +98,7 @@ export default async function Home() {
           </p>
         </LandingReveal>
 
-        <LandingReveal delay={140} className="relative min-w-0">
-          <div className="absolute -left-10 top-12 hidden font-display text-[9rem] font-semibold leading-none text-[color:var(--paper-rule)] lg:block">
-            10
-          </div>
+        <LandingReveal delay={140} className="min-w-0">
           <div className="relative ml-auto max-w-[620px] rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-3 shadow-[0_28px_90px_rgba(47,58,50,0.14)] md:p-5">
             <div className="mb-4 flex items-start justify-between gap-5 px-1">
               <div>
@@ -186,33 +204,61 @@ export default async function Home() {
         </LandingReveal>
       </section>
 
-      <section id="routine" className="bg-[color:var(--paper-shade)]">
-        <div className="mx-auto max-w-7xl px-5 py-24 md:px-10 lg:px-14 lg:py-32">
-          <LandingReveal>
-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--library-green)]">
-              A study routine you can keep
+      <section id="routine" className="border-y border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)]">
+        <div className="mx-auto max-w-7xl px-5 py-20 md:px-10 lg:px-14 lg:py-24">
+          <LandingReveal className="grid gap-6 lg:grid-cols-[.8fr_1.2fr] lg:items-end">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--library-green)]">
+                Workflow
+              </p>
+              <h2 className="mt-5 max-w-2xl font-display text-4xl font-semibold leading-[.98] tracking-[-0.05em] md:text-5xl">
+                Study starts from the game you just played.
+              </h2>
+            </div>
+            <p className="max-w-2xl text-[15px] leading-7 text-[color:var(--ink-soft)] lg:justify-self-end">
+              The intended routine is simple: keep your opening files in RepDrill,
+              train the lines that are due, then use online games to discover exactly
+              which positions need attention.
             </p>
-            <h2 className="mt-5 max-w-3xl font-display text-5xl font-semibold leading-[.98] tracking-[-0.05em] md:text-6xl">
-              Less deciding what to study. More finding the move.
-            </h2>
           </LandingReveal>
-          <div className="mt-14 grid gap-px overflow-hidden rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--paper-rule)] md:grid-cols-3">
-            {routine.map(([title, body], index) => (
-              <LandingReveal
-                key={title}
-                delay={index * 100}
-                className="bg-[color:var(--surface)] p-7 md:min-h-64 md:p-9"
-              >
-                <span className="font-display-italic text-2xl text-[color:var(--margin-red)]">
-                  0{index + 1}
-                </span>
-                <h3 className="mt-10 font-display text-3xl font-semibold tracking-[-0.035em]">
-                  {title}
-                </h3>
-                <p className="mt-4 text-sm leading-relaxed text-[color:var(--ink-soft)]">{body}</p>
-              </LandingReveal>
-            ))}
-          </div>
+
+          <LandingReveal delay={100}>
+            <ol className="mt-10 grid gap-px overflow-hidden rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--paper-rule)] shadow-[0_18px_54px_rgba(47,58,50,0.07)] sm:grid-cols-2 lg:grid-cols-4">
+              {workflowSteps.map((step, index) => (
+                <li
+                  key={step.number}
+                  className="group relative flex min-h-56 flex-col bg-[color:var(--surface)] p-6 transition-colors duration-200 hover:bg-[color:var(--surface-soft)]"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-[color:var(--library-green)]">
+                      Step {step.number}
+                    </span>
+                    <span className="font-display-italic text-xl text-[color:var(--margin-red)]">
+                      {step.number}
+                    </span>
+                  </div>
+                  <h3 className="mt-7 max-w-[15rem] font-display text-2xl font-semibold leading-tight tracking-[-0.035em]">
+                    {step.title}
+                  </h3>
+                  <p className="mt-3 text-sm leading-relaxed text-[color:var(--ink-soft)]">
+                    {step.body}
+                  </p>
+                  <div className="mt-auto flex items-center gap-2 border-t border-[color:var(--paper-rule)] pt-5 font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
+                    <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--library-green)]" />
+                    {step.cue}
+                  </div>
+                  {index < workflowSteps.length - 1 && (
+                    <span
+                      aria-hidden
+                      className="absolute -right-3 top-7 z-10 hidden h-6 w-6 place-items-center rounded-full border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] text-xs text-[color:var(--library-green)] lg:grid"
+                    >
+                      →
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </LandingReveal>
         </div>
       </section>
 

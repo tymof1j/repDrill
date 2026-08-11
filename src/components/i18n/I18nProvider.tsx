@@ -115,13 +115,23 @@ export function I18nProvider({
       }, delay);
     };
 
-    scheduleApply();
+    // Language controls should feel like a native toggle: update the current
+    // DOM before waiting for React's next render. The delayed scheduler remains
+    // for content mounted later by client navigation.
+    applyLanguage(language, originals.current);
     persistLanguage(language);
 
-    window.setRepDrillLanguage = (next) => setLanguage(normalizeLanguage(next));
+    const applyNextLanguage = (next: Language) => {
+      const normalized = normalizeLanguage(next);
+      applyLanguage(normalized, originals.current);
+      persistLanguage(normalized);
+      setLanguage(normalized);
+    };
+
+    window.setRepDrillLanguage = applyNextLanguage;
     const onLanguage = (event: Event) => {
       const detail = (event as CustomEvent<{ language?: string }>).detail;
-      setLanguage(normalizeLanguage(detail?.language));
+      applyNextLanguage(normalizeLanguage(detail?.language));
     };
     window.addEventListener('repdrill-language', onLanguage);
 
@@ -136,6 +146,9 @@ export function I18nProvider({
       window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(secondFrame);
       window.removeEventListener('repdrill-language', onLanguage);
+      if (window.setRepDrillLanguage === applyNextLanguage) {
+        delete window.setRepDrillLanguage;
+      }
     };
   }, [language]);
 

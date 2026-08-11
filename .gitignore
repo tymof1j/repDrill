@@ -49,3 +49,13 @@ next-env.d.ts
 
 # local AI review artifacts
 .clawpatch/
+
+# Private course captures and learner exports never belong in Git. Import them
+# into the configured Convex deployment instead; keep any local capture only
+# in this ignored workspace directory.
+/data/import/
+/scripts/
+*.pgn
+*.status.json
+learning-progress.json
+*.pdf

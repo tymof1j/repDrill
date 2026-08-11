@@ -163,6 +163,14 @@ The in-app documentation starts at `/documentation`. The repository also keeps d
 - `/documentation/spaced-repetition` — why spaced repetition matters for opening memory.
 - `/documentation/fsrs` — why RepDrill uses FSRS.
 
+### Private imports and learner status
+
+Raw course material, source captures, PGNs, and personal learning-status
+exports are not repository content. They remain in the database/local recovery
+storage and are excluded by Git. [`data/README.md`](data/README.md) records
+that boundary, including the optional server-only source-PDF proxy, and
+explains the role of the maintained importer tooling.
+
 ## Architecture
 
 ### Frontend
@@ -209,6 +217,24 @@ pnpm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 The dev server must run on **port 3000**. If the port is busy, stop the existing process instead of falling back to another port.
+
+### Course host aliases
+
+Set `COURSE_ALIAS_ROOT_DOMAIN` to the app's root domain to enable these
+allow-listed shortcuts:
+
+- `woodpecker.<root>` opens the built-in Woodpecker Method course.
+- `woodpecker2.<root>` opens the built-in Woodpecker Method 2 course.
+- `english.<root>` and `english-breakfast.<root>` open the signed-in user's
+  uniquely identifiable English Breakfast course, or fall back to `/courses`.
+
+The aliases only handle the host root (`/`) and redirect to the canonical
+`SITE_URL`, which keeps authentication on one trusted origin. For local
+testing, `*.localhost` works without setting a root domain. In production,
+the application code is only one part of the setup: configure wildcard DNS,
+a wildcard TLS certificate/custom domain, and the hosting platform's
+`*.<root>` domain mapping. Without that infrastructure, wildcard hosts will
+not reach the Next.js proxy.
 
 For hosted or shared data, configure a Convex deployment and provide:
 
