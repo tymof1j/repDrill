@@ -248,7 +248,10 @@ function CourseCard({
 
         <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-[color:var(--ink-soft)]">{meta.shortDescription}</p>
 
-        <div className="mt-6 border-t border-[color:var(--paper-rule)] pt-5">
+        <div
+          key={`progress-${course.id}-${bookProgress?.updatedAt ?? 'pending'}-${progress.percent}-${progress.due}-${progress.label}`}
+          className="mt-6 border-t border-[color:var(--paper-rule)] pt-5"
+        >
           <ProgressBar value={progress.percent} tone={progress.due > 0 ? 'red' : 'green'} label={progress.label} />
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--ink-faint)]">
             <span>{progress.variationLabel}</span>
@@ -256,7 +259,10 @@ function CourseCard({
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div
+          key={`actions-${course.id}-${bookProgress?.updatedAt ?? 'pending'}-${learnHref}-${reviewHref}-${progress.due}`}
+          className="mt-6 flex flex-wrap items-center gap-2"
+        >
           <Link href={learnHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[color:var(--ink)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)] active:translate-y-0">Learn<span aria-hidden className="ml-2">→</span></Link>
           <Link href={reviewHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ink)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0">Review{progress.due > 0 ? ` · ${progress.due}` : ''}</Link>
         </div>
