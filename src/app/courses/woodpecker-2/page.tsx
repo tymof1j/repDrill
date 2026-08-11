@@ -4,7 +4,6 @@ import {
   AppSurface,
   BackLink,
   PageHeader,
-  PremiumButton,
   PremiumPanel,
   SecondaryButton,
   Stamp,
@@ -15,6 +14,7 @@ import {
   woodpecker2Puzzles,
   type Woodpecker2Puzzle,
 } from '@/lib/woodpecker2';
+import { WoodpeckerStartButton } from '../WoodpeckerStartButton';
 
 const sections: Array<{
   key: Woodpecker2Puzzle['section'];
@@ -71,7 +71,14 @@ export default async function Woodpecker2CoursePage() {
         eyebrow="Positional puzzle course · Complete book"
         title={WOODPECKER_2_COURSE.name}
         body={WOODPECKER_2_COURSE.description}
-        action={<PremiumButton href="/train/puzzles/woodpecker-2?n=1">Start the method</PremiumButton>}
+        action={(
+          <WoodpeckerStartButton
+            bookKey="woodpecker-method-2"
+            courseSlug="woodpecker-2"
+            total={woodpecker2Puzzles.length}
+            label="Start the method"
+          />
+        )}
       />
 
       <section className="mb-12 grid gap-4 border-y border-[color:var(--paper-rule)] py-6 sm:grid-cols-3">
@@ -131,4 +138,3 @@ function CourseStat({ value, label }: { value: number | string; label: string })
     </div>
   );
 }
-

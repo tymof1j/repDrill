@@ -4,13 +4,13 @@ import {
   AppSurface,
   BackLink,
   PageHeader,
-  PremiumButton,
   Stamp,
 } from '@/components/ui/Premium';
 import {
   WOODPECKER_COURSE,
   woodpeckerPuzzles,
 } from '@/lib/woodpecker';
+import { WoodpeckerStartButton } from '../WoodpeckerStartButton';
 import { WoodpeckerSectionCards } from './WoodpeckerSectionCards';
 
 export default async function WoodpeckerCoursePage() {
@@ -25,7 +25,14 @@ export default async function WoodpeckerCoursePage() {
         eyebrow="Puzzle course · Complete book"
         title={WOODPECKER_COURSE.name}
         body={WOODPECKER_COURSE.description}
-        action={<PremiumButton href="/train/puzzles/woodpecker?n=1">Start solving</PremiumButton>}
+        action={(
+          <WoodpeckerStartButton
+            bookKey="woodpecker-method"
+            courseSlug="woodpecker"
+            total={woodpeckerPuzzles.length}
+            label="Start solving"
+          />
+        )}
       />
 
       <section className="mb-12 grid gap-4 border-y border-[color:var(--paper-rule)] py-6 sm:grid-cols-3">
