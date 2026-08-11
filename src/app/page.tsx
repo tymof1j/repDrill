@@ -1,12 +1,9 @@
 import Link from 'next/link';
 import { isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
 import { redirect } from 'next/navigation';
-import { ChessBoard } from '@/components/board/ChessBoard';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LandingReveal } from '@/components/landing/LandingReveal';
-
-// A public historical position used only as a landing-page board example.
-const FEATURE_FEN = '2b5/4Q1pp/pp3n1k/3p3q/P2P1P2/BP1B2P1/7P/6K1 w - - 0 1';
+import { LandingDemoBoard } from '@/components/landing/LandingDemoBoard';
 
 const needs = [
   {
@@ -110,7 +107,7 @@ export default async function Home() {
                 from your book
               </span>
             </div>
-            <ChessBoard fen={FEATURE_FEN} orientation="white" viewOnly />
+            <LandingDemoBoard />
             <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[color:var(--paper-rule)] px-1 pt-4 text-sm">
               <div>
                 <p className="text-[color:var(--ink-faint)]">Source</p>
