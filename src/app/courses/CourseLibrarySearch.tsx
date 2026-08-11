@@ -170,7 +170,7 @@ function CourseCard({
   const progress = getProgress(course, bookProgress);
   const href = course.href ?? `/courses/${course.id}`;
   const learnHref = course.isBuiltIn
-    ? course.href ?? href
+    ? getBuiltInBookLearnHref(course, bookProgress) ?? course.href ?? href
     : `/train?courseId=${encodeURIComponent(course.id)}&mode=learn`;
   const reviewHref = course.mode === 'puzzles'
     ? getBuiltInBookReviewHref(course, bookProgress) ?? course.href ?? '/train'
@@ -294,6 +294,44 @@ function getBuiltInBookReviewHref(
   const exercise = Math.min(Math.max(nextExercise, 1), fullBookSize);
   const slug = book === 'woodpecker-method-2' ? 'woodpecker-2' : 'woodpecker';
   return `/train/puzzles/${slug}?n=${exercise}`;
+}
+
+function getBuiltInBookLearnHref(
+  course: CourseListItem,
+  progress: BookProgressSnapshot | null,
+) {
+  const book = getBuiltInBookKey(course);
+  if (!book) return null;
+
+  const fullBookSize = book === 'woodpecker-method-2' ? 1000 : 1128;
+  const setSize = Math.min(Math.max(progress?.setSize ?? fullBookSize, 1), fullBookSize);
+  const firstCandidate = Math.min(Math.max(progress?.position ?? 1, 1), setSize);
+  const solved = new Set(progress?.solved ?? []);
+
+  // Resume from the cursor in the last started cycle.  If the user opened a
+  // later puzzle manually, wrap only after that cursor, so an unfinished
+  // earlier puzzle never forces Learn back to a difficulty/start screen.
+  let exercise: number | null = null;
+  for (let candidate = firstCandidate; candidate <= setSize; candidate += 1) {
+    if (!solved.has(candidate)) {
+      exercise = candidate;
+      break;
+    }
+  }
+  if (exercise === null) {
+    for (let candidate = 1; candidate < firstCandidate; candidate += 1) {
+      if (!solved.has(candidate)) {
+        exercise = candidate;
+        break;
+      }
+    }
+  }
+
+  // A completed cycle has no unsolved position. Keep the user in that same
+  // cycle; the trainer presents the explicit "start next cycle" action.
+  const target = exercise ?? firstCandidate;
+  const slug = book === 'woodpecker-method-2' ? 'woodpecker-2' : 'woodpecker';
+  return `/train/puzzles/${slug}?n=${target}`;
 }
 
 function getBuiltInBookKey(course: CourseListItem): BookTrainingKey | null {
