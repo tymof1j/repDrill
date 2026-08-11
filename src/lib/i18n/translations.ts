@@ -85,6 +85,8 @@ export const ukTranslations: Record<string, string> = {
   'From the game': 'З партії',
   'That move misses the idea. The position is reset — calculate once more.':
     'Цей хід не знаходить ідею. Позицію відновлено — порахуй ще раз.',
+  'Incorrect move · Added to missed · Retry, analyse, or check source.':
+    'Хибний хід · Додано до пропущених · Повтори, проаналізуй або відкрий джерело.',
   'The book explanation is available, but this line could not be converted into a fully legal interactive sequence.':
     'Пояснення з книги доступне, але цю лінію не вдалося перетворити на повністю легальну інтерактивну послідовність.',
   Solved: 'Розвʼязано',

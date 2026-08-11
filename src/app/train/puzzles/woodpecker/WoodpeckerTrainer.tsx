@@ -436,7 +436,7 @@ export function WoodpeckerTrainer({
             )}
             {status === 'wrong' && (
               <p className="mb-5 rounded-md bg-[color:var(--paper-shade)] px-4 py-3 text-sm text-[color:var(--margin-red)]">
-                That move misses the current key. This puzzle is in your missed queue; you can analyse the position, retry, or check the source.
+                Incorrect move · Added to missed · Retry, analyse, or check source.
               </p>
             )}
             {solution.solutionUci.length === 0 && (
