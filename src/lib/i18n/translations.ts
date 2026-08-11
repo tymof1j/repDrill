@@ -42,7 +42,11 @@ export const ukTranslations: Record<string, string> = {
   'A great chess book is only useful if you do the work.': 'Сильна шахова книга працює лише тоді, коли працюєш ти.',
   'RepDrill keeps each diagram together with the players, event, year, and author’s explanation. You see the position first. The answer stays hidden until you commit to a move.':
     'RepDrill зберігає кожну діаграму разом із гравцями, подією, роком і поясненням автора. Спершу ти бачиш позицію. Відповідь залишається прихованою, доки ти не зробиш хід.',
-  'Try the included Woodpecker course': 'Спробувати вбудований курс Woodpecker',
+  'Build a puzzle course from your book': 'Створи курс задач зі своєї книги',
+  'Your favourite tactics book': 'Твоя улюблена книга задач',
+  'Add your own positions · solve them online · review them when due':
+    'Додай власні позиції · розвʼязуй їх онлайн · повертайся до них у потрібний час',
+  'your material': 'твої матеріали',
   'A study routine you can keep': 'Навчальний ритм, якого легко дотримуватися',
   'Less deciding what to study. More finding the move.': 'Менше вибору, що вчити. Більше пошуку ходу.',
   'Bring one useful source': 'Додай одне корисне джерело',

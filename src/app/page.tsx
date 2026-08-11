@@ -5,8 +5,7 @@ import { ChessBoard } from '@/components/board/ChessBoard';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LandingReveal } from '@/components/landing/LandingReveal';
 
-// The Woodpecker Method, exercise 10 (Easy):
-// Wilhelm Steinitz — Oscar Gelbfuhs, Vienna 1873. 1.Qxf6+! gxf6 2.Bf8#.
+// A public historical position used only as a landing-page board example.
 const FEATURE_FEN = '2b5/4Q1pp/pp3n1k/3p3q/P2P1P2/BP1B2P1/7P/6K1 w - - 0 1';
 
 const needs = [
@@ -177,7 +176,7 @@ export default async function Home() {
               href="/login"
               className="mt-9 inline-flex items-center gap-3 rounded-md bg-[color:var(--paper)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] hover:bg-white"
             >
-              Try the two included Woodpecker courses <span aria-hidden>→</span>
+              Build a puzzle course from your book <span aria-hidden>→</span>
             </Link>
           </div>
           <div className="grid min-h-[420px] place-items-center bg-[color:var(--library-green)] p-8">
@@ -186,17 +185,19 @@ export default async function Home() {
                 Puzzle course
               </p>
               <h3 className="mt-4 font-display text-4xl font-semibold leading-none tracking-[-0.04em]">
-                The Woodpecker Methods
+                Your favourite
+                <br />
+                tactics book
               </h3>
               <p className="mt-4 text-sm leading-relaxed text-[color:var(--ink-soft)]">
-                2,128 tactical and positional exercises · author-guided cycles
+                Add your own positions · solve them online · review them when due
               </p>
               <div className="mt-8 flex items-end justify-between border-t border-[color:var(--paper-edge)] pt-5">
-                <span className="font-display text-6xl font-semibold text-[color:var(--margin-red)]">2</span>
+                <span className="font-display text-6xl font-semibold text-[color:var(--margin-red)]">∞</span>
                 <span className="pb-2 text-right font-mono text-[9px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
-                  complete
+                  your
                   <br />
-                  books
+                  material
                 </span>
               </div>
             </div>
