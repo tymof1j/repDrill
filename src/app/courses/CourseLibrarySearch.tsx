@@ -88,7 +88,7 @@ export function CourseLibrarySearch({ courses }: Props) {
   );
   const progressRows = useQuery(
     api.training.getCourseLineProgress,
-    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds } : 'skip',
+    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds, version: 2 } : 'skip',
   ) as CourseLineProgressSummary[] | undefined;
   const progressByCourseId = useMemo(
     () => new Map((progressRows ?? []).map((row) => [row.courseId, row])),

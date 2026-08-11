@@ -708,7 +708,12 @@ export type CourseLineProgress = {
 };
 
 export const getCourseLineProgress = query({
-  args: { courseIds: v.array(v.id("courses")) },
+  args: {
+    courseIds: v.array(v.id("courses")),
+    // Bump this when the aggregation semantics change so an already-open
+    // client cannot keep a result cached from an older implementation.
+    version: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId || args.courseIds.length === 0) return [] as CourseLineProgress[];
@@ -750,15 +755,22 @@ export const getCourseLineProgress = query({
       if (!summary || chapter?.chapterType === "info_only") continue;
 
       summary.total += 1;
-      if (card.state === 0) {
-        summary.newLines += 1;
-      } else {
+      // A failed recall can legitimately remain in FSRS state `new`, but it
+      // is still an attempted position.  `lastReview` is the durable signal
+      // that the learner has seen the card at least once, so progress should
+      // not stay at zero after a completed training line.
+      const hasBeenReviewed = card.lastReview !== undefined || card.state !== 0;
+      if (hasBeenReviewed) {
         summary.learned += 1;
+      } else {
+        summary.newLines += 1;
       }
       if (card.state === 0 || card.due <= now) summary.due += 1;
     }
 
-    return Array.from(summaries.values());
+    const result = Array.from(summaries.values());
+    console.log("course progress summary", JSON.stringify({ version: args.version ?? 1, result }));
+    return result;
   },
 });
 
