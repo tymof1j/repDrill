@@ -497,15 +497,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [needsManualNext, inErrorRecovery]);
 
-  // Keep the drill flowing: show the submitted result briefly, then advance
-  // to the next prepared position so intervening computer moves appear
-  // automatically without requiring a manual Continue click.
-  useEffect(() => {
-    if (linePhase !== 'drill' || !feedback || !needsManualNext) return;
-    const timer = window.setTimeout(continueAfterWrong, 900);
-    return () => window.clearTimeout(timer);
-  }, [linePhase, feedback, needsManualNext, continueAfterWrong]);
-
   const nextLine = useCallback(() => {
     if (!lineSaved) return;
     const next = lineIndex + 1;
@@ -845,6 +836,16 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                     <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
                     <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
                   </div>
+                )}
+                {feedback.type === 'wrong' && needsManualNext && (
+                  <button
+                    type="button"
+                    onClick={continueAfterWrong}
+                    className="inline-flex items-center gap-3 rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--paper)] transition-colors hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)]"
+                  >
+                    Continue
+                    <span className="font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span>
+                  </button>
                 )}
               </div>
             </section>
