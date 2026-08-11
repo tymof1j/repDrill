@@ -696,10 +696,19 @@ function MethodProgressCard({
   onAdvance: () => void;
 }) {
   const method = BOOK_METHODS[courseKey];
+  const [now, setNow] = useState(() => Date.now());
   const solved = progress.solvedCount;
   const complete = solved >= progress.setSize && progress.missedCount === 0;
   const targetDays = method.targetDays[progress.cycle - 1];
   const lateCycle = progress.cycle >= 6;
+  const daysInCycle = progress.startedAt === null
+    ? null
+    : Math.max(1, Math.ceil(Math.max(0, now - progress.startedAt) / (24 * 60 * 60 * 1_000)));
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <div className="mt-4 rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] p-5">
@@ -708,6 +717,11 @@ function MethodProgressCard({
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">Author’s cadence · Cycle {progress.cycle} of 7</p>
           <p className="mt-2 text-sm text-[color:var(--ink-soft)]">
             {solved}/{progress.setSize} positions · {progress.attemptCount} attempts · target {targetDays} {targetDays === 1 ? 'day' : 'days'}
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+            {daysInCycle === null
+              ? 'Cycle clock starts with the first position'
+              : `${daysInCycle} ${daysInCycle === 1 ? 'day' : 'days'} in current cycle`}
           </p>
           {progress.missedCount > 0 && (
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">

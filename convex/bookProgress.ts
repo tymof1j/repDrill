@@ -309,6 +309,9 @@ export const recordAttempt = mutation({
       missedCount,
       unresolvedMissedCount,
       attemptCount: summary.attemptCount + 1,
+      // Start the cycle clock with the first recorded solution/attempt, not
+      // when the user merely opens or advances to the cycle.
+      startedAt: summary.startedAt ?? now,
       updatedAt: now,
     });
 
@@ -340,7 +343,9 @@ export const advanceCycle = mutation({
       solvedCount: 0,
       missedCount: 0,
       unresolvedMissedCount: 0,
-      startedAt: now,
+      // The cycle clock starts when the first position in the new cycle is
+      // actually attempted. `recordAttempt` sets the timestamp.
+      startedAt: undefined,
       updatedAt: now,
     });
     return await readSnapshot(ctx, userId, args.bookKey);

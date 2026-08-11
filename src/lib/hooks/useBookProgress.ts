@@ -133,6 +133,7 @@ function applyAttempt(
 
   const solvedList = [...solved].sort((a, b) => a - b);
   const missedList = [...missed].sort((a, b) => a - b);
+  const updatedAt = Date.now();
   return {
     ...progress,
     position: success ? Math.max(progress.position, puzzle + 1) : progress.position,
@@ -142,7 +143,8 @@ function applyAttempt(
     missedCount,
     unresolvedMissedCount,
     attemptCount: progress.attemptCount + 1,
-    updatedAt: Date.now(),
+    startedAt: progress.startedAt ?? updatedAt,
+    updatedAt,
   };
 }
 
@@ -157,7 +159,7 @@ function applyCycleAdvance(progress: BookProgressSnapshot): BookProgressSnapshot
     missedCount: 0,
     unresolvedMissedCount: 0,
     attemptCount: progress.attemptCount,
-    startedAt: Date.now(),
+    startedAt: null,
     updatedAt: Date.now(),
   };
 }

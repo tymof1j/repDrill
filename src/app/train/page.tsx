@@ -86,7 +86,11 @@ export default function TrainPage() {
 
   const result = useQuery(api.training.getTrainingLines, queryArgs);
 
-  if (!isAuthenticated || !cardsReady || result === undefined || courses === undefined || repertoires === undefined) return null;
+  if (isLoading) return <TrainingLoadingState label="Checking your session…" />;
+  if (!isAuthenticated) return null;
+  if (!cardsReady || result === undefined || courses === undefined || repertoires === undefined) {
+    return <TrainingLoadingState label="Preparing your review queue…" />;
+  }
 
   const showSelector = courses.length > 1 || repertoires.length > 0;
 
@@ -195,5 +199,17 @@ export default function TrainPage() {
       studyMode={learnMode}
       initialLineId={resumeLineId}
     />
+  );
+}
+
+function TrainingLoadingState({ label }: { label: string }) {
+  return (
+    <AppSurface>
+      <div className="border-y border-[color:var(--paper-edge)] py-20 text-center" role="status">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
+          {label}
+        </p>
+      </div>
+    </AppSurface>
   );
 }

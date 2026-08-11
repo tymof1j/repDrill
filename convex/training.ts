@@ -22,6 +22,15 @@ function newCard(): Card {
   return createEmptyCard();
 }
 
+/**
+ * A brand-new FSRS card is due immediately by design.  That does not make it
+ * a repetition: it is still unseen material and belongs in Learn until the
+ * learner has attempted it at least once.
+ */
+function isUnseenCard(card: Doc<"reviewCards"> | null | undefined) {
+  return Boolean(card && card.state === 0 && card.lastReview === undefined);
+}
+
 function scheduleCard(card: Card, rating: Grade, now?: Date) {
   return f.next(card, now ?? new Date(), rating);
 }
@@ -439,7 +448,7 @@ export const getTrainingLines = query({
             annotation: m.comment?.trim() ? m.comment : childPos?.annotation ?? null,
             annotations: m.annotations ?? null,
             cardId: card ? (card._id as string) : null,
-            isNew: card ? card.state === 0 : false,
+            isNew: card ? isUnseenCard(card) : false,
           });
           dfs(m.childPositionId as string, path);
           path.pop();
@@ -472,7 +481,7 @@ export const getTrainingLines = query({
         const lineDueCount = steps.filter((s) => {
           if (!s.cardId) return false;
           const card = allCards.find((c) => (c._id as string) === s.cardId);
-          return card && card.due <= now;
+          return card && card.due <= now && !isUnseenCard(card);
         }).length;
 
         const infoLineAlreadyViewed = viewedInfoLineKeys.has(lineSettingKey);
@@ -780,8 +789,8 @@ export const getQuickStats = query({
 
     return {
       totalLines: activeCards.length,
-      dueLines: activeCards.filter((c) => c.due <= now).length,
-      newLines: activeCards.filter((c) => c.state === 0).length,
+      dueLines: activeCards.filter((c) => c.due <= now && !isUnseenCard(c)).length,
+      newLines: activeCards.filter((c) => isUnseenCard(c)).length,
     };
   },
 });
@@ -881,11 +890,12 @@ export const getLineStats = query({
         for (const m of children) {
           const isRep = m.moveType === "repertoire";
           const card = isRep ? cardByMoveId.get(m._id as string) : null;
+          const unseen = isUnseenCard(card);
           countPaths(
             m.childPositionId as string,
             hasRep || isRep,
-            hasDue || (card ? card.due <= now : false),
-            hasNew || (card ? card.state === 0 : false)
+            hasDue || Boolean(card && card.due <= now && !unseen),
+            hasNew || unseen
           );
         }
         onPath.delete(posId);
