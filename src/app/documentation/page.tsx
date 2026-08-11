@@ -23,7 +23,7 @@ const advantages = [
   {
     title: 'Smart PGN chapter naming and info-only lines',
     body:
-      'When a PGN includes useful chapter metadata (for example ChapterName/Event), RepDrill uses it. If metadata is missing (like "?" tags), single-file imports fall back to the uploaded filename. Chapters/lines that look informational ("ideas", "games") can be auto-marked or manually marked as info-only: they stay viewable everywhere, appear once in Learn, and are excluded from FSRS memorization scheduling.',
+      'When a PGN includes useful chapter metadata (for example ChapterName/Event), RepDrill uses it. If metadata is missing (like "?" tags), single-file imports fall back to the uploaded filename. Imported lines are training by default; individual lines can be manually marked info-only to make them view-only in Learn and exclude them from FSRS scheduling.',
   },
   {
     title: 'FSRS review instead of fixed repetition',

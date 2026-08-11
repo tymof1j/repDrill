@@ -215,7 +215,7 @@ export const importTreeIntoChapter = mutation({
     const chapterId = await ctx.db.insert("chapters", {
       courseId: args.courseId,
       name: args.chapterName,
-      chapterType: args.chapterType ?? "training",
+      chapterType: "training",
       sortOrder: args.sortOrder,
       createdAt: Date.now(),
     });
@@ -583,7 +583,7 @@ export const processImportChapterBatch = internalMutation({
       chapterId = await ctx.db.insert("chapters", {
         courseId: chapterImport.courseId,
         name: chapterImport.chapterName,
-        chapterType: chapterImport.chapterType,
+        chapterType: "training",
         sortOrder: chapterImport.sortOrder,
         ...(chapterImport.sourceChapterId ? { sourceChapterId: chapterImport.sourceChapterId } : {}),
         ...(chapterImport.sourceFile ? { sourceFile: chapterImport.sourceFile } : {}),
@@ -816,7 +816,7 @@ export const importBundle = mutation({
         const chapterId = await ctx.db.insert("chapters", {
           courseId,
           name: chapter.name || `Chapter ${chapterIndex + 1}`,
-          chapterType: chapter.chapterType ?? "training",
+          chapterType: "training",
           sortOrder: chapter.sortOrder ?? chapterIndex,
           description: chapter.description ?? undefined,
           ...(chapter.sourceChapterId ? { sourceChapterId: chapter.sourceChapterId } : {}),

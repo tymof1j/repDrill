@@ -31,7 +31,6 @@ import {
   renameChapterAction,
   deleteChapterAction,
   updateAnnotationAction,
-  setChapterTypeAction,
   setLineInfoOnlyAction,
   reorderChaptersAction,
 } from '../actions';
@@ -46,7 +45,7 @@ type Props = {
     isPublic: boolean;
     shareToken: string | null;
   };
-  chapters: { id: string; name: string; chapterType: 'training' | 'info_only' }[];
+  chapters: { id: string; name: string }[];
   rootPositionId: string;
   positions: ViewerPosition[];
   moves: ViewerMove[];
@@ -303,16 +302,6 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     fd.set('text', text);
     startTransition(() => {
       void updateAnnotationAction(fd);
-    });
-  };
-
-  const handleSetChapterType = (chapterId: string, chapterType: 'training' | 'info_only') => {
-    const fd = new FormData();
-    fd.set('id', chapterId);
-    fd.set('courseId', course.id);
-    fd.set('chapterType', chapterType);
-    startTransition(() => {
-      void setChapterTypeAction(fd);
     });
   };
 
@@ -607,13 +596,6 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                                 Manage ···
                               </summary>
                               <div className="absolute right-0 z-10 mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-2 shadow-[0_18px_40px_rgba(47,58,50,0.14)]">
-                                <GhostButton
-                                  onClick={() => handleSetChapterType(ch.id, ch.chapterType === 'info_only' ? 'training' : 'info_only')}
-                                  disabled={pending}
-                                  className="justify-start"
-                                >
-                                  {ch.chapterType === 'info_only' ? 'Set training' : 'Set info-only'}
-                                </GhostButton>
                                 <GhostButton onClick={() => startChapterRename(ch)} className="justify-start">Rename</GhostButton>
                                 <GhostButton onClick={() => handleDeleteChapter(ch.id)} disabled={pending} className="justify-start text-[color:var(--margin-red)]">
                                   Delete chapter

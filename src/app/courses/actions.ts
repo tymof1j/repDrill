@@ -10,21 +10,6 @@ import { parsePgn } from '@/lib/chess/pgn-parser';
 import { buildTree } from '@/lib/chess/tree';
 import type { PgnMoveAnnotations } from '@/lib/chess/pgn-parser';
 
-/**
- * Only explicit PGN metadata opts a chapter into info-only mode. Prose such
- * as "the idea" or "in this game" is common in opening notes and must not
- * silently turn hundreds of training lines into read-only material.
- */
-function isExplicitInfoOnly(headers: Record<string, string>, chapterName: string, filename: string) {
-  const explicit = [headers.ChapterType, headers.Mode, headers.Type, headers.InfoOnly]
-    .filter(Boolean)
-    .map((value) => value!.trim().toLowerCase());
-  if (explicit.some((value) => value === 'info_only' || value === 'info-only' || value === 'info' || value === 'true')) {
-    return true;
-  }
-  return chapterName.trim().toLowerCase() === 'introduction' || filename.trim().toLowerCase() === 'introduction';
-}
-
 function filenameWithoutExt(name: string) {
   return name.replace(/\.[^.]+$/, '').trim();
 }
@@ -105,9 +90,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
       chapterNameFromHeaders && chapterNameFromHeaders !== '?'
         ? chapterNameFromHeaders
         : fallbackFilename || `Chapter ${i + 1}`;
-    const chapterType: 'training' | 'info_only' = isExplicitInfoOnly(game.headers, chapterName, fallbackFilename)
-      ? 'info_only'
-      : 'training';
+    const chapterType = 'training' as const;
 
     try {
       const tree = buildTree(game);
@@ -134,7 +117,6 @@ export async function importPgnAction(formData: FormData): Promise<void> {
       const existing = chapterGroups.get(groupKey);
       if (existing) {
         existing.moves.push(...moves);
-        if (chapterType === 'training') existing.chapterType = 'training';
       } else {
         const chapter = {
           chapterName,
@@ -212,17 +194,6 @@ export async function reorderChaptersAction(formData: FormData): Promise<void> {
   if (!Array.isArray(chapterIds) || chapterIds.length === 0) throw new Error('Invalid chapterIds');
 
   await fetchMutation(api.courses.reorderChapters, { courseId, chapterIds }, { token });
-  revalidatePath(`/courses/${courseId}`);
-}
-
-export async function setChapterTypeAction(formData: FormData): Promise<void> {
-  const token = await requireToken();
-  const id = String(formData.get('id') ?? '') as Id<"chapters">;
-  const courseId = String(formData.get('courseId') ?? '');
-  const chapterType = String(formData.get('chapterType') ?? '') as 'training' | 'info_only';
-  if (!id || (chapterType !== 'training' && chapterType !== 'info_only')) throw new Error('Missing id or chapterType');
-
-  await fetchMutation(api.courses.setChapterType, { id, chapterType }, { token });
   revalidatePath(`/courses/${courseId}`);
 }
 

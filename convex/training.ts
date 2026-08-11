@@ -86,10 +86,8 @@ async function getTrainableCourses(
 }
 
 /**
- * Return repertoire move ids that belong to training chapters the user can
- * currently access.  Review cards are intentionally retained when a chapter
- * is later switched to info-only, so card-based stats must filter those stale
- * rows instead of treating them as active training work.
+ * Return repertoire move ids that belong to courses the user can currently
+ * access. Info-only is a line-level setting, so chapter metadata is ignored.
  */
 async function getTrainableMoveIds(
   ctx: QueryCtx | MutationCtx,
@@ -103,7 +101,6 @@ async function getTrainableMoveIds(
       .withIndex("by_course", (q) => q.eq("courseId", course._id))
       .collect();
     for (const chapter of chapters) {
-      if (chapter.chapterType === "info_only") continue;
       const moves = await ctx.db
         .query("moves")
         .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
@@ -127,16 +124,12 @@ export const ensureCards = mutation({
     if (trainableCourses.length === 0) return 0;
 
     const allChapterIds: Id<"chapters">[] = [];
-    const chapterTypeById = new Map<string, Doc<"chapters">["chapterType"]>();
     for (const { course } of trainableCourses) {
       const chapters = await ctx.db
         .query("chapters")
         .withIndex("by_course", (q) => q.eq("courseId", course._id))
         .collect();
       allChapterIds.push(...chapters.map((c) => c._id));
-      for (const chapter of chapters) {
-        chapterTypeById.set(chapter._id as string, chapter.chapterType);
-      }
     }
     if (allChapterIds.length === 0) return 0;
 
@@ -146,7 +139,6 @@ export const ensureCards = mutation({
         .query("moves")
         .withIndex("by_chapter", (q) => q.eq("chapterId", chId))
         .collect();
-      if (chapterTypeById.get(chId as string) === "info_only") continue;
       for (const m of chMoves) {
         if (m.moveType === "repertoire") repertoireMoveIds.push(m._id);
       }
@@ -323,10 +315,6 @@ export const getTrainingLines = query({
     // Load all moves
     const allMoves: Doc<"moves">[] = [];
     for (const ch of allChapters) {
-      // Learn mode is a guided overview and includes info-only chapters.
-      // Review mode remains strictly trainable so prose chapters never enter
-      // the FSRS queue.
-      if (ch.chapterType === "info_only" && !args.learnMode) continue;
       const chMoves = await ctx.db
         .query("moves")
         .withIndex("by_chapter", (q) => q.eq("chapterId", ch._id))
@@ -407,9 +395,6 @@ export const getTrainingLines = query({
     for (const [chapterId, movesByParent] of movesByParentByChapter) {
       const chapter = chapById.get(chapterId);
       if (!chapter) continue;
-      // Info-only chapters are study material. Learn mode surfaces them in the
-      // guided overview, while ordinary review keeps them out of the queue.
-      if (chapter.chapterType === "info_only" && !args.learnMode) continue;
       const course = courseById.get(chapter.courseId as string);
       if (!course) continue;
 
@@ -477,11 +462,9 @@ export const getTrainingLines = query({
         }
         const lineKey = steps.map((s) => s.uci).join(" ");
         const lineSettingKey = `${chapterId}:${lineKey}`;
-        // In review mode chapter-level info-only moves are excluded while
-        // loading the graph; Learn mode keeps them and marks their lines here.
-        const lineIsInfoOnly =
-          chapter.chapterType === "info_only" ||
-          lineSettingByChapterAndKey.get(lineSettingKey) === true;
+        const lineOverride = lineSettingByChapterAndKey.get(lineSettingKey);
+        const lineIsInfoOnly = lineOverride === true;
+        if (!args.learnMode && lineIsInfoOnly) continue;
         if (!steps.some((s) => s.isUserMove) && !lineIsInfoOnly) continue;
 
         const lineIsNew = steps.some((s) => s.isNew);
@@ -635,9 +618,8 @@ export const getCourseLineStatuses = query({
       lines.forEach((line, lineIndex) => {
         const repMoves = line.moves.filter((move) => move.moveType === "repertoire");
         const lineKey = line.moves.map((move) => move.uci).join(" ");
-        const isInfoOnly =
-          chaptersInCourse.find((ch) => (ch._id as string) === chapterId)?.chapterType === "info_only" ||
-          lineSettingByChapterAndKey.get(`${chapterId}:${lineKey}`) === true;
+        const lineOverride = lineSettingByChapterAndKey.get(`${chapterId}:${lineKey}`);
+        const isInfoOnly = lineOverride === true;
         if (isInfoOnly) {
           result.push({
             chapterId,
@@ -752,7 +734,7 @@ export const getCourseLineProgress = query({
         chapterById.set(chapterKey, chapter);
       }
       const summary = chapter ? summaries.get(chapter.courseId as string) : undefined;
-      if (!summary || chapter?.chapterType === "info_only") continue;
+      if (!summary) continue;
 
       summary.total += 1;
       // A failed recall can legitimately remain in FSRS state `new`, but it
@@ -825,7 +807,6 @@ export const getLineStats = query({
 
     const allMoves: Doc<"moves">[] = [];
     for (const ch of allChapters) {
-      if (ch.chapterType === "info_only") continue;
       const chMoves = await ctx.db
         .query("moves")
         .withIndex("by_chapter", (q) => q.eq("chapterId", ch._id))

@@ -56,7 +56,7 @@ export default async function CourseDetailPage({
         isPublic: course.isPublic,
         shareToken: course.shareToken ?? null,
       }}
-      chapters={chapters.map((c) => ({ id: c._id, name: c.name, chapterType: c.chapterType ?? 'training' }))}
+      chapters={chapters.map((c) => ({ id: c._id, name: c.name }))}
       rootPositionId={rootPosition?._id ?? ''}
       positions={allPositions.map((position) => ({
         id: position._id,

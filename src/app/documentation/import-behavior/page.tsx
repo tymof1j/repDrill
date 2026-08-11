@@ -57,12 +57,11 @@ export default function ImportBehaviorDocPage() {
           Info-only detection
         </h2>
         <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
-          RepDrill auto-marks imported content as info-only if it sees any of these keywords:
-          <strong> idea</strong>, <strong>ideas</strong>, <strong>game</strong>,{' '}
-          <strong>games</strong>.
+          Imported lines are training lines by default. Info-only is a manual, line-level setting;
+          chapter names, filenames, headers, and comments never flag an entire chapter.
         </p>
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
-          Detection checks: uploaded filename, PGN headers, and PGN comments.
+          Each line can be switched independently from Training to Info-only in the course detail view.
         </p>
       </section>
 
@@ -103,9 +102,9 @@ export default function ImportBehaviorDocPage() {
           Manual override
         </h2>
         <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
-          In course detail you can manually toggle both chapter and individual lines between
-          <strong> training</strong> and <strong>info-only</strong>. Use this when auto-detection
-          is not what you want.
+          In course detail you can manually toggle each individual line between
+          <strong> training</strong> and <strong>info-only</strong>. Chapters do not have an
+          info-only flag.
         </p>
       </section>
     </DocLayout>
