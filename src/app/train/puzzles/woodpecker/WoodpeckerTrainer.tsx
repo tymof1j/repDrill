@@ -16,19 +16,10 @@ import {
 import {
   BOOK_METHODS,
   isBookMethodEnabled,
-  readBookMethodProgress,
-  recordBookMethodSolve,
-  startNextBookMethodCycle,
-  type BookMethodProgress,
   type BookTrainingKey,
 } from '@/lib/bookTrainingPreferences';
-import {
-  getBookProgressEventName,
-  readBookPuzzleProgress,
-  recordBookPuzzleMissed,
-  recordBookPuzzleSolved,
-  type BookPuzzleProgress,
-} from '@/lib/woodpeckerProgress';
+import { useBookProgress } from '@/lib/hooks/useBookProgress';
+import type { BookProgressSnapshot } from '@/lib/woodpeckerProgress';
 import { solutionPdfPage } from '@/lib/woodpeckerPdf';
 
 type BookPuzzle = {
@@ -69,13 +60,13 @@ export function WoodpeckerTrainer({
   const router = useRouter();
   const method = BOOK_METHODS[courseKey];
   const replyTimer = useRef<number | null>(null);
+  const attemptStartedAt = useRef<number | null>(null);
+  const attemptOpen = useRef(true);
   const [fen, setFen] = useState(puzzle.fen);
   const [ply, setPly] = useState(0);
   const [status, setStatus] = useState<TrainerStatus>('ready');
   const [lastMove, setLastMove] = useState<[string, string] | undefined>();
-  const [progress, setProgress] = useState<BookPuzzleProgress>(() => readBookPuzzleProgress(courseKey));
   const [methodEnabled, setMethodEnabled] = useState(() => isBookMethodEnabled(courseKey));
-  const [methodProgress, setMethodProgress] = useState<BookMethodProgress>(() => readBookMethodProgress(courseKey));
   const [solution, setSolution] = useState<PuzzleSolution>(() => readSolutionOverride(courseKey, puzzle));
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionDraft, setCorrectionDraft] = useState('');
@@ -86,21 +77,27 @@ export function WoodpeckerTrainer({
   const isWoodpeckerOne = courseKey === 'woodpecker-method';
   const isForcedRecheck = isWoodpeckerOne && puzzle.exercise === forcedRecheckExercise;
   const answerPdfPage = isWoodpeckerOne ? solutionPdfPage(puzzle.exercise) : null;
+  const {
+    progress: syncedProgress,
+    isLoading: progressLoading,
+    recordAttempt,
+    advanceCycle,
+  } = useBookProgress(courseKey, total);
 
   useEffect(() => {
-    const refreshProgress = () => {
-      setProgress(readBookPuzzleProgress(courseKey));
-      setMethodEnabled(isBookMethodEnabled(courseKey));
-      setMethodProgress(readBookMethodProgress(courseKey));
-    };
-    const eventName = getBookProgressEventName();
-    window.addEventListener(eventName, refreshProgress);
-    window.addEventListener('storage', refreshProgress);
+    const refreshMethod = () => setMethodEnabled(isBookMethodEnabled(courseKey));
+    window.addEventListener('repdrill:book-method-change', refreshMethod);
+    window.addEventListener('storage', refreshMethod);
     return () => {
-      window.removeEventListener(eventName, refreshProgress);
-      window.removeEventListener('storage', refreshProgress);
+      window.removeEventListener('repdrill:book-method-change', refreshMethod);
+      window.removeEventListener('storage', refreshMethod);
     };
   }, [courseKey]);
+
+  useEffect(() => {
+    attemptStartedAt.current = Date.now();
+    attemptOpen.current = true;
+  }, [puzzle.exercise]);
 
   useEffect(() => () => {
     if (replyTimer.current) window.clearTimeout(replyTimer.current);
@@ -121,6 +118,25 @@ export function WoodpeckerTrainer({
       return new Map<string, string[]>();
     }
   }, [fen, status]);
+
+  if (progressLoading || !syncedProgress) {
+    return (
+      <AppSurface className="pb-8">
+        <div className="mb-7">
+          <BackLink href={`/courses/${courseSlug}`}>Course overview</BackLink>
+        </div>
+        <div
+          role="status"
+          className="rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-6 py-12 text-center"
+        >
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
+            Loading private progress…
+          </p>
+        </div>
+      </AppSurface>
+    );
+  }
+  const progress = syncedProgress;
 
   const playPly = (positionFen: string, uci: string) => {
     try {
@@ -149,16 +165,22 @@ export function WoodpeckerTrainer({
     return { fen: position, lastMove: move };
   };
 
-  const updateProgress = (next: BookPuzzleProgress) => setProgress(next);
-
   const goTo = (exercise: number) => {
     router.push(`/train/puzzles/${courseSlug}?n=${Math.min(Math.max(exercise, 1), total)}`);
   };
 
   const remainingMissed = progress.missed.filter((exercise) => exercise !== puzzle.exercise);
+  const remainingMissedCount = Math.max(
+    0,
+    progress.missedCount - (progress.missed.includes(puzzle.exercise) ? 1 : 0),
+  );
+  const currentSetLimit = Math.min(total, progress.setSize);
   const nextExercise = () => {
     if (remainingMissed.length > 0) return remainingMissed[0];
-    return puzzle.exercise < total ? puzzle.exercise + 1 : null;
+    if (progress.unresolvedMissedCount > 0 && progress.position !== puzzle.exercise) {
+      return progress.position;
+    }
+    return puzzle.exercise < currentSetLimit ? puzzle.exercise + 1 : null;
   };
 
   const resetBoard = () => {
@@ -169,14 +191,23 @@ export function WoodpeckerTrainer({
     setLastMove(undefined);
     setStatus('ready');
     setHintVisible(false);
+    attemptStartedAt.current = Date.now();
+    attemptOpen.current = true;
+  };
+
+  const recordOutcome = (success: boolean) => {
+    if (!attemptOpen.current) return;
+    attemptOpen.current = false;
+    const recordedAt = Date.now();
+    recordAttempt(
+      puzzle.exercise,
+      success,
+      Math.max(0, recordedAt - (attemptStartedAt.current ?? recordedAt)),
+    );
   };
 
   const finishSolved = () => {
-    const next = recordBookPuzzleSolved(courseKey, puzzle.exercise);
-    updateProgress(next);
-    if (methodEnabled && puzzle.exercise <= method.recommendedSetSize) {
-      setMethodProgress(recordBookMethodSolve(courseKey, puzzle.exercise));
-    }
+    recordOutcome(true);
     const final = playSolution();
     setFen(final.fen);
     setLastMove(final.lastMove);
@@ -184,7 +215,7 @@ export function WoodpeckerTrainer({
     setStatus('correct');
   };
 
-  const markMissed = () => updateProgress(recordBookPuzzleMissed(courseKey, puzzle.exercise));
+  const markMissed = () => recordOutcome(false);
 
   const onMove = (from: string, to: string) => {
     // Once an answer has been submitted (including a wrong one), the board is
@@ -272,11 +303,14 @@ export function WoodpeckerTrainer({
 
   const giveHint = () => {
     markMissed();
+    attemptStartedAt.current = Date.now();
+    attemptOpen.current = true;
     setHintVisible(true);
   };
 
   const reviewMissed = () => {
-    if (progress.missed.length > 0) goTo(progress.missed[0]);
+    const nextMissed = progress.missed[0] ?? progress.position;
+    if (progress.missedCount > 0 && nextMissed > 0) goTo(nextMissed);
   };
 
   const openCorrection = () => {
@@ -317,15 +351,15 @@ export function WoodpeckerTrainer({
         <div className="flex flex-wrap items-center gap-3">
           <Stamp tone="red">Puzzle mode</Stamp>
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
-            {progress.solved.length} / {total} solved
+            Cycle {progress.cycle} · {progress.solvedCount} / {progress.setSize} solved
           </span>
-          {progress.missed.length > 0 && (
+          {progress.missedCount > 0 && (
             <button
               type="button"
               onClick={reviewMissed}
               className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--margin-red)] underline decoration-current/30 underline-offset-4"
             >
-              {progress.missed.length} missed · review
+              {progress.missedCount} missed · review
             </button>
           )}
         </div>
@@ -421,14 +455,14 @@ export function WoodpeckerTrainer({
                   >
                     Analyse on Lichess ↗
                   </a>
-                  {progress.missed.length > 0 && (
+                  {progress.missedCount > 0 && (
                     <button type="button" onClick={reviewMissed} className="font-mono text-[10px] uppercase tracking-[0.15em] text-[color:var(--margin-red)] underline decoration-current/30 underline-offset-4">
-                      Review missed ({progress.missed.length})
+                      Review missed ({progress.missedCount})
                     </button>
                   )}
                 </div>
                 <PremiumButton onClick={() => next && goTo(next)} disabled={!next} className="mt-7">
-                  {remainingMissed.length > 0 ? `Next missed · ${remainingMissed.length} left` : 'Next position'}
+                  {remainingMissedCount > 0 ? `Next missed · ${remainingMissedCount} left` : 'Next position'}
                 </PremiumButton>
               </div>
             ) : status === 'wrong' ? (
@@ -464,7 +498,7 @@ export function WoodpeckerTrainer({
             )}
           </div>
 
-          {methodEnabled && <MethodProgressCard courseKey={courseKey} progress={methodProgress} onAdvance={() => { setMethodProgress(startNextBookMethodCycle(courseKey)); goTo(1); }} />}
+          {methodEnabled && <MethodProgressCard courseKey={courseKey} progress={progress} onAdvance={() => { advanceCycle(); goTo(1); }} />}
 
           <div className="mt-4 flex items-center justify-between gap-3">
             <GhostButton onClick={() => goTo(puzzle.exercise - 1)} disabled={puzzle.exercise <= 1}>← Previous</GhostButton>
@@ -604,12 +638,12 @@ function MethodProgressCard({
   onAdvance,
 }: {
   courseKey: BookTrainingKey;
-  progress: BookMethodProgress;
+  progress: BookProgressSnapshot;
   onAdvance: () => void;
 }) {
   const method = BOOK_METHODS[courseKey];
-  const solved = progress.solved.filter((exercise) => exercise <= method.recommendedSetSize).length;
-  const complete = solved >= method.recommendedSetSize;
+  const solved = progress.solvedCount;
+  const complete = solved >= progress.setSize && progress.missedCount === 0;
   const targetDays = method.targetDays[progress.cycle - 1];
   const lateCycle = progress.cycle >= 6;
 
@@ -618,7 +652,14 @@ function MethodProgressCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">Author’s cadence · Cycle {progress.cycle} of 7</p>
-          <p className="mt-2 text-sm text-[color:var(--ink-soft)]">{solved}/{method.recommendedSetSize} positions · target {targetDays} {targetDays === 1 ? 'day' : 'days'}</p>
+          <p className="mt-2 text-sm text-[color:var(--ink-soft)]">
+            {solved}/{progress.setSize} positions · {progress.attemptCount} attempts · target {targetDays} {targetDays === 1 ? 'day' : 'days'}
+          </p>
+          {progress.missedCount > 0 && (
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">
+              {progress.missedCount} missed still to review
+            </p>
+          )}
         </div>
         <Link href="/documentation/woodpecker-method" className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink)] underline decoration-[color:var(--paper-edge)] underline-offset-4">Why this cadence?</Link>
       </div>

@@ -127,6 +127,95 @@ export default defineSchema({
     viewedAt: v.number(),
   }).index("by_user_and_chapter_and_line_key", ["userId", "chapterId", "lineKey"]).index("by_user", ["userId"]),
 
+  // Built-in book courses are shared application data, but every training
+  // result is private to the signed-in user.  Keep the small current-cycle
+  // summary separate from puzzle state and the append-only attempt history.
+  bookProgress: defineTable({
+    userId: v.id("users"),
+    bookKey: v.union(v.literal("woodpecker-method"), v.literal("woodpecker-method-2")),
+    cycle: v.number(),
+    position: v.number(),
+    setSize: v.number(),
+    solvedCount: v.number(),
+    missedCount: v.number(),
+    // The legacy app can report a missed-count without exposing every queued
+    // exercise id.  Preserve that count instead of fabricating puzzle ids.
+    unresolvedMissedCount: v.number(),
+    attemptCount: v.number(),
+    startedAt: v.optional(v.number()),
+    sourceMarker: v.optional(v.string()),
+    lastImportedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user_id_and_book_key", ["userId", "bookKey"]),
+
+  bookPuzzleProgress: defineTable({
+    userId: v.id("users"),
+    bookKey: v.union(v.literal("woodpecker-method"), v.literal("woodpecker-method-2")),
+    cycle: v.number(),
+    puzzle: v.number(),
+    solved: v.boolean(),
+    missed: v.boolean(),
+    attemptCount: v.number(),
+    bestSuccessTimeMs: v.optional(v.number()),
+    lastTimeMs: v.optional(v.number()),
+    lastSuccess: v.boolean(),
+    lastAttemptAt: v.number(),
+    sourceMarker: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user_id_and_book_key_and_cycle_and_puzzle", [
+      "userId",
+      "bookKey",
+      "cycle",
+      "puzzle",
+    ]),
+
+  bookPuzzleAttempts: defineTable({
+    userId: v.id("users"),
+    bookKey: v.union(v.literal("woodpecker-method"), v.literal("woodpecker-method-2")),
+    cycle: v.number(),
+    puzzle: v.number(),
+    attempt: v.number(),
+    success: v.boolean(),
+    durationMs: v.optional(v.number()),
+    recordedAt: v.number(),
+    source: v.union(v.literal("native"), v.literal("legacy_import")),
+    sourceMarker: v.string(),
+    sourceAttemptKey: v.string(),
+    importId: v.optional(v.id("bookProgressImports")),
+  })
+    .index("by_user_id_and_book_key_and_cycle_and_puzzle_and_attempt", [
+      "userId",
+      "bookKey",
+      "cycle",
+      "puzzle",
+      "attempt",
+    ])
+    .index("by_user_id_and_book_key_and_source_attempt_key", [
+      "userId",
+      "bookKey",
+      "sourceAttemptKey",
+    ]),
+
+  bookProgressImports: defineTable({
+    userId: v.id("users"),
+    bookKey: v.union(v.literal("woodpecker-method"), v.literal("woodpecker-method-2")),
+    kind: v.union(v.literal("legacy_csv"), v.literal("local_storage")),
+    sourceMarker: v.string(),
+    idempotencyKey: v.string(),
+    sourceRecordCount: v.number(),
+    importedAttemptCount: v.number(),
+    cycle: v.number(),
+    position: v.number(),
+    setSize: v.number(),
+    solvedCount: v.number(),
+    missedCount: v.number(),
+    createdAt: v.number(),
+    completedAt: v.number(),
+  }).index("by_user_id_and_book_key_and_source_marker", ["userId", "bookKey", "sourceMarker"]),
+
   repertoires: defineTable({
     userId: v.id("users"),
     name: v.string(),

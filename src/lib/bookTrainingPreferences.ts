@@ -27,9 +27,18 @@ const progressKey = (book: BookTrainingKey) => `repdrill:${book}:method-progress
 const learnQuizPassesKey = 'repdrill:learn-quiz-passes';
 const learnResumeKey = (courseId: string) => `repdrill:learn-resume:${courseId}`;
 
+function emitBookProgress(book: BookTrainingKey) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('repdrill:book-progress-change', { detail: { book } }));
+}
+
 export function isBookMethodEnabled(book: BookTrainingKey) {
   if (typeof window === 'undefined') return true;
-  return window.localStorage.getItem(enabledKey(book)) !== 'off';
+  try {
+    return window.localStorage.getItem(enabledKey(book)) !== 'off';
+  } catch {
+    return true;
+  }
 }
 
 export function setBookMethodEnabled(book: BookTrainingKey, enabled: boolean) {
@@ -57,10 +66,24 @@ export function readBookMethodProgress(book: BookTrainingKey): BookMethodProgres
   }
 }
 
+export function hasStoredBookMethodProgress(book: BookTrainingKey) {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(progressKey(book)) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function recordBookMethodSolve(book: BookTrainingKey, exercise: number) {
   const progress = readBookMethodProgress(book);
   if (!progress.solved.includes(exercise)) progress.solved.push(exercise);
-  window.localStorage.setItem(progressKey(book), JSON.stringify(progress));
+  try {
+    window.localStorage.setItem(progressKey(book), JSON.stringify(progress));
+  } catch {
+    // Convex remains the primary store when browser storage is unavailable.
+  }
+  emitBookProgress(book);
   return progress;
 }
 
@@ -71,7 +94,12 @@ export function startNextBookMethodCycle(book: BookTrainingKey) {
     solved: [],
     startedAt: new Date().toISOString(),
   };
-  window.localStorage.setItem(progressKey(book), JSON.stringify(next));
+  try {
+    window.localStorage.setItem(progressKey(book), JSON.stringify(next));
+  } catch {
+    // Convex remains the primary store when browser storage is unavailable.
+  }
+  emitBookProgress(book);
   return next;
 }
 

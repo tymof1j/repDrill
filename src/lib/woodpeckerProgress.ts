@@ -1,4 +1,9 @@
-import type { BookTrainingKey } from './bookTrainingPreferences';
+import {
+  BOOK_METHODS,
+  hasStoredBookMethodProgress,
+  readBookMethodProgress,
+  type BookTrainingKey,
+} from './bookTrainingPreferences';
 
 /**
  * Puzzle progress is intentionally kept in the browser for the bundled book
@@ -16,10 +21,60 @@ const aliases: Record<BookTrainingKey, { solved: string[]; missed: string[] }> =
   },
 };
 
+const snapshotKey = (book: BookTrainingKey) => `repdrill:${book}:progress-snapshot-v1`;
+const LOCAL_STORAGE_SOURCE_MARKER = 'repdrill-local-storage';
+
 export type BookPuzzleProgress = {
   solved: number[];
   missed: number[];
 };
+
+export type BookProgressSnapshot = BookPuzzleProgress & {
+  bookKey: BookTrainingKey;
+  cycle: number;
+  position: number;
+  setSize: number;
+  solvedCount: number;
+  missedCount: number;
+  unresolvedMissedCount: number;
+  attemptCount: number;
+  startedAt: number | null;
+  updatedAt: number;
+  sourceMarker: string | null;
+};
+
+function readCachedSnapshot(book: BookTrainingKey): BookProgressSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(snapshotKey(book)) ?? 'null');
+    if (
+      !parsed
+      || parsed.bookKey !== book
+      || !Array.isArray(parsed.solved)
+      || !Array.isArray(parsed.missed)
+      || !Number.isInteger(parsed.cycle)
+      || !Number.isInteger(parsed.position)
+      || !Number.isInteger(parsed.setSize)
+      || !Number.isInteger(parsed.solvedCount)
+      || !Number.isInteger(parsed.missedCount)
+      || !Number.isInteger(parsed.unresolvedMissedCount)
+      || !Number.isInteger(parsed.attemptCount)
+      || !Number.isFinite(parsed.updatedAt)
+    ) return null;
+    return parsed as BookProgressSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+export function cacheBookProgressSnapshot(progress: BookProgressSnapshot) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(snapshotKey(progress.bookKey), JSON.stringify(progress));
+  } catch {
+    // Realtime Convex state still works when browser storage is unavailable.
+  }
+}
 
 function readNumbers(keys: string[]) {
   if (typeof window === 'undefined') return new Set<number>();
@@ -42,7 +97,11 @@ function readNumbers(keys: string[]) {
 
 function writeNumbers(key: string, values: Set<number>) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(key, JSON.stringify([...values].sort((a, b) => a - b)));
+  try {
+    window.localStorage.setItem(key, JSON.stringify([...values].sort((a, b) => a - b)));
+  } catch {
+    // Realtime Convex state still works when browser storage is unavailable.
+  }
 }
 
 function emitProgress(book: BookTrainingKey) {
@@ -62,6 +121,71 @@ export function readBookPuzzleProgress(book: BookTrainingKey): BookPuzzleProgres
     solved: [...solved].sort((a, b) => a - b),
     missed: [...missed].sort((a, b) => a - b),
   };
+}
+
+/**
+ * Build the best current-cycle snapshot available before Convex responds.
+ * Older RepDrill versions split lifetime puzzle state and author-cycle state
+ * across three localStorage records, so prefer the cycle-specific solved list
+ * whenever that record exists.
+ */
+export function readLocalBookProgressSnapshot(
+  book: BookTrainingKey,
+  fullBookSize: number = BOOK_METHODS[book].recommendedSetSize,
+): BookProgressSnapshot {
+  const cached = readCachedSnapshot(book);
+  if (cached) return cached;
+  const puzzleProgress = readBookPuzzleProgress(book);
+  const methodProgress = readBookMethodProgress(book);
+  const hasMethodProgress = hasStoredBookMethodProgress(book);
+  const setSize = hasMethodProgress ? BOOK_METHODS[book].recommendedSetSize : fullBookSize;
+  const solved = [...new Set(hasMethodProgress ? methodProgress.solved : puzzleProgress.solved)]
+    .filter((exercise) => Number.isInteger(exercise) && exercise > 0 && exercise <= setSize)
+    .sort((a, b) => a - b);
+  const solvedSet = new Set(solved);
+  const missed = [...new Set(puzzleProgress.missed)]
+    .filter((exercise) => exercise <= setSize && !solvedSet.has(exercise))
+    .sort((a, b) => a - b);
+  const nextPosition = solved.length > 0
+    ? Math.max(...solved) + 1
+    : missed[0] ?? 1;
+  const startedAt = Date.parse(methodProgress.startedAt);
+
+  return {
+    bookKey: book,
+    cycle: hasMethodProgress ? methodProgress.cycle : 1,
+    position: Math.min(setSize + 1, nextPosition),
+    setSize,
+    solved,
+    missed,
+    solvedCount: solved.length,
+    missedCount: missed.length,
+    unresolvedMissedCount: 0,
+    // Legacy localStorage only retained aggregate sets, not attempt history.
+    attemptCount: 0,
+    startedAt: Number.isFinite(startedAt) ? startedAt : null,
+    updatedAt: 0,
+    sourceMarker: LOCAL_STORAGE_SOURCE_MARKER,
+  };
+}
+
+export function hasLocalBookProgress(snapshot: BookProgressSnapshot) {
+  return isLocalBookProgressSnapshot(snapshot)
+    && (snapshot.cycle > 1
+    || snapshot.position > 1
+    || snapshot.solvedCount > 0
+    || snapshot.missedCount > 0);
+}
+
+/**
+ * Only this marker denotes an unscoped browser recovery copy.  Snapshots with
+ * any other marker came from a server account and must not be shown or
+ * migrated when the current account has no matching server row.
+ */
+export function isLocalBookProgressSnapshot(
+  snapshot: BookProgressSnapshot | null | undefined,
+) {
+  return snapshot?.sourceMarker === LOCAL_STORAGE_SOURCE_MARKER;
 }
 
 export function recordBookPuzzleSolved(book: BookTrainingKey, exercise: number) {

@@ -10,6 +10,7 @@
 
 import type * as analyze from "../analyze.js";
 import type * as auth from "../auth.js";
+import type * as bookProgress from "../bookProgress.js";
 import type * as courses from "../courses.js";
 import type * as http from "../http.js";
 import type * as import_ from "../import.js";
@@ -27,6 +28,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analyze: typeof analyze;
   auth: typeof auth;
+  bookProgress: typeof bookProgress;
   courses: typeof courses;
   http: typeof http;
   import: typeof import_;

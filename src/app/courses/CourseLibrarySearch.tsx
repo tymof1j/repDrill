@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Fuse from 'fuse.js';
 import {
@@ -15,11 +15,8 @@ import {
   getCourseMeta,
   type CourseKind,
 } from './CourseVisuals';
-import {
-  getBookProgressEventName,
-  readBookPuzzleProgress,
-  type BookPuzzleProgress,
-} from '@/lib/woodpeckerProgress';
+import { useBookProgress } from '@/lib/hooks/useBookProgress';
+import type { BookProgressSnapshot } from '@/lib/woodpeckerProgress';
 import type { BookTrainingKey } from '@/lib/bookTrainingPreferences';
 
 export type CourseListItem = {
@@ -32,7 +29,6 @@ export type CourseListItem = {
   isBuiltIn?: boolean;
   isShared?: boolean;
 };
-
 
 type Props = {
   courses: CourseListItem[];
@@ -177,7 +173,7 @@ function CourseCard({
     ? course.href ?? href
     : `/train?courseId=${encodeURIComponent(course.id)}&mode=learn`;
   const reviewHref = course.mode === 'puzzles'
-    ? course.href ?? '/train'
+    ? getBuiltInBookReviewHref(course, bookProgress) ?? course.href ?? '/train'
     : `/train?courseId=${encodeURIComponent(course.id)}`;
 
   return (
@@ -228,7 +224,7 @@ function CourseCard({
           <ProgressBar value={progress.percent} tone={progress.due > 0 ? 'red' : 'green'} label={progress.label} />
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--ink-faint)]">
             <span>{progress.variationLabel}</span>
-            <span className={progress.due > 0 ? 'text-[color:var(--margin-red)]' : ''}>{progress.due > 0 ? `${progress.due} due` : 'Ready when you are'}</span>
+            <span className={progress.due > 0 ? 'text-[color:var(--margin-red)]' : ''}>{progress.dueLabel}</span>
           </div>
         </div>
 
@@ -253,44 +249,51 @@ function CourseCard({
 
 function getProgress(
   course: CourseListItem,
-  bookProgress: BookPuzzleProgress | null = null,
+  bookProgress: BookProgressSnapshot | null = null,
 ) {
   if (course.isBuiltIn) {
-    const count = course.name.toLowerCase().includes('woodpecker method 2') ? 1000 : course.name.toLowerCase().includes('woodpecker') ? 1128 : 0;
-    const solved = bookProgress?.solved.length ?? 0;
-    const missed = bookProgress?.missed.length ?? 0;
+    const count = bookProgress?.setSize
+      ?? (course.name.toLowerCase().includes('woodpecker method 2') ? 1000 : course.name.toLowerCase().includes('woodpecker') ? 1128 : 0);
+    const solved = bookProgress?.solvedCount ?? 0;
+    const missed = bookProgress?.missedCount ?? 0;
+    const cycle = bookProgress?.cycle ?? 1;
+    const attempts = bookProgress?.attemptCount ?? 0;
     const percent = count ? (solved / count) * 100 : 0;
     return {
       percent,
-      label: solved ? `${Math.round(percent)}%` : 'Not started',
-      variationLabel: count ? `${solved.toLocaleString()} / ${count.toLocaleString()} positions` : 'Progress not started',
+      label: solved ? `Cycle ${cycle} · ${Math.round(percent)}%` : `Cycle ${cycle} · Not started`,
+      variationLabel: count
+        ? `${solved.toLocaleString()} / ${count.toLocaleString()} positions${attempts > 0 ? ` · ${attempts.toLocaleString()} attempts` : ''}`
+        : 'Progress not started',
       due: missed,
+      dueLabel: missed > 0 ? `${missed} missed` : 'Ready when you are',
     };
   }
-  // Do not derive aggregate course progress by scanning every move on a live
-  // subscription. Large imported libraries can exceed backend query limits.
-  return { percent: 0, label: 'Ready to train', variationLabel: 'Open course for line progress', due: 0 };
+  // Course progress used to be derived by scanning every move in every
+  // imported course. Large libraries exceed Convex query limits and that
+  // optional card decoration could take down the entire route. Keep the
+  // library independent from aggregate progress until it is maintained at
+  // write time instead.
+  return { percent: 0, label: 'Ready to train', variationLabel: 'Open course for line progress', due: 0, dueLabel: 'Ready when you are' };
 }
 
-function useBuiltInBookProgress(course: CourseListItem): BookPuzzleProgress | null {
+function useBuiltInBookProgress(course: CourseListItem): BookProgressSnapshot | null {
   const book = getBuiltInBookKey(course);
-  const [progress, setProgress] = useState<BookPuzzleProgress | null>(() => (
-    book ? readBookPuzzleProgress(book) : null
-  ));
+  const fullBookSize = book === 'woodpecker-method-2' ? 1000 : 1128;
+  return useBookProgress(book, fullBookSize).progress;
+}
 
-  useEffect(() => {
-    if (!book) return;
-    const refresh = () => setProgress(readBookPuzzleProgress(book));
-    const eventName = getBookProgressEventName();
-    window.addEventListener(eventName, refresh);
-    window.addEventListener('storage', refresh);
-    return () => {
-      window.removeEventListener(eventName, refresh);
-      window.removeEventListener('storage', refresh);
-    };
-  }, [book]);
-
-  return book ? progress : null;
+function getBuiltInBookReviewHref(
+  course: CourseListItem,
+  progress: BookProgressSnapshot | null,
+) {
+  const book = getBuiltInBookKey(course);
+  if (!book) return null;
+  const nextExercise = progress?.missed[0] ?? progress?.position ?? 1;
+  const fullBookSize = book === 'woodpecker-method-2' ? 1000 : 1128;
+  const exercise = Math.min(Math.max(nextExercise, 1), fullBookSize);
+  const slug = book === 'woodpecker-method-2' ? 'woodpecker-2' : 'woodpecker';
+  return `/train/puzzles/${slug}?n=${exercise}`;
 }
 
 function getBuiltInBookKey(course: CourseListItem): BookTrainingKey | null {
