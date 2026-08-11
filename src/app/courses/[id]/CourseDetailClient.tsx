@@ -336,6 +336,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
             <CourseCover
               name={course.name}
               kind={courseMeta.kind}
+              compact
               coverUrl={getCourseCoverUrl(course.name, courseMeta.kind)}
             />
           </div>
