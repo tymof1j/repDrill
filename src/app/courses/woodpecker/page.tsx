@@ -5,30 +5,13 @@ import {
   BackLink,
   PageHeader,
   PremiumButton,
-  PremiumPanel,
-  SecondaryButton,
   Stamp,
 } from '@/components/ui/Premium';
 import {
   WOODPECKER_COURSE,
-  getSectionRange,
   woodpeckerPuzzles,
 } from '@/lib/woodpecker';
-
-const sectionCopy = {
-  easy: {
-    title: 'Easy',
-    body: 'Build speed and pattern recognition with compact combinations.',
-  },
-  intermediate: {
-    title: 'Intermediate',
-    body: 'Calculate deeper positions where the first move is less obvious.',
-  },
-  advanced: {
-    title: 'Advanced',
-    body: 'Longer, demanding combinations selected for serious calculation work.',
-  },
-} as const;
+import { WoodpeckerSectionCards } from './WoodpeckerSectionCards';
 
 export default async function WoodpeckerCoursePage() {
   if (!(await isAuthenticatedNextjs())) redirect('/login');
@@ -62,33 +45,7 @@ export default async function WoodpeckerCoursePage() {
         </span>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        {(['easy', 'intermediate', 'advanced'] as const).map((section) => {
-          const range = getSectionRange(section);
-          const copy = sectionCopy[section];
-          return (
-            <PremiumPanel key={section} innerClassName="flex h-full flex-col p-6 md:p-7">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)]">
-                Exercises {range.first}–{range.last}
-              </p>
-              <h2 className="mt-4 font-display text-3xl font-semibold tracking-[-0.03em]">
-                {copy.title}
-              </h2>
-              <p className="mt-3 flex-1 text-sm leading-relaxed text-[color:var(--ink-soft)]">
-                {copy.body}
-              </p>
-              <div className="mt-7 flex items-center justify-between border-t border-[color:var(--paper-rule)] pt-5">
-                <span className="font-mono text-xs text-[color:var(--ink-faint)]">
-                  {range.count} positions
-                </span>
-                <SecondaryButton href={`/train/puzzles/woodpecker?n=${range.first}`}>
-                  Open set
-                </SecondaryButton>
-              </div>
-            </PremiumPanel>
-          );
-        })}
-      </div>
+      <WoodpeckerSectionCards />
     </AppSurface>
   );
 }
