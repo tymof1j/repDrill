@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 
 type Props = {
   children: ReactNode;
   caption?: ReactNode;
   className?: string;
   storageKey?: string;
+  /** Clamp a persisted board size to the visible desktop training viewport. */
+  fitViewport?: boolean;
 };
 
 const MIN_SIZE = 280;
@@ -19,15 +21,21 @@ const FRAME_GAP = 32;
 const SHELL_MAX_MIN = 1152; // 72rem
 const SHELL_MAX_BOOST = 420;
 const SHIFT_MAX_PX = 78;
+// Caption, input mode, notation entry and the bottom breathing room must all
+// remain visible beneath the board in a training viewport.
+const VIEWPORT_BOTTOM_RESERVE = 330;
 
 export function ResizableDiagramFrame({
   children,
   caption,
   className = '',
   storageKey = STORAGE_KEY,
+  fitViewport = false,
 }: Props) {
   const [size, setSize] = useState<number | null>(null);
   const [resizableEnabled, setResizableEnabled] = useState(false);
+  const [viewportMaxSize, setViewportMaxSize] = useState<number | null>(null);
+  const figureRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)');
@@ -56,8 +64,40 @@ export function ResizableDiagramFrame({
   }, [storageKey]);
 
   useEffect(() => {
-    if (!resizableEnabled || !size) return;
-    const t = Math.max(0, Math.min(1, (size - 560) / 520));
+    if (!resizableEnabled || !fitViewport) {
+      const frame = window.requestAnimationFrame(() => setViewportMaxSize(null));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    let frame = 0;
+    const sync = () => {
+      const element = figureRef.current;
+      if (!element) return;
+      // Use the document position rather than the current scroll offset. The
+      // cap must be stable even when a user arrives here from a previously
+      // scrolled training session.
+      const scrollTop = document.getElementById('main-content')?.scrollTop ?? window.scrollY;
+      const top = element.getBoundingClientRect().top + scrollTop;
+      setViewportMaxSize(Math.max(MIN_SIZE, Math.floor(window.innerHeight - top - VIEWPORT_BOTTOM_RESERVE)));
+    };
+    const requestSync = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(sync);
+    };
+    requestSync();
+    window.addEventListener('resize', requestSync);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', requestSync);
+    };
+  }, [fitViewport, resizableEnabled]);
+
+  const displaySize = size && viewportMaxSize
+    ? Math.min(size, viewportMaxSize)
+    : size;
+
+  useEffect(() => {
+    if (!resizableEnabled || !displaySize) return;
+    const t = Math.max(0, Math.min(1, (displaySize - 560) / 520));
     const gutter = Math.round(LG_GUTTER_MAX - t * (LG_GUTTER_MAX - LG_GUTTER_MIN));
     const shellMax = Math.round(SHELL_MAX_MIN + t * SHELL_MAX_BOOST);
     const shift = Math.round(t * SHIFT_MAX_PX);
@@ -69,7 +109,7 @@ export function ResizableDiagramFrame({
       document.documentElement.style.removeProperty('--app-shell-max-width');
       document.documentElement.style.removeProperty('--content-shift-x');
     };
-  }, [resizableEnabled, size]);
+  }, [resizableEnabled, displaySize]);
 
   const handleResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!resizableEnabled) return;
@@ -82,10 +122,13 @@ export function ResizableDiagramFrame({
     const currentSize = Math.round(frame.getBoundingClientRect().width);
     const shellWidth =
       document.querySelector<HTMLElement>('.app-shell-inner')?.clientWidth ?? window.innerWidth;
-    const maxSize = Math.max(
+    const widthMaxSize = Math.max(
       MIN_SIZE,
       Math.floor(shellWidth - RIGHT_COLUMN_RESERVE - FRAME_GAP),
     );
+    const maxSize = viewportMaxSize
+      ? Math.min(widthMaxSize, viewportMaxSize)
+      : widthMaxSize;
 
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
@@ -114,11 +157,12 @@ export function ResizableDiagramFrame({
 
   return (
     <figure
+      ref={figureRef}
       className={`relative ${className}`}
       style={
-        resizableEnabled && size
+        resizableEnabled && displaySize
           ? {
-              width: `${size}px`,
+              width: `${displaySize}px`,
             }
           : undefined
       }

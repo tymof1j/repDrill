@@ -122,13 +122,18 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   // anchoring disabled. Lock only the two paints following a user answer.
   const preserveViewportAfterMove = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const top = window.scrollY;
+    // Authenticated pages scroll inside #main-content, not the window. Using
+    // window.scrollY here made the earlier guard a no-op in the app shell.
+    const scrollContainer = document.getElementById('main-content');
+    const top = scrollContainer?.scrollTop ?? window.scrollY;
     const restore = () => {
-      if (Math.abs(window.scrollY - top) < 1) return;
+      const currentTop = scrollContainer?.scrollTop ?? window.scrollY;
+      if (Math.abs(currentTop - top) < 1) return;
       const root = document.documentElement;
       const previousBehavior = root.style.scrollBehavior;
       root.style.scrollBehavior = 'auto';
-      window.scrollTo(0, top);
+      if (scrollContainer) scrollContainer.scrollTop = top;
+      else window.scrollTo(0, top);
       root.style.scrollBehavior = previousBehavior;
     };
     window.requestAnimationFrame(() => {
@@ -348,7 +353,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         // invalid move
       }
     },
-    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, errorCorrectStreak, preserveViewportAfterMove],
+    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, errorCorrectStreak],
   );
 
   const onBoardMove = useCallback((orig: string, dest: string) => {
@@ -660,9 +665,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const lichessFen = toCompleteFen(step?.parentFen ?? boardFen).replaceAll(' ', '_');
 
   return (
-    <AppSurface className="training-scroll-stable">
+    <AppSurface className="training-scroll-stable lg:h-full lg:overflow-hidden lg:py-5">
       {filterBar}
-      <div key={phaseKey} data-training-phase={linePhase} className="contents">
+      <div key={phaseKey} data-training-phase={linePhase} className="contents lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
           Training · Line <span className="font-display italic text-[color:var(--ink)]">{lineIndex + 1}</span> of {lines.length}
@@ -700,6 +705,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             <ResizableDiagramFrame
               className="-mx-2 md:mx-0"
               caption={isBrowsing ? `Move ${browseIndex} / ${line.steps.length}` : `Move ${Math.min(questionIndex + 1, userMovesInLine)} / ${userMovesInLine}`}
+              fitViewport
             >
               <ChessBoard
                 fen={boardFen}

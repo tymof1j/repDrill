@@ -91,10 +91,12 @@ export default function TrainPage() {
   const showSelector = courses.length > 1 || repertoires.length > 0;
 
   const filterBar = showSelector ? (
-    <div className="mb-6 flex flex-wrap items-center gap-x-1 gap-y-1 border-b border-[color:var(--paper-edge)] pb-3">
-      <span className="mr-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+    <details className="relative mb-4 lg:fixed lg:right-5 lg:top-5 lg:z-30 lg:mb-0">
+      <summary className="ml-auto flex w-fit cursor-pointer list-none items-center gap-2 rounded border border-[color:var(--paper-edge)] bg-[color:var(--surface)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-soft)] shadow-[0_8px_20px_rgba(47,58,50,0.08)] marker:content-none [&::-webkit-details-marker]:hidden">
         Filter
-      </span>
+        <span aria-hidden>⌄</span>
+      </summary>
+      <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1 rounded border border-[color:var(--paper-edge)] bg-[color:var(--surface)] p-2 shadow-[0_18px_45px_rgba(47,58,50,0.12)] lg:absolute lg:right-0 lg:w-80">
       <button
         type="button"
         onClick={() => setSelection({ type: 'all' })}
@@ -134,7 +136,8 @@ export default function TrainPage() {
           {c.name}
         </button>
       ))}
-    </div>
+      </div>
+    </details>
   ) : null;
 
   if (result.lines.length === 0) {
