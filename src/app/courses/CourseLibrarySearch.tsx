@@ -3,9 +3,6 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Fuse from 'fuse.js';
-import { useQuery } from 'convex/react';
-import type { Id } from '@convex/_generated/dataModel';
-import { api } from '@convex/_generated/api';
 import {
   EmptyState,
   GhostButton,
@@ -36,13 +33,6 @@ export type CourseListItem = {
   isShared?: boolean;
 };
 
-export type CourseLineProgressSummary = {
-  courseId: string;
-  total: number;
-  learned: number;
-  due: number;
-  newLines: number;
-};
 
 type Props = {
   courses: CourseListItem[];
@@ -83,23 +73,6 @@ export function CourseLibrarySearch({ courses }: Props) {
     if (filter === 'all') return searched;
     return searched.filter((course) => getCourseMeta(course.name, course.description, course.mode).kind === filter);
   }, [courses, filter, fuse, query]);
-  // One batched subscription keeps the library responsive when a course has
-  // hundreds of branches.  Built-in puzzle pages and shared read-only cards
-  // do not have theory line progress in the user's review queue.
-  const trainableCourseIds = useMemo(
-    () => courses
-      .filter((course) => !course.isBuiltIn && !course.isShared)
-      .map((course) => course.id as Id<'courses'>),
-    [courses],
-  );
-  const progressRows = useQuery(
-    api.training.getCourseLineProgress,
-    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds } : 'skip',
-  ) as CourseLineProgressSummary[] | undefined;
-  const progressByCourseId = useMemo(
-    () => new Map((progressRows ?? []).map((row) => [row.courseId, row])),
-    [progressRows],
-  );
   if (courses.length === 0) {
     return <EmptyState>No courses yet. Import a PGN or a Lichess study to seed your first body of theory.</EmptyState>;
   }
@@ -163,7 +136,6 @@ export function CourseLibrarySearch({ courses }: Props) {
               onRenameCancel={() => setRenameTargetId(null)}
               onDelete={() => setDeleteTargetId(course.id)}
               onDeleteCancel={() => setDeleteTargetId(null)}
-              lineProgress={progressByCourseId.get(course.id)}
             />
           ))}
         </div>
@@ -184,7 +156,6 @@ function CourseCard({
   onRenameCancel,
   onDelete,
   onDeleteCancel,
-  lineProgress,
 }: {
   course: CourseListItem;
   featured: boolean;
@@ -197,11 +168,10 @@ function CourseCard({
   onRenameCancel: () => void;
   onDelete: () => void;
   onDeleteCancel: () => void;
-  lineProgress?: CourseLineProgressSummary;
 }) {
   const meta = getCourseMeta(course.name, course.description, course.mode);
   const bookProgress = useBuiltInBookProgress(course);
-  const progress = getProgress(course, lineProgress, bookProgress);
+  const progress = getProgress(course, bookProgress);
   const href = course.href ?? `/courses/${course.id}`;
   const learnHref = course.isBuiltIn
     ? course.href ?? href
@@ -283,7 +253,6 @@ function CourseCard({
 
 function getProgress(
   course: CourseListItem,
-  summary: CourseLineProgressSummary | undefined,
   bookProgress: BookPuzzleProgress | null = null,
 ) {
   if (course.isBuiltIn) {
@@ -298,22 +267,9 @@ function getProgress(
       due: missed,
     };
   }
-  if (!summary) {
-    // This bundled archive has 335 browsable branches; the Introduction is
-    // deliberately info-only, leaving 334 trainable variations. Keep its card
-    // informative while the realtime aggregate is still warming up.
-    if (course.name.toLowerCase().includes('english breakfast')) {
-      return { percent: 0, label: 'Not started', variationLabel: '0 / 334 variations', due: 0 };
-    }
-    return { percent: 0, label: 'Not started', variationLabel: '0 / — variations', due: 0 };
-  }
-  const percent = summary.total ? (summary.learned / summary.total) * 100 : 0;
-  return {
-    percent,
-    label: `${Math.round(percent)}%`,
-    variationLabel: `${summary.learned} / ${summary.total} variations`,
-    due: summary.due,
-  };
+  // Do not derive aggregate course progress by scanning every move on a live
+  // subscription. Large imported libraries can exceed backend query limits.
+  return { percent: 0, label: 'Ready to train', variationLabel: 'Open course for line progress', due: 0 };
 }
 
 function useBuiltInBookProgress(course: CourseListItem): BookPuzzleProgress | null {
