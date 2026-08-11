@@ -302,19 +302,22 @@ function getProgress(
     const count = bookProgress?.setSize
       ?? (course.name.toLowerCase().includes('woodpecker method 2') ? 1000 : course.name.toLowerCase().includes('woodpecker') ? 1128 : 0);
     const solved = bookProgress?.solvedCount ?? 0;
-    const missed = bookProgress?.missedCount ?? 0;
     const cycle = bookProgress?.cycle ?? 1;
     const attempts = bookProgress?.attemptCount ?? 0;
     const percent = count ? (solved / count) * 100 : 0;
+    const toLearn = Math.max(0, count - solved);
+    // Built-in book cycles treat completed positions as the repeatable/due
+    // set. Missed attempts are tracked separately and must not inflate Due.
+    const due = Math.max(0, count - toLearn);
     return {
       percent,
       label: solved ? `Cycle ${cycle} · ${Math.round(percent)}%` : `Cycle ${cycle} · Not started`,
       variationLabel: count
         ? `${solved.toLocaleString()} / ${count.toLocaleString()} positions${attempts > 0 ? ` · ${attempts.toLocaleString()} attempts` : ''}`
         : 'Progress not started',
-      due: missed,
-      newLines: Math.max(0, count - solved),
-      dueLabel: missed > 0 ? `${missed} missed` : 'Ready when you are',
+      due,
+      newLines: toLearn,
+      dueLabel: due > 0 ? `${due} due` : 'Ready when you are',
     };
   }
   if (!summary) {

@@ -43,9 +43,6 @@ type PuzzleSolution = { solutionSan: string[]; solutionUci: string[] };
 type TrainerStatus = 'ready' | 'wrong' | 'correct' | 'revealed';
 
 const forcedRecheckExercise = 110;
-// Schedule the prepared reply on the next event-loop turn. This keeps the
-// player's move committed without adding a perceptible artificial pause.
-const COMPUTER_REPLY_DELAY_MS = 0;
 
 export function WoodpeckerTrainer({
   puzzle,
@@ -62,7 +59,6 @@ export function WoodpeckerTrainer({
 }) {
   const router = useRouter();
   const method = BOOK_METHODS[courseKey];
-  const replyTimer = useRef<number | null>(null);
   const attemptStartedAt = useRef<number | null>(null);
   const attemptOpen = useRef(true);
   const [fen, setFen] = useState(puzzle.fen);
@@ -102,10 +98,6 @@ export function WoodpeckerTrainer({
     attemptStartedAt.current = Date.now();
     attemptOpen.current = true;
   }, [puzzle.exercise]);
-
-  useEffect(() => () => {
-    if (replyTimer.current) window.clearTimeout(replyTimer.current);
-  }, []);
 
   const legalDests = useMemo(() => {
     if (status !== 'ready') return new Map<string, string[]>();
@@ -188,8 +180,6 @@ export function WoodpeckerTrainer({
   };
 
   const resetBoard = () => {
-    if (replyTimer.current) window.clearTimeout(replyTimer.current);
-    replyTimer.current = null;
     // Chessground keeps its own piece positions. Remount it when the FEN is
     // unchanged so a failed attempt cannot leave the incorrect move on board.
     setBoardKey((key) => key + 1);
@@ -241,10 +231,6 @@ export function WoodpeckerTrainer({
       }
       return;
     }
-    // The opponent reply is animated for a moment after a correct move. Do
-    // not accept a second user move against the pre-reply position.
-    if (replyTimer.current) return;
-
     // A hint is intentionally only the first-move arrow. Once the player
     // starts calculating, remove it and leave the board as their own puzzle.
     if (hintVisible) setHintVisible(false);
@@ -269,32 +255,30 @@ export function WoodpeckerTrainer({
         return;
       }
 
-      setFen(chess.fen());
-      setLastMove([move.from, move.to]);
       const replyIndex = ply + 1;
       if (replyIndex >= solution.solutionUci.length) {
+        setFen(chess.fen());
+        setLastMove([move.from, move.to]);
         finishSolved();
         return;
       }
 
+      // Apply the prepared reply synchronously. A timer here is perceptible
+      // as network latency even when the answer is already known locally.
+      const reply = playPly(chess.fen(), solution.solutionUci[replyIndex]);
+      if (!reply) {
+        finishSolved();
+        return;
+      }
+      setFen(reply.fen);
+      setLastMove(reply.lastMove);
+      const nextUserPly = replyIndex + 1;
+      if (nextUserPly >= solution.solutionUci.length) {
+        finishSolved();
+        return;
+      }
+      setPly(nextUserPly);
       setStatus('ready');
-      replyTimer.current = window.setTimeout(() => {
-        replyTimer.current = null;
-        const reply = playPly(chess.fen(), solution.solutionUci[replyIndex]);
-        if (!reply) {
-          finishSolved();
-          return;
-        }
-        setFen(reply.fen);
-        setLastMove(reply.lastMove);
-        const nextUserPly = replyIndex + 1;
-        if (nextUserPly >= solution.solutionUci.length) {
-          finishSolved();
-          return;
-        }
-        setPly(nextUserPly);
-        setStatus('ready');
-      }, COMPUTER_REPLY_DELAY_MS);
     } catch {
       markMissed();
       setBoardKey((key) => key + 1);
