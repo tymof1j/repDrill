@@ -690,6 +690,78 @@ export const getCourseLineStatuses = query({
   },
 });
 
+/**
+ * Return a bounded progress summary for the course cards.
+ *
+ * This deliberately aggregates the user's existing review cards instead of
+ * walking every move branch in every course. The old implementation could
+ * exceed Convex's document-read budget for large imported studies and took
+ * down the entire courses page. A card is created for each trainable
+ * repertoire move, so this remains a useful and stable position-level signal.
+ */
+export type CourseLineProgress = {
+  courseId: string;
+  total: number;
+  learned: number;
+  due: number;
+  newLines: number;
+};
+
+export const getCourseLineProgress = query({
+  args: { courseIds: v.array(v.id("courses")) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId || args.courseIds.length === 0) return [] as CourseLineProgress[];
+
+    const requestedIds = Array.from(new Set(args.courseIds.map((id) => id as string))).slice(0, 50);
+    const summaries = new Map<string, CourseLineProgress>();
+    for (const courseId of requestedIds) {
+      const course = await ctx.db.get(courseId as Id<"courses">);
+      if (course?.userId === userId) {
+        summaries.set(courseId, { courseId, total: 0, learned: 0, due: 0, newLines: 0 });
+      }
+    }
+    if (summaries.size === 0) return [] as CourseLineProgress[];
+
+    const cards = await ctx.db
+      .query("reviewCards")
+      .withIndex("by_user_due", (q) => q.eq("userId", userId))
+      .take(5000);
+    const moveById = new Map<string, Doc<"moves"> | null>();
+    const chapterById = new Map<string, Doc<"chapters"> | null>();
+    const now = Date.now();
+
+    for (const card of cards) {
+      const moveKey = card.moveId as string;
+      let move = moveById.get(moveKey);
+      if (move === undefined) {
+        move = await ctx.db.get(card.moveId);
+        moveById.set(moveKey, move);
+      }
+      if (!move || move.moveType !== "repertoire") continue;
+
+      const chapterKey = move.chapterId as string;
+      let chapter = chapterById.get(chapterKey);
+      if (chapter === undefined) {
+        chapter = await ctx.db.get(move.chapterId);
+        chapterById.set(chapterKey, chapter);
+      }
+      const summary = chapter ? summaries.get(chapter.courseId as string) : undefined;
+      if (!summary || chapter?.chapterType === "info_only") continue;
+
+      summary.total += 1;
+      if (card.state === 0) {
+        summary.newLines += 1;
+      } else {
+        summary.learned += 1;
+      }
+      if (card.state === 0 || card.due <= now) summary.due += 1;
+    }
+
+    return Array.from(summaries.values());
+  },
+});
+
 // --- Quick stats (card scan plus trainable-chapter filter) ---
 export const getQuickStats = query({
   args: {},

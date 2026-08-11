@@ -3,6 +3,9 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Fuse from 'fuse.js';
+import { useQuery } from 'convex/react';
+import type { Id } from '@convex/_generated/dataModel';
+import { api } from '@convex/_generated/api';
 import {
   EmptyState,
   GhostButton,
@@ -28,6 +31,14 @@ export type CourseListItem = {
   mode?: 'theory' | 'puzzles';
   isBuiltIn?: boolean;
   isShared?: boolean;
+};
+
+export type CourseLineProgressSummary = {
+  courseId: string;
+  total: number;
+  learned: number;
+  due: number;
+  newLines: number;
 };
 
 type Props = {
@@ -69,6 +80,20 @@ export function CourseLibrarySearch({ courses }: Props) {
     if (filter === 'all') return searched;
     return searched.filter((course) => getCourseMeta(course.name, course.description, course.mode).kind === filter);
   }, [courses, filter, fuse, query]);
+  const trainableCourseIds = useMemo(
+    () => courses
+      .filter((course) => !course.isBuiltIn && !course.isShared)
+      .map((course) => course.id as Id<'courses'>),
+    [courses],
+  );
+  const progressRows = useQuery(
+    api.training.getCourseLineProgress,
+    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds } : 'skip',
+  ) as CourseLineProgressSummary[] | undefined;
+  const progressByCourseId = useMemo(
+    () => new Map((progressRows ?? []).map((row) => [row.courseId, row])),
+    [progressRows],
+  );
   if (courses.length === 0) {
     return <EmptyState>No courses yet. Import a PGN or a Lichess study to seed your first body of theory.</EmptyState>;
   }
@@ -132,6 +157,7 @@ export function CourseLibrarySearch({ courses }: Props) {
               onRenameCancel={() => setRenameTargetId(null)}
               onDelete={() => setDeleteTargetId(course.id)}
               onDeleteCancel={() => setDeleteTargetId(null)}
+              lineProgress={progressByCourseId.get(course.id)}
             />
           ))}
         </div>
@@ -152,6 +178,7 @@ function CourseCard({
   onRenameCancel,
   onDelete,
   onDeleteCancel,
+  lineProgress,
 }: {
   course: CourseListItem;
   featured: boolean;
@@ -164,10 +191,11 @@ function CourseCard({
   onRenameCancel: () => void;
   onDelete: () => void;
   onDeleteCancel: () => void;
+  lineProgress?: CourseLineProgressSummary;
 }) {
   const meta = getCourseMeta(course.name, course.description, course.mode);
   const bookProgress = useBuiltInBookProgress(course);
-  const progress = getProgress(course, bookProgress);
+  const progress = getProgress(course, lineProgress, bookProgress);
   const href = course.href ?? `/courses/${course.id}`;
   const learnHref = course.isBuiltIn
     ? getBuiltInBookLearnHref(course, bookProgress) ?? course.href ?? href
@@ -249,6 +277,7 @@ function CourseCard({
 
 function getProgress(
   course: CourseListItem,
+  summary: CourseLineProgressSummary | undefined,
   bookProgress: BookProgressSnapshot | null = null,
 ) {
   if (course.isBuiltIn) {
@@ -269,12 +298,17 @@ function getProgress(
       dueLabel: missed > 0 ? `${missed} missed` : 'Ready when you are',
     };
   }
-  // Course progress used to be derived by scanning every move in every
-  // imported course. Large libraries exceed Convex query limits and that
-  // optional card decoration could take down the entire route. Keep the
-  // library independent from aggregate progress until it is maintained at
-  // write time instead.
-  return { percent: 0, label: 'Ready to train', variationLabel: 'Open course for line progress', due: 0, dueLabel: 'Ready when you are' };
+  if (!summary || summary.total === 0) {
+    return { percent: 0, label: 'Ready to train', variationLabel: 'Open course to create review cards', due: 0, dueLabel: 'Ready when you are' };
+  }
+  const percent = (summary.learned / summary.total) * 100;
+  return {
+    percent,
+    label: `${Math.round(percent)}%`,
+    variationLabel: `${summary.learned} / ${summary.total} positions`,
+    due: summary.due,
+    dueLabel: summary.due > 0 ? `${summary.due} due` : 'Ready when you are',
+  };
 }
 
 function useBuiltInBookProgress(course: CourseListItem): BookProgressSnapshot | null {
