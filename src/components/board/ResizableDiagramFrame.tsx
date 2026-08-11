@@ -12,7 +12,7 @@ type Props = {
 };
 
 const MIN_SIZE = 280;
-const DEFAULT_SIZE = 480;
+const DEFAULT_SIZE = 680;
 const STORAGE_KEY = 'repdrill:board-size';
 const LG_GUTTER_MAX = 56;
 const LG_GUTTER_MIN = 20;
@@ -23,7 +23,7 @@ const SHELL_MAX_BOOST = 420;
 const SHIFT_MAX_PX = 78;
 // Caption, input mode, notation entry and the bottom breathing room must all
 // remain visible beneath the board in a training viewport.
-const VIEWPORT_BOTTOM_RESERVE = 330;
+const VIEWPORT_BOTTOM_RESERVE = 180;
 
 export function ResizableDiagramFrame({
   children,
@@ -51,7 +51,7 @@ export function ResizableDiagramFrame({
         const raw = window.localStorage.getItem(storageKey);
         if (raw) {
           const parsed = Number(raw);
-          if (Number.isFinite(parsed) && parsed >= MIN_SIZE) initial = parsed;
+          if (Number.isFinite(parsed) && parsed >= MIN_SIZE) initial = Math.max(parsed, DEFAULT_SIZE);
         }
       } catch {
         // ignore
@@ -77,7 +77,10 @@ export function ResizableDiagramFrame({
       // scrolled training session.
       const scrollTop = document.getElementById('main-content')?.scrollTop ?? window.scrollY;
       const top = element.getBoundingClientRect().top + scrollTop;
-      setViewportMaxSize(Math.max(MIN_SIZE, Math.floor(window.innerHeight - top - VIEWPORT_BOTTOM_RESERVE)));
+      const shellWidth = document.querySelector<HTMLElement>('.app-shell-inner')?.clientWidth ?? window.innerWidth;
+      const widthMax = Math.max(MIN_SIZE, Math.floor(shellWidth - RIGHT_COLUMN_RESERVE - FRAME_GAP));
+      const heightMax = Math.max(MIN_SIZE, Math.floor(window.innerHeight - top - VIEWPORT_BOTTOM_RESERVE));
+      setViewportMaxSize(Math.min(widthMax, heightMax));
     };
     const requestSync = () => {
       window.cancelAnimationFrame(frame);

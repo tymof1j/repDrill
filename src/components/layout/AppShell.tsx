@@ -14,7 +14,6 @@ export function AppShell({
   const isPublicPage =
     pathname === '/' || pathname === '/comparison' || pathname === '/login' || pathname.startsWith('/share/');
   const isFaqPage = pathname === '/documentation' || pathname.startsWith('/documentation/');
-  const isTrainingPage = pathname.startsWith('/train');
 
   if (isPublicPage) {
     return (
@@ -36,7 +35,7 @@ export function AppShell({
   }
 
   return (
-    <div className={`relative flex min-h-screen bg-[color:var(--paper)] ${isTrainingPage ? 'lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden' : ''}`}>
+    <div className="relative flex min-h-screen bg-[color:var(--paper)]">
       <GlobalShortcuts />
       <a
         href="#main-content"
@@ -47,7 +46,7 @@ export function AppShell({
       {sidebar}
       <main
         id="main-content"
-        className={`relative flex-1 overflow-y-auto border-l border-[color:var(--paper-rule)] bg-[color:var(--paper)] ${isTrainingPage ? 'lg:overflow-hidden' : ''}`}
+        className="relative flex-1 overflow-y-auto border-l border-[color:var(--paper-rule)] bg-[color:var(--paper)]"
       >
         {children}
       </main>

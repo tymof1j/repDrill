@@ -154,6 +154,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     () => (line ? line.steps.map((s, i) => (s.isUserMove ? i : -1)).filter((i) => i >= 0) : []),
     [line],
   );
+  // Study navigation may reveal the position immediately before the first
+  // prepared/user move, but never the continuation that is being tested.
+  const browseLimit = userStepIndexes[0] ?? line?.steps.length ?? 0;
   const currentStepIndex = inErrorRecovery
     ? (errorQueue[0] ?? -1)
     : (userStepIndexes[questionIndex] ?? -1);
@@ -490,8 +493,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         if (e.key === 'ArrowRight' || e.key === ' ') {
           e.preventDefault();
           const next = browseIndex + 1;
-          if (next <= line.steps.length) setBrowseIndex(next);
-          else startDrilling();
+          if (next <= browseLimit) setBrowseIndex(next);
           return;
         }
         if (e.key === 'ArrowUp') {
@@ -501,7 +503,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         }
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setBrowseIndex(line.steps.length);
+          setBrowseIndex(browseLimit);
           return;
         }
         if (e.key === 'Enter') {
@@ -531,7 +533,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [linePhase, browseIndex, line, waitingForUser, needsManualNext, feedback, startDrilling, continueAfterWrong, lineSaved, lineSaving, nextLine]);
+  }, [linePhase, browseIndex, browseLimit, line, waitingForUser, needsManualNext, feedback, startDrilling, continueAfterWrong, lineSaved, lineSaving, nextLine]);
 
   useEffect(() => {
     if (!queuedPremove || !waitingForUser || linePhase !== 'drill' || needsManualNext) return;
@@ -542,19 +544,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }, 0);
     return () => window.clearTimeout(timer);
   }, [queuedPremove, waitingForUser, linePhase, needsManualNext, tryMove]);
-
-  useEffect(() => {
-    const main = document.getElementById('main-content');
-    if (!main) return;
-    const mq = window.matchMedia('(min-width: 1024px)');
-    const apply = () => { main.style.overflowY = mq.matches ? 'hidden' : ''; };
-    apply();
-    mq.addEventListener('change', apply);
-    return () => {
-      mq.removeEventListener('change', apply);
-      main.style.overflowY = '';
-    };
-  }, []);
 
   const handleStudyNotationMove = useCallback((san: string) => {
     if (linePhase !== 'browse') return;
@@ -665,9 +654,11 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const lichessFen = toCompleteFen(step?.parentFen ?? boardFen).replaceAll(' ', '_');
 
   return (
-    <AppSurface className="training-scroll-stable lg:h-full lg:overflow-hidden lg:py-5">
-      {filterBar}
-      <div key={phaseKey} data-training-phase={linePhase} className="contents lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    <AppSurface className="training-scroll-stable lg:py-8">
+      <div className="relative">
+        {filterBar}
+      </div>
+      <div key={phaseKey} data-training-phase={linePhase} className="contents">
       <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
           Training · Line <span className="font-display italic text-[color:var(--ink)]">{lineIndex + 1}</span> of {lines.length}
@@ -730,7 +721,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             <div className="mt-6">
               <div className="grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 <button type="button" onClick={() => setBrowseIndex((i) => Math.max(0, i - 1))} disabled={browseIndex === 0} className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:opacity-30">← Back</button>
-                <button type="button" onClick={() => { const next = browseIndex + 1; if (next <= line.steps.length) setBrowseIndex(next); else startDrilling(); }} className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)]">{browseIndex >= line.steps.length ? 'Drill →' : 'Forward →'}</button>
+                <button type="button" onClick={() => { const next = browseIndex + 1; if (next <= browseLimit) setBrowseIndex(next); }} disabled={browseIndex >= browseLimit} className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">Forward →</button>
                 <button type="button" onClick={startDrilling} className="bg-[color:var(--ink)] px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--paper)] transition-colors duration-200 hover:opacity-90">Start drill</button>
               </div>
             </div>
@@ -817,11 +808,13 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
               </p>
               <p className="notation mt-2 text-[15px] text-[color:var(--ink)]">{feedback.text}</p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <div className="inline-flex overflow-hidden rounded-md border border-[color:var(--paper-edge)]">
-                  <button type="button" onClick={() => showSolutionPly(shownSolutionPly - 1)} disabled={shownSolutionPly === 0} aria-label="Previous solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">←</button>
-                  <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
-                  <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
-                </div>
+                {(feedback.type === 'wrong' || isLineDone) && (
+                  <div className="inline-flex overflow-hidden rounded-md border border-[color:var(--paper-edge)]">
+                    <button type="button" onClick={() => showSolutionPly(shownSolutionPly - 1)} disabled={shownSolutionPly === 0} aria-label="Previous solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">←</button>
+                    <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
+                    <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
+                  </div>
+                )}
                 <a href={`https://lichess.org/analysis/standard/${lichessFen}?color=${playerColor}`} target="_blank" rel="noreferrer" aria-label="Analyze on Lichess" title="Analyze on Lichess" className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-white transition-transform hover:-translate-y-0.5 hover:border-[color:var(--library-green)]">
                   <img src="/lichess-knight.png" alt="" className="h-7 w-7 object-contain" />
                 </a>
@@ -845,7 +838,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Line</p>
               <ol className="mt-4 flex flex-wrap gap-2">
                 {browseTraceTokens.map((token) => (
-                  <li key={token.key} className={`notation cursor-pointer rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 md:text-[17px] ${browseIndex === token.index + 1 ? 'bg-[color:var(--ink)] text-[color:var(--paper)]' : line.steps[token.index]?.isUserMove ? 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]' : token.hasAnnotation ? 'bg-[color:var(--library-green)]/15 text-[color:var(--library-green)] hover:bg-[color:var(--library-green)]/25' : 'bg-transparent text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-edge)]'}`} onClick={() => setBrowseIndex(token.index + 1)}>
+                  <li key={token.key} className={`notation cursor-pointer rounded-lg px-2.5 py-1 text-[16px] leading-none transition-colors duration-150 md:text-[17px] ${browseIndex === token.index + 1 ? 'bg-[color:var(--ink)] text-[color:var(--paper)]' : line.steps[token.index]?.isUserMove ? 'bg-[color:var(--paper-deep)] text-[color:var(--ink)] hover:bg-[color:var(--paper-edge)]' : token.hasAnnotation ? 'bg-[color:var(--library-green)]/15 text-[color:var(--library-green)] hover:bg-[color:var(--library-green)]/25' : 'bg-transparent text-[color:var(--ink-soft)] hover:bg-[color:var(--paper-edge)]'}`} onClick={() => setBrowseIndex(Math.min(token.index + 1, browseLimit))}>
                     {token.text}
                   </li>
                 ))}

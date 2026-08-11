@@ -91,8 +91,8 @@ export default function TrainPage() {
   const showSelector = courses.length > 1 || repertoires.length > 0;
 
   const filterBar = showSelector ? (
-    <details className="relative mb-4 lg:fixed lg:right-5 lg:top-5 lg:z-30 lg:mb-0">
-      <summary className="ml-auto flex w-fit cursor-pointer list-none items-center gap-2 rounded border border-[color:var(--paper-edge)] bg-[color:var(--surface)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-soft)] shadow-[0_8px_20px_rgba(47,58,50,0.08)] marker:content-none [&::-webkit-details-marker]:hidden">
+    <details className="relative mb-4 lg:absolute lg:right-0 lg:top-0 lg:z-20 lg:mb-0">
+      <summary className="ml-auto flex w-fit cursor-pointer list-none items-center gap-2 rounded border border-[color:var(--paper-edge)] bg-[color:var(--paper)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-soft)] marker:content-none [&::-webkit-details-marker]:hidden">
         Filter
         <span aria-hidden>⌄</span>
       </summary>
