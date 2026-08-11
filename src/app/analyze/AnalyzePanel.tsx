@@ -10,6 +10,7 @@ import {
   GhostButton,
   StatTile,
   EmptyState,
+  PremiumPanel,
 } from '@/components/ui/Premium';
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import dynamic from 'next/dynamic';
@@ -45,6 +46,28 @@ type Source = 'lichess' | 'chesscom';
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const SYNC_COOLDOWN_MS = 4 * 60 * 1000;
+
+function relativeDayLabel(timestamp: number, now = Date.now()) {
+  const target = new Date(timestamp);
+  const today = new Date(now);
+  const targetDay = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
+  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.max(0, Math.floor((todayDay - targetDay) / 86_400_000));
+
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days === 2) return 'Day before yesterday';
+  return `${days} days ago`;
+}
+
+function ClockIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v5l3.25 2" />
+    </svg>
+  );
+}
 
 function summarizeRows(rows: GameAnalysisRow[]): AnalyzeBatchResult {
   const totals = { inBook: 0, leftBook: 0, noRepertoire: 0, parseError: 0 };
@@ -108,7 +131,7 @@ export function AnalyzePanel({
   const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
-    const t = window.setInterval(() => setNowMs(Date.now()), 1000);
+    const t = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(t);
   }, []);
 
@@ -331,54 +354,46 @@ export function AnalyzePanel({
         )
       ) : (
         <>
-      <div className="border border-[color:var(--paper-edge)] bg-[color:var(--paper-shade)] px-5 py-5 md:px-7 md:py-6">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
-          Source · § 1
-        </p>
-        <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-4">
-          <SourceToggle
-            value={source}
-            onChange={setSource}
-            hasLichess={hasLichess}
-            hasChessCom={hasChessCom}
-          />
-          <LimitToggle value={limit} onChange={setLimit} />
-          <div className="flex items-center gap-3">
-            <PremiumButton
-              type="button"
-              onClick={onAnalyze}
-              disabled={pending || !username || syncBlocked}
-            >
-              {pending ? 'Analyzing…' : syncBlocked ? `Wait ${Math.ceil(remainingMs / 1000)}s` : 'Analyze'}
-            </PremiumButton>
-            {!username && (
-              <SecondaryButton href="/settings">Add username</SecondaryButton>
+      <PremiumPanel innerClassName="p-5 md:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[color:var(--paper-rule)] pb-5">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
+              Game source
+            </p>
+            {username && (
+              <p className="mt-2 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
+                Last <span className="tabular-nums">{limit}</span> games for{' '}
+                <span className="font-display not-italic text-[color:var(--ink)]">{username}</span>
+                {' '}on {source === 'lichess' ? 'Lichess' : 'Chess.com'}.
+              </p>
             )}
           </div>
+          {lastSyncedAt && (
+            <span
+              title={new Date(lastSyncedAt).toLocaleString()}
+              className="inline-flex items-center gap-2 rounded-full border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[color:var(--ink-soft)]"
+            >
+              <ClockIcon /> Synced {relativeDayLabel(lastSyncedAt)}
+            </span>
+          )}
         </div>
-        {username && (
-          <p className="mt-4 font-display-italic text-[14px] text-[color:var(--ink-soft)]">
-            Pulling last <span className="tabular-nums">{limit}</span> games for{' '}
-            <span className="font-display not-italic text-[color:var(--ink)]">
-              {username}
-            </span>{' '}
-            on {source === 'lichess' ? 'Lichess' : 'Chess.com'}.
-          </p>
-        )}
-        {lastSyncedAt && (
-          <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
-            Last sync: {new Date(lastSyncedAt).toLocaleString()}
-          </p>
-        )}
-        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
+        <div className="mt-5 flex flex-wrap items-end gap-x-8 gap-y-5">
+          <SourceToggle value={source} onChange={setSource} hasLichess={hasLichess} hasChessCom={hasChessCom} />
+          <LimitToggle value={limit} onChange={setLimit} />
+          <div className="flex items-center gap-3">
+            <PremiumButton type="button" onClick={onAnalyze} disabled={pending || !username || syncBlocked}>
+              {pending ? 'Analyzing…' : syncBlocked ? `Wait ${Math.ceil(remainingMs / 1000)}s` : 'Analyze games'}
+            </PremiumButton>
+            {!username && <SecondaryButton href="/settings">Add username</SecondaryButton>}
+          </div>
+        </div>
+        <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)]">
           Sync limit: once every 4 minutes.
         </p>
         {error && (
-          <p className="mt-4 border-l-2 border-[color:var(--margin-red)] pl-3 font-mono text-[11px] text-[color:var(--margin-red)]">
-            {error}
-          </p>
+          <p className="mt-4 border-l-2 border-[color:var(--margin-red)] pl-3 font-mono text-[11px] text-[color:var(--margin-red)]">{error}</p>
         )}
-      </div>
+      </PremiumPanel>
 
       {result && <BatchSummary result={result} />}
 
@@ -562,6 +577,7 @@ function GameList({
             month: 'short',
             day: 'numeric',
           });
+          const relativeDate = relativeDayLabel(date.getTime());
           const opp =
             g.deviation.playedAs === 'white' ? g.blackUsername : g.whiteUsername;
           const youResult =
@@ -596,7 +612,12 @@ function GameList({
                     {g.opening ? ` · ${g.opening}` : ''}
                   </p>
                 </div>
-                <DeviationBadge dev={g.deviation} />
+                <div className="flex items-center gap-4">
+                  <span title={dateLabel} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+                    <ClockIcon /> {relativeDate}
+                  </span>
+                  <DeviationBadge dev={g.deviation} />
+                </div>
               </button>
             </li>
           );
