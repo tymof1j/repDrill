@@ -322,6 +322,19 @@ input[type="search"]::-webkit-search-cancel-button {
   animation: pulse-due 2.4s ease-in-out infinite;
 }
 
+/*
+ * A training move changes prompt, trace, feedback and annotations in the
+ * right-hand column.  Chrome's scroll anchoring can treat one of those nodes
+ * as the anchor and compensate by moving the viewport a few pixels.  The
+ * board then appears to jump while the user is making a move.  This surface
+ * deliberately owns a dynamic training layout, so opt it out of anchoring
+ * rather than letting the browser adjust the user's scroll position.
+ */
+.training-scroll-stable,
+.training-scroll-stable * {
+  overflow-anchor: none;
+}
+
 /* ─── Reduced motion ──────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

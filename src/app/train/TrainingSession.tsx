@@ -613,7 +613,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   });
 
   return (
-    <AppSurface>
+    <AppSurface className="training-scroll-stable">
       {filterBar}
       <div key={phaseKey} data-training-phase={linePhase} className="contents">
       <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
