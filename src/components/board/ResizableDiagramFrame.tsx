@@ -16,14 +16,14 @@ const DEFAULT_SIZE = 680;
 const STORAGE_KEY = 'repdrill:board-size';
 const LG_GUTTER_MAX = 56;
 const LG_GUTTER_MIN = 20;
-const RIGHT_COLUMN_RESERVE = 420;
-const FRAME_GAP = 32;
+const RIGHT_COLUMN_RESERVE = 360;
+const FRAME_GAP = 24;
 const SHELL_MAX_MIN = 1152; // 72rem
 const SHELL_MAX_BOOST = 420;
 const SHIFT_MAX_PX = 78;
-// Caption, input mode, notation entry and the bottom breathing room must all
-// remain visible beneath the board in a training viewport.
-const VIEWPORT_BOTTOM_RESERVE = 180;
+// Training controls now live beside the board on desktop, so only the frame
+// caption and a small breathing room need to remain visible beneath it.
+const VIEWPORT_BOTTOM_RESERVE = 56;
 
 export function ResizableDiagramFrame({
   children,

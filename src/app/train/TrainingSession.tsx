@@ -11,7 +11,7 @@ const ChessBoard = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="mx-auto aspect-square w-full max-w-none animate-pulse rounded bg-[color:var(--paper-rule)] md:max-w-[480px]" />
+      <div className="mx-auto aspect-square w-full max-w-none animate-pulse rounded bg-[color:var(--paper-rule)]" />
     ),
   },
 );
@@ -672,10 +672,10 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const lichessFen = toCompleteFen(step?.parentFen ?? boardFen).replaceAll(' ', '_');
 
   return (
-    <AppSurface className="training-scroll-stable lg:py-8">
-      {filterBar ? <div className="mb-5 flex min-h-10 items-start justify-end">{filterBar}</div> : null}
+    <AppSurface className="training-surface training-scroll-stable lg:py-5">
+      {filterBar ? <div className="mb-3 flex min-h-9 items-start justify-end">{filterBar}</div> : null}
       <div key={phaseKey} data-training-phase={linePhase} className="contents">
-      <div className="mb-6 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-3 md:grid-cols-[auto_1fr_auto] md:gap-8">
+      <div className="mb-4 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
           Training · Line <span className="font-display italic text-[color:var(--ink)]">{lineIndex + 1}</span> of {lines.length}
         </p>
@@ -697,12 +697,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         </div>
       </div>
 
-      <div className="mb-10 h-px bg-[color:var(--paper-rule)]">
+      <div className="mb-6 h-px bg-[color:var(--paper-rule)]">
         <div className="h-full bg-[color:var(--margin-red)] transition-[width] duration-500 ease-out" style={{ width: `${lineProgress}%` }} />
       </div>
 
-      <div className="grid gap-10 lg:grid-cols-[auto_minmax(420px,1fr)] lg:gap-14">
-        <div>
+      <div className="training-workspace grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] lg:items-start lg:gap-10">
+        <div className="training-board-column min-w-0">
           <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Diagram</p>
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">{phaseLabel}</p>
@@ -710,7 +710,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
 
           <div className="-mx-5 overflow-x-clip md:mx-0">
             <ResizableDiagramFrame
-              className="-mx-2 md:mx-0"
+              className="training-board-frame max-w-full -mx-2 md:mx-0"
               caption={isBrowsing ? `Move ${browseIndex} / ${line.steps.length}` : `Move ${Math.min(questionIndex + 1, userMovesInLine)} / ${userMovesInLine}`}
               fitViewport
             >
@@ -733,8 +733,11 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             </ResizableDiagramFrame>
           </div>
 
+        </div>
+
+        <div className="training-side min-w-0 space-y-8 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:pr-2">
           {isBrowsing && (
-            <div className="mt-6">
+            <div>
               <div className="grid grid-cols-3 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 <button type="button" onClick={() => setBrowseIndex((i) => Math.max(0, i - 1))} disabled={browseIndex === 0} className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:opacity-30">← Back</button>
                 <button type="button" onClick={() => { const next = browseIndex + 1; if (next <= browseLimit) setBrowseIndex(next); }} disabled={browseIndex >= browseLimit} className="px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">Forward →</button>
@@ -743,51 +746,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             </div>
           )}
 
-          {isBrowsing && browseAnnotation && (
-            <section className="mt-4 lg:hidden">
-              <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Annotation</p>
-              <StudyAnnotation text={browseAnnotation} onNotationMove={handleStudyNotationMove} />
-            </section>
-          )}
-
-          {showInputPicker && (
-            <div className="mt-6 space-y-4">
-              <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
-                {(['mouse', 'keyboard'] as const).map((mode) => (
-                  <button key={mode} type="button" onClick={() => { setInputMode(mode); if (mode === 'keyboard') setTimeout(() => notationRef.current?.focus(), 50); }} className={`px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${inputMode === mode ? 'bg-[color:var(--ink)] text-[color:var(--paper)]' : 'text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'}`}>
-                    {mode === 'mouse' ? 'Board' : 'Notation'}
-                  </button>
-                ))}
-              </div>
-              {isDrilling && waitingForUser && inputMode === 'keyboard' && (
-                <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">→</span>
-                  <input ref={notationRef} type="text" value={notationInput} onChange={(e) => { setNotationInput(e.target.value); setNotationError(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleNotationSubmit(); } }} placeholder="e.g. Nf3" className="notation flex-1 bg-transparent text-lg text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none" autoFocus />
-                  <SecondaryButton onClick={handleNotationSubmit}>Play</SecondaryButton>
-                </div>
-              )}
-              {isBrowsing && inputMode === 'keyboard' && (
-                <p className="font-display-italic text-sm text-[color:var(--ink-soft)]">
-                  Notation view selected. Use the move line on the right to inspect the prepared sequence.
-                </p>
-              )}
-              {notationError && (
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <p className="font-display-italic text-sm text-[color:var(--margin-red)]">{notationError}</p>
-                  <Link href="/documentation/notation" target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[5px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)]">What notation is accepted?</Link>
-                </div>
-              )}
-            </div>
-          )}
-
-          {needsManualNext && feedback && (
-            <div className="mt-4">
-              <PremiumButton onClick={continueAfterWrong}>Continue</PremiumButton>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-10">
           <section>
             <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Prompt</p>
             <p className="mt-5 font-display text-3xl font-medium leading-[1.15] tracking-[-0.01em] text-[color:var(--ink)] md:text-4xl">
@@ -822,6 +780,49 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             </p>
           </section>
 
+          {isBrowsing && browseAnnotation && (
+            <section>
+              <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Annotation</p>
+              <StudyAnnotation text={browseAnnotation} onNotationMove={handleStudyNotationMove} />
+            </section>
+          )}
+
+          {showInputPicker && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
+                {(['mouse', 'keyboard'] as const).map((mode) => (
+                  <button key={mode} type="button" onClick={() => { setInputMode(mode); if (mode === 'keyboard') setTimeout(() => notationRef.current?.focus(), 50); }} className={`px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${inputMode === mode ? 'bg-[color:var(--ink)] text-[color:var(--paper)]' : 'text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'}`}>
+                    {mode === 'mouse' ? 'Board' : 'Notation'}
+                  </button>
+                ))}
+              </div>
+              {isDrilling && waitingForUser && inputMode === 'keyboard' && (
+                <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">→</span>
+                  <input ref={notationRef} type="text" value={notationInput} onChange={(e) => { setNotationInput(e.target.value); setNotationError(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleNotationSubmit(); } }} placeholder="e.g. Nf3" className="notation flex-1 bg-transparent text-lg text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none" autoFocus />
+                  <SecondaryButton onClick={handleNotationSubmit}>Play</SecondaryButton>
+                </div>
+              )}
+              {isBrowsing && inputMode === 'keyboard' && (
+                <p className="font-display-italic text-sm text-[color:var(--ink-soft)]">
+                  Notation view selected. Use the move line on the right to inspect the prepared sequence.
+                </p>
+              )}
+              {notationError && (
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <p className="font-display-italic text-sm text-[color:var(--margin-red)]">{notationError}</p>
+                  <Link href="/documentation/notation" target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)] underline decoration-[color:var(--paper-edge)] decoration-1 underline-offset-[5px] transition-colors duration-200 hover:text-[color:var(--library-green)] hover:decoration-[color:var(--library-green)]">What notation is accepted?</Link>
+                </div>
+              )}
+            </div>
+          )}
+
+          {needsManualNext && feedback && (
+            <div>
+              <PremiumButton onClick={continueAfterWrong}>Continue</PremiumButton>
+            </div>
+          )}
+
           {feedback && (
             <section className={`border-l-2 pl-4 ${feedback.type === 'correct' ? 'border-[color:var(--library-green)]' : 'border-[color:var(--margin-red)]'}`}>
               <p className={`font-mono text-[10px] uppercase tracking-[0.22em] ${feedback.type === 'correct' ? 'text-[color:var(--library-green)]' : 'text-[color:var(--margin-red)]'}`}>
@@ -854,14 +855,10 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             </section>
           )}
 
-          {((isBrowsing && browseAnnotation) || (isDrilling && showAnnotation && drillMarkup.text)) && (
+          {(isDrilling && showAnnotation && drillMarkup.text) && (
             <section>
               <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">Annotation</p>
-            {isBrowsing ? (
-              <StudyAnnotation text={browseAnnotation ?? ''} onNotationMove={handleStudyNotationMove} />
-            ) : (
               <p data-no-translate className="marginalia mt-4 text-[15px] leading-relaxed">{drillMarkup.text}</p>
-            )}
             </section>
           )}
 
