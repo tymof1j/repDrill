@@ -42,6 +42,12 @@ export function WoodpeckerSectionCards() {
         const missed = knownMissed + unresolvedMissed;
         const percent = Math.min(100, Math.round((solved / range.count) * 100));
         const activeSet = progress?.setSize === range.count && section.id === 'easy';
+        const nextExercise = findNextExercise(
+          range.first,
+          range.last,
+          progress?.position,
+          progress?.solved ?? [],
+        );
 
         return (
           <section
@@ -81,11 +87,28 @@ export function WoodpeckerSectionCards() {
 
             <div className="mt-6 flex items-center justify-between gap-4">
               <span className="font-mono text-xs text-[color:var(--ink-faint)]">{range.count} positions</span>
-              <SecondaryButton href={`/train/puzzles/woodpecker?n=${range.first}`}>Open set</SecondaryButton>
+              <SecondaryButton href={`/train/puzzles/woodpecker?n=${nextExercise}`}>Open set</SecondaryButton>
             </div>
           </section>
         );
       })}
     </div>
   );
+}
+
+function findNextExercise(
+  first: number,
+  last: number,
+  position: number | undefined,
+  solved: number[],
+) {
+  const solvedSet = new Set(solved);
+  const cursor = Math.min(last, Math.max(first, position ?? first));
+  for (let exercise = cursor; exercise <= last; exercise += 1) {
+    if (!solvedSet.has(exercise)) return exercise;
+  }
+  for (let exercise = first; exercise < cursor; exercise += 1) {
+    if (!solvedSet.has(exercise)) return exercise;
+  }
+  return first;
 }
