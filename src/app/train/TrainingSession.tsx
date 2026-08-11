@@ -83,6 +83,8 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const [notationError, setNotationError] = useState<string | null>(null);
   const [needsManualNext, setNeedsManualNext] = useState(false);
   const [tracePreviewIndex, setTracePreviewIndex] = useState<number | null>(null);
+  // The post-answer solution navigator must not move the active drill cursor.
+  const [solutionPreviewIndex, setSolutionPreviewIndex] = useState<number | null>(null);
   const [queuedPremove, setQueuedPremove] = useState<{ from: string; to: string } | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
@@ -194,6 +196,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setNotationError(null);
     setNeedsManualNext(false);
     setTracePreviewIndex(null);
+    setSolutionPreviewIndex(null);
     setQueuedPremove(null);
     setLinePhase(studyMode || line.isInfoOnly || line.isNew ? 'browse' : 'drill');
   }, [configuredQuizPasses, line, lineIndex, studyMode]);
@@ -306,6 +309,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         setNotationInput('');
         setNotationError(null);
         setTracePreviewIndex(null);
+        setSolutionPreviewIndex(currentStepIndex + 1);
 
         if (correct) {
           const hasStudyMarkup = Boolean(
@@ -456,6 +460,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setFeedback(null);
     setShowAnnotation(false);
     setTracePreviewIndex(null);
+    setSolutionPreviewIndex(null);
     if (!inErrorRecovery) {
       setQuestionIndex((i) => i + 1);
     }
@@ -646,6 +651,18 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
       ),
     };
   });
+  const shownSolutionPly = Math.min(
+    Math.max(solutionPreviewIndex ?? currentStepIndex + 1, 0),
+    line.steps.length,
+  );
+  const showSolutionPly = (ply: number) => {
+    const nextPly = Math.min(Math.max(ply, 0), line.steps.length);
+    const shownStep = nextPly > 0 ? line.steps[nextPly - 1] : undefined;
+    setSolutionPreviewIndex(nextPly);
+    setBoardFen(toCompleteFen(shownStep?.childFen ?? line.steps[0]?.parentFen));
+    setLastMoveUci(shownStep ? [shownStep.uci.slice(0, 2), shownStep.uci.slice(2, 4)] : undefined);
+  };
+  const lichessFen = toCompleteFen(step?.parentFen ?? boardFen).replaceAll(' ', '_');
 
   return (
     <AppSurface className="training-scroll-stable">
@@ -798,6 +815,16 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                 {feedback.type === 'correct' ? '✓ Correct' : '✗ Departure from prep'}
               </p>
               <p className="notation mt-2 text-[15px] text-[color:var(--ink)]">{feedback.text}</p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="inline-flex overflow-hidden rounded-md border border-[color:var(--paper-edge)]">
+                  <button type="button" onClick={() => showSolutionPly(shownSolutionPly - 1)} disabled={shownSolutionPly === 0} aria-label="Previous solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">←</button>
+                  <span className="border-x border-[color:var(--paper-edge)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Solution {shownSolutionPly}/{line.steps.length}</span>
+                  <button type="button" onClick={() => showSolutionPly(shownSolutionPly + 1)} disabled={shownSolutionPly >= line.steps.length} aria-label="Next solution move" className="px-3 py-2 font-mono text-sm transition-colors hover:bg-[color:var(--paper-deep)] disabled:cursor-not-allowed disabled:opacity-30">→</button>
+                </div>
+                <a href={`https://lichess.org/analysis/standard/${lichessFen}?color=${playerColor}`} target="_blank" rel="noreferrer" aria-label="Analyze on Lichess" title="Analyze on Lichess" className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-white transition-transform hover:-translate-y-0.5 hover:border-[color:var(--library-green)]">
+                  <img src="/lichess-knight.png" alt="" className="h-7 w-7 object-contain" />
+                </a>
+              </div>
             </section>
           )}
 

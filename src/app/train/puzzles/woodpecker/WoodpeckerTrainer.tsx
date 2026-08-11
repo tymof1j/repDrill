@@ -238,6 +238,10 @@ export function WoodpeckerTrainer({
     // not accept a second user move against the pre-reply position.
     if (replyTimer.current) return;
 
+    // A hint is intentionally only the first-move arrow. Once the player
+    // starts calculating, remove it and leave the board as their own puzzle.
+    if (hintVisible) setHintVisible(false);
+
     const expected = solution.solutionUci[ply];
     if (!expected) return;
     try {
@@ -304,7 +308,8 @@ export function WoodpeckerTrainer({
   const giveHint = () => {
     markMissed();
     attemptStartedAt.current = Date.now();
-    attemptOpen.current = true;
+    // The initial miss stays in the review queue even if the player now uses
+    // the arrow to solve the rest of the line correctly.
     setHintVisible(true);
   };
 
@@ -386,6 +391,9 @@ export function WoodpeckerTrainer({
             ) : (
               <GhostButton onClick={() => goTo(Math.floor(Math.random() * total) + 1)}>Random</GhostButton>
             )}
+            <button type="button" onClick={openCorrection} className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)] underline decoration-current/30 underline-offset-4 hover:text-[color:var(--library-green)]">
+              Fix solution
+            </button>
           </div>
 
           <div className="overflow-hidden rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-2 shadow-[0_22px_70px_rgba(47,58,50,0.12)]">
@@ -451,10 +459,15 @@ export function WoodpeckerTrainer({
                     href={lichessUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--library-green)] underline decoration-current/30 underline-offset-4"
+                    aria-label="Analyze on Lichess"
+                    title="Analyze on Lichess"
+                    className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-white transition-transform hover:-translate-y-0.5 hover:border-[color:var(--library-green)]"
                   >
-                    Analyse on Lichess ↗
+                    <img src="/lichess-knight.png" alt="" className="h-7 w-7 object-contain" />
                   </a>
+                  <button type="button" onClick={openCorrection} className="font-mono text-[10px] uppercase tracking-[0.15em] text-[color:var(--ink-faint)] underline decoration-current/30 underline-offset-4 hover:text-[color:var(--library-green)]">
+                    Fix solution
+                  </button>
                   {progress.missedCount > 0 && (
                     <button type="button" onClick={reviewMissed} className="font-mono text-[10px] uppercase tracking-[0.15em] text-[color:var(--margin-red)] underline decoration-current/30 underline-offset-4">
                       Review missed ({progress.missedCount})
@@ -472,7 +485,7 @@ export function WoodpeckerTrainer({
                   <a href={lichessUrl} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--library-green)] underline decoration-current/30 underline-offset-4">Analyse on Lichess ↗</a>
                 </div>
                 <button type="button" onClick={openCorrection} className="mt-5 font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--ink-faint)] underline decoration-current/30 underline-offset-4">
-                  Key looks wrong? Open the book and correct it
+                  Fix solution
                 </button>
                 <button type="button" onClick={reveal} className="mt-3 block font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--ink-faint)] underline decoration-current/30 underline-offset-4">
                   Show solution (keeps this in missed)
@@ -487,7 +500,7 @@ export function WoodpeckerTrainer({
                 </p>
                 {hintVisible && firstMove && (
                   <p className="mt-4 rounded-md bg-[color:var(--paper-shade)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--library-green)]">
-                    Hint: look at {firstMove.slice(0, 2)} → {firstMove.slice(2, 4)} · this position is in missed
+                    Hint: look at {firstMove.slice(0, 2)} → {firstMove.slice(2, 4)} · now solve it yourself · this position stays in missed
                   </p>
                 )}
                 <div className="mt-6 flex flex-wrap items-center gap-4">
