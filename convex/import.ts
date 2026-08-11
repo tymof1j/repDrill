@@ -2,7 +2,7 @@ import { internal } from "./_generated/api";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 type ImportedBundle = {
@@ -11,11 +11,15 @@ type ImportedBundle = {
     name?: string;
     color?: "white" | "black";
     description?: string | null;
+    sourceCourseId?: string;
+    sourceUrl?: string;
     chapters?: Array<{
       name?: string;
       chapterType?: "training" | "info_only";
       sortOrder?: number;
       description?: string | null;
+      sourceChapterId?: string;
+      sourceFile?: string;
       moves?: Array<{
         parentFen?: string;
         childFen?: string;
@@ -26,11 +30,151 @@ type ImportedBundle = {
         isMainLine?: boolean;
         moveType?: "repertoire" | "opponent" | "alternative";
         sortOrder?: number;
+        comment?: string | null;
+        annotations?: ImportedAnnotations;
       }>;
     }>;
   }>;
   positions?: Array<{ fen?: string; annotation?: string | null }>;
 };
+
+type ImportedAnnotations = {
+  nags?: number[];
+  directives?: Array<{
+    name: string;
+    args: Record<string, string>;
+    value?: string;
+    raw: string;
+  }>;
+  arrows?: Array<{ start: string; end: string; color?: string; raw?: string }>;
+  circles?: Array<{ square: string; color?: string; raw?: string }>;
+  clocks?: string[];
+};
+
+/**
+ * A duplicate parent+SAN edge can be encountered when several PGN lines
+ * converge on the same position.  Moves are represented by one Convex row,
+ * so merge all metadata from the duplicate instead of silently dropping the
+ * later line's comment, NAGs, drawings, or clock directives.
+ */
+type MoveMetadata = Pick<Doc<"moves">, "comment" | "annotations" | "isMainLine">;
+
+function mergeText(existing?: string, incoming?: string) {
+  const left = existing?.trim();
+  const right = incoming?.trim();
+  if (!right) return existing;
+  if (!left) return incoming;
+  if (left === right) return existing;
+  return `${existing}\n\n${incoming}`;
+}
+
+function mergeUnique<T>(items: T[], key: (item: T) => string) {
+  const seen = new Set<string>();
+  const merged: T[] = [];
+  for (const item of items) {
+    const itemKey = key(item);
+    if (seen.has(itemKey)) continue;
+    seen.add(itemKey);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function mergeAnnotations(
+  existing?: ImportedAnnotations | Doc<"moves">["annotations"],
+  incoming?: ImportedAnnotations,
+): ImportedAnnotations | undefined {
+  if (!existing && !incoming) return undefined;
+  const current = existing as ImportedAnnotations | undefined;
+  const merged: ImportedAnnotations = {};
+
+  const nags = mergeUnique([...(current?.nags ?? []), ...(incoming?.nags ?? [])], String);
+  if (nags.length > 0) merged.nags = nags;
+
+  const directives = mergeUnique(
+    [...(current?.directives ?? []), ...(incoming?.directives ?? [])],
+    (directive) => directive.raw,
+  );
+  if (directives.length > 0) merged.directives = directives;
+
+  const arrows = mergeUnique(
+    [...(current?.arrows ?? []), ...(incoming?.arrows ?? [])],
+    (arrow) => `${arrow.start}:${arrow.end}:${arrow.color ?? ""}:${arrow.raw ?? ""}`,
+  );
+  if (arrows.length > 0) merged.arrows = arrows;
+
+  const circles = mergeUnique(
+    [...(current?.circles ?? []), ...(incoming?.circles ?? [])],
+    (circle) => `${circle.square}:${circle.color ?? ""}:${circle.raw ?? ""}`,
+  );
+  if (circles.length > 0) merged.circles = circles;
+
+  const clocks = mergeUnique([...(current?.clocks ?? []), ...(incoming?.clocks ?? [])], String);
+  if (clocks.length > 0) merged.clocks = clocks;
+
+  return merged;
+}
+
+async function mergeDuplicateMove(
+  ctx: MutationCtx,
+  existing: MoveMetadata & Pick<Doc<"moves">, "_id">,
+  incoming: {
+    comment?: string;
+    annotations?: ImportedAnnotations;
+    isMainLine: boolean;
+  },
+) {
+  const comment = mergeText(existing.comment, incoming.comment);
+  const annotations = mergeAnnotations(existing.annotations, incoming.annotations);
+  const patch: {
+    comment?: string;
+    annotations?: ImportedAnnotations;
+    isMainLine?: boolean;
+  } = {};
+  if (comment && comment !== existing.comment) patch.comment = comment;
+  if (annotations && JSON.stringify(annotations) !== JSON.stringify(existing.annotations ?? undefined)) {
+    patch.annotations = annotations;
+  }
+  if (incoming.isMainLine && !existing.isMainLine) patch.isMainLine = true;
+  if (Object.keys(patch).length > 0) {
+    // Keep the in-memory entry in sync as more duplicate lines converge on
+    // this edge later in the same mutation/batch.  Otherwise a third line
+    // would merge against stale metadata and overwrite the second line's
+    // contribution in the database.
+    if (patch.comment !== undefined) existing.comment = patch.comment;
+    if (patch.annotations !== undefined) existing.annotations = patch.annotations;
+    if (patch.isMainLine !== undefined) existing.isMainLine = patch.isMainLine;
+    await ctx.db.patch(existing._id, patch);
+  }
+}
+
+const pgnArrowValidator = v.object({
+  start: v.string(),
+  end: v.string(),
+  color: v.optional(v.string()),
+  raw: v.optional(v.string()),
+});
+
+const pgnCircleValidator = v.object({
+  square: v.string(),
+  color: v.optional(v.string()),
+  raw: v.optional(v.string()),
+});
+
+const pgnDirectiveValidator = v.object({
+  name: v.string(),
+  args: v.record(v.string(), v.string()),
+  value: v.optional(v.string()),
+  raw: v.string(),
+});
+
+const pgnAnnotationsValidator = v.object({
+  nags: v.optional(v.array(v.number())),
+  directives: v.optional(v.array(pgnDirectiveValidator)),
+  arrows: v.optional(v.array(pgnArrowValidator)),
+  circles: v.optional(v.array(pgnCircleValidator)),
+  clocks: v.optional(v.array(v.string())),
+});
 
 /**
  * Import pre-parsed moves into a chapter.
@@ -55,6 +199,7 @@ export const importTreeIntoChapter = mutation({
         colorToMove: v.union(v.literal("white"), v.literal("black")),
         comment: v.optional(v.string()),
         isMainLine: v.boolean(),
+        annotations: v.optional(pgnAnnotationsValidator),
       })
     ),
   },
@@ -120,7 +265,7 @@ export const importTreeIntoChapter = mutation({
 
     // Chapter was just created in this mutation, so we only need to dedup
     // against moves we insert in this same loop. Track in memory.
-    const seenMoves = new Set<string>();
+    const seenMoves = new Map<string, MoveMetadata & Pick<Doc<"moves">, "_id">>();
     let movesCreated = 0;
     let movesSkipped = 0;
 
@@ -129,11 +274,12 @@ export const importTreeIntoChapter = mutation({
       const childId = await upsertPosition(mv.fen);
 
       const dupKey = `${parentId}:${mv.san}`;
-      if (seenMoves.has(dupKey)) {
+      const existingMove = seenMoves.get(dupKey);
+      if (existingMove) {
+        await mergeDuplicateMove(ctx, existingMove, mv);
         movesSkipped++;
         continue;
       }
-      seenMoves.add(dupKey);
 
       // Determine move type: whose move is this?
       const colorThatMoved: "white" | "black" =
@@ -141,7 +287,7 @@ export const importTreeIntoChapter = mutation({
       const moveType =
         colorThatMoved === args.courseColor ? "repertoire" : "opponent";
 
-      await ctx.db.insert("moves", {
+      const moveId = await ctx.db.insert("moves", {
         chapterId,
         parentPositionId: parentId,
         childPositionId: childId,
@@ -152,6 +298,14 @@ export const importTreeIntoChapter = mutation({
         isMainLine: mv.isMainLine,
         moveType,
         sortOrder: index,
+        ...(mv.comment ? { comment: mv.comment } : {}),
+        ...(mv.annotations ? { annotations: mv.annotations } : {}),
+      });
+      seenMoves.set(dupKey, {
+        _id: moveId,
+        comment: mv.comment,
+        annotations: mv.annotations,
+        isMainLine: mv.isMainLine,
       });
       movesCreated++;
     }
@@ -169,6 +323,7 @@ const importMoveValidator = v.object({
   colorToMove: v.union(v.literal("white"), v.literal("black")),
   comment: v.optional(v.string()),
   isMainLine: v.boolean(),
+  annotations: v.optional(pgnAnnotationsValidator),
 });
 
 const MOVE_CHUNK_SIZE = 250;
@@ -191,7 +346,10 @@ export const listCourseImports = query({
       .query("courseImports")
       .withIndex("by_course_and_created_at", (q) => q.eq("courseId", args.courseId))
       .order("desc")
-      .take(5);
+      // Archive imports are intentionally enqueued one chapter at a time to
+      // stay below Convex's function payload ceiling.  Keep enough recent
+      // rows to report the full archive rather than only the last five.
+      .take(50);
 
     const items = [];
     for (const item of imports) {
@@ -206,6 +364,8 @@ export const listCourseImports = query({
           _id: ch._id,
           chapterName: ch.chapterName,
           chapterType: ch.chapterType,
+          sourceChapterId: ch.sourceChapterId ?? null,
+          sourceFile: ch.sourceFile ?? null,
           status: ch.status,
           totalMoves: ch.totalMoves,
           processedMoves: ch.processedMoves,
@@ -228,6 +388,8 @@ export const createCourseImport = mutation({
         sortOrder: v.number(),
         courseColor: v.union(v.literal("white"), v.literal("black")),
         rootFen: v.string(),
+        sourceChapterId: v.optional(v.string()),
+        sourceFile: v.optional(v.string()),
         moves: v.array(importMoveValidator),
       }),
     ),
@@ -239,19 +401,50 @@ export const createCourseImport = mutation({
     if (!course || course.userId !== userId) throw new Error("Course not found");
     if (args.chapters.length === 0) throw new Error("No chapters to import");
 
+    // A source chapter id is a stable idempotency key for archive imports.
+    // Concurrent/retried requests should not create another chapter (or a
+    // second background job) once the first request has committed its row.
+    const chaptersToQueue = [];
+    const sourceChapterIdsSeen = new Set<string>();
+    for (const chapter of args.chapters) {
+      if (!chapter.sourceChapterId) {
+        chaptersToQueue.push(chapter);
+        continue;
+      }
+      if (sourceChapterIdsSeen.has(chapter.sourceChapterId)) continue;
+      sourceChapterIdsSeen.add(chapter.sourceChapterId);
+      const existing = await ctx.db
+        .query("courseImportChapters")
+        .withIndex("by_course_and_source_chapter_id", (q) =>
+          q.eq("courseId", args.courseId).eq("sourceChapterId", chapter.sourceChapterId!),
+        )
+        .first();
+      if (!existing) chaptersToQueue.push(chapter);
+    }
+
+    if (chaptersToQueue.length === 0) {
+      const existingImport = await ctx.db
+        .query("courseImports")
+        .withIndex("by_course_and_created_at", (q) => q.eq("courseId", args.courseId))
+        .order("desc")
+        .first();
+      if (!existingImport) throw new Error("Import already exists but its progress row is missing");
+      return existingImport._id;
+    }
+
     const now = Date.now();
     const importId = await ctx.db.insert("courseImports", {
       courseId: args.courseId,
       userId,
       status: "queued",
-      totalChapters: args.chapters.length,
+      totalChapters: chaptersToQueue.length,
       completedChapters: 0,
       failedChapters: 0,
       createdAt: now,
       updatedAt: now,
     });
 
-    for (const chapter of args.chapters) {
+    for (const chapter of chaptersToQueue) {
       const chapterImportId = await ctx.db.insert("courseImportChapters", {
         importId,
         courseId: args.courseId,
@@ -261,6 +454,8 @@ export const createCourseImport = mutation({
         sortOrder: chapter.sortOrder,
         courseColor: chapter.courseColor,
         rootFen: chapter.rootFen,
+        ...(chapter.sourceChapterId ? { sourceChapterId: chapter.sourceChapterId } : {}),
+        ...(chapter.sourceFile ? { sourceFile: chapter.sourceFile } : {}),
         status: "queued",
         totalMoves: chapter.moves.length,
         processedMoves: 0,
@@ -390,6 +585,8 @@ export const processImportChapterBatch = internalMutation({
         name: chapterImport.chapterName,
         chapterType: chapterImport.chapterType,
         sortOrder: chapterImport.sortOrder,
+        ...(chapterImport.sourceChapterId ? { sourceChapterId: chapterImport.sourceChapterId } : {}),
+        ...(chapterImport.sourceFile ? { sourceFile: chapterImport.sourceFile } : {}),
         createdAt: Date.now(),
       });
       await ctx.db.patch(chapterImport._id, { createdChapterId: chapterId, updatedAt: Date.now() });
@@ -412,7 +609,10 @@ export const processImportChapterBatch = internalMutation({
       const existing = await ctx.db
         .query("positions")
         .withIndex("by_user_fen", (q) => q.eq("userId", importUserId).eq("fen", fen))
-        .unique();
+        // Legacy imports may already contain duplicate position rows.  A
+        // retry should reuse one deterministically instead of throwing from
+        // `.unique()` and leaving the chapter stuck in processing.
+        .first();
       if (existing) {
         if (annotationsByFen.has(fen) && !existing.annotation) {
           await ctx.db.patch(existing._id, { annotation: annotationsByFen.get(fen) });
@@ -439,17 +639,28 @@ export const processImportChapterBatch = internalMutation({
       .query("moves")
       .withIndex("by_chapter", (q) => q.eq("chapterId", chapterId))
       .collect();
-    const seenMoves = new Set(existingMoves.map((m) => `${m.parentPositionId}:${m.san}`));
+    const seenMoves = new Map<string, MoveMetadata & Pick<Doc<"moves">, "_id">>();
+    for (const existingMove of existingMoves) {
+      seenMoves.set(`${existingMove.parentPositionId}:${existingMove.san}`, {
+        _id: existingMove._id,
+        comment: existingMove.comment,
+        annotations: existingMove.annotations,
+        isMainLine: existingMove.isMainLine,
+      });
+    }
 
     for (const [i, mv] of batch.entries()) {
       const parentId = await ensurePosition(mv.parentFen);
       const childId = await ensurePosition(mv.fen);
       const dupKey = `${parentId}:${mv.san}`;
-      if (seenMoves.has(dupKey)) continue;
-      seenMoves.add(dupKey);
+      const existingMove = seenMoves.get(dupKey);
+      if (existingMove) {
+        await mergeDuplicateMove(ctx, existingMove, mv);
+        continue;
+      }
       const colorThatMoved: "white" | "black" = mv.colorToMove === "white" ? "black" : "white";
       const moveType = colorThatMoved === courseColor ? "repertoire" : "opponent";
-      await ctx.db.insert("moves", {
+      const moveId = await ctx.db.insert("moves", {
         chapterId,
         parentPositionId: parentId,
         childPositionId: childId,
@@ -460,6 +671,14 @@ export const processImportChapterBatch = internalMutation({
         isMainLine: mv.isMainLine,
         moveType,
         sortOrder: args.offset + i,
+        ...(mv.comment ? { comment: mv.comment } : {}),
+        ...(mv.annotations ? { annotations: mv.annotations } : {}),
+      });
+      seenMoves.set(dupKey, {
+        _id: moveId,
+        comment: mv.comment,
+        annotations: mv.annotations,
+        isMainLine: mv.isMainLine,
       });
     }
 
@@ -555,6 +774,10 @@ export const importBundle = mutation({
         .withIndex("by_user_fen", (q) => q.eq("userId", authedUserId).eq("fen", fen))
         .first();
       if (existing) {
+        const annotation = annotations.get(fen);
+        if (annotation && !existing.annotation) {
+          await ctx.db.patch(existing._id, { annotation });
+        }
         const existingId = existing._id as Id<"positions">;
         fenToId.set(fen, existingId);
         return existingId;
@@ -581,6 +804,8 @@ export const importBundle = mutation({
         name: course.name,
         color: course.color,
         description: course.description ?? undefined,
+        ...(course.sourceCourseId ? { sourceCourseId: course.sourceCourseId } : {}),
+        ...(course.sourceUrl ? { sourceUrl: course.sourceUrl } : {}),
         isPublic: false,
         createdAt: now,
         updatedAt: now,
@@ -594,15 +819,28 @@ export const importBundle = mutation({
           chapterType: chapter.chapterType ?? "training",
           sortOrder: chapter.sortOrder ?? chapterIndex,
           description: chapter.description ?? undefined,
+          ...(chapter.sourceChapterId ? { sourceChapterId: chapter.sourceChapterId } : {}),
+          ...(chapter.sourceFile ? { sourceFile: chapter.sourceFile } : {}),
           createdAt: now,
         });
         chaptersCreated++;
 
+        const seenMoves = new Map<string, MoveMetadata & Pick<Doc<"moves">, "_id">>();
         for (const [moveIndex, move] of (chapter.moves ?? []).entries()) {
           if (!move.parentFen || !move.childFen || !move.san || !move.uci) continue;
           const parentPositionId = await upsertPosition(move.parentFen);
           const childPositionId = await upsertPosition(move.childFen);
-          await ctx.db.insert("moves", {
+          const dupKey = `${parentPositionId}:${move.san}`;
+          const existingMove = seenMoves.get(dupKey);
+          if (existingMove) {
+            await mergeDuplicateMove(ctx, existingMove, {
+              comment: move.comment ?? undefined,
+              annotations: move.annotations,
+              isMainLine: move.isMainLine ?? true,
+            });
+            continue;
+          }
+          const moveId = await ctx.db.insert("moves", {
             chapterId,
             parentPositionId,
             childPositionId,
@@ -613,6 +851,14 @@ export const importBundle = mutation({
             isMainLine: move.isMainLine ?? true,
             moveType: move.moveType ?? "repertoire",
             sortOrder: move.sortOrder ?? moveIndex,
+            ...(move.comment ? { comment: move.comment } : {}),
+            ...(move.annotations ? { annotations: move.annotations } : {}),
+          });
+          seenMoves.set(dupKey, {
+            _id: moveId,
+            comment: move.comment ?? undefined,
+            annotations: move.annotations,
+            isMainLine: move.isMainLine ?? true,
           });
           movesCreated++;
         }

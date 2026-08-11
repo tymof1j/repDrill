@@ -8,28 +8,25 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { parsePgn } from '@/lib/chess/pgn-parser';
 import { buildTree } from '@/lib/chess/tree';
-import type { PgnMoveNode } from '@/lib/chess/pgn-parser';
+import type { PgnMoveAnnotations } from '@/lib/chess/pgn-parser';
 
-const INFO_HINT_WORDS = ['idea', 'ideas', 'game', 'games'];
-
-function looksLikeInfoContent(value: string | undefined) {
-  if (!value) return false;
-  const lower = value.toLowerCase();
-  return INFO_HINT_WORDS.some((word) => lower.includes(word));
+/**
+ * Only explicit PGN metadata opts a chapter into info-only mode. Prose such
+ * as "the idea" or "in this game" is common in opening notes and must not
+ * silently turn hundreds of training lines into read-only material.
+ */
+function isExplicitInfoOnly(headers: Record<string, string>, chapterName: string, filename: string) {
+  const explicit = [headers.ChapterType, headers.Mode, headers.Type, headers.InfoOnly]
+    .filter(Boolean)
+    .map((value) => value!.trim().toLowerCase());
+  if (explicit.some((value) => value === 'info_only' || value === 'info-only' || value === 'info' || value === 'true')) {
+    return true;
+  }
+  return chapterName.trim().toLowerCase() === 'introduction' || filename.trim().toLowerCase() === 'introduction';
 }
 
 function filenameWithoutExt(name: string) {
   return name.replace(/\.[^.]+$/, '').trim();
-}
-
-function gameContainsInfoHints(nodes: PgnMoveNode[]): boolean {
-  for (const node of nodes) {
-    if (looksLikeInfoContent(node.comment)) return true;
-    for (const variation of node.variations) {
-      if (gameContainsInfoHints(variation)) return true;
-    }
-  }
-  return false;
 }
 
 async function requireToken() {
@@ -94,6 +91,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
       moveNumber: number;
       colorToMove: 'white' | 'black';
       comment?: string;
+      annotations?: PgnMoveAnnotations;
       isMainLine: boolean;
     }>;
   }> = [];
@@ -101,6 +99,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
   let invalidGames = 0;
   for (const [i, game] of games.entries()) {
     const chapterNameFromHeaders =
+      game.headers.Chapter ||
       game.headers.ChapterName ||
       game.headers.Event ||
       game.headers.White;
@@ -108,9 +107,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
       chapterNameFromHeaders && chapterNameFromHeaders !== '?'
         ? chapterNameFromHeaders
         : fallbackFilename || `Chapter ${i + 1}`;
-    const chapterType: 'training' | 'info_only' = looksLikeInfoContent(fallbackFilename) ||
-      Object.values(game.headers).some((value) => looksLikeInfoContent(value))
-      || gameContainsInfoHints(game.moves)
+    const chapterType: 'training' | 'info_only' = isExplicitInfoOnly(game.headers, chapterName, fallbackFilename)
       ? 'info_only'
       : 'training';
 
@@ -130,6 +127,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
           moveNumber: m.moveNumber,
           colorToMove: m.colorToMove,
           comment: m.comment,
+          annotations: m.annotations,
           isMainLine: m.isMainLine,
         })),
       });

@@ -9,6 +9,7 @@ import {
   reviewCards,
   reviewLogs,
 } from '@/lib/db/schema';
+import type { PgnMoveAnnotations } from '@/lib/chess/pgn-parser';
 
 const STARTING_FEN_NORMALIZED =
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
@@ -174,6 +175,9 @@ export type ExportBundle = {
         isMainLine: boolean;
         moveType: 'repertoire' | 'opponent' | 'alternative';
         sortOrder: number;
+        /** Optional metadata accepted from lossless PGN/course archives. */
+        comment?: string | null;
+        annotations?: PgnMoveAnnotations | null;
       }>;
     }>;
   }>;

@@ -208,6 +208,48 @@ export const create = mutation({
   },
 });
 
+/**
+ * Return the user's deterministic course for an external archive, creating it
+ * exactly once.  One-click fixture imports use this instead of matching by
+ * display name, which keeps retries idempotent when a request times out after
+ * Convex has already committed the course row.
+ */
+export const ensureImported = mutation({
+  args: {
+    sourceCourseId: v.string(),
+    name: v.string(),
+    color: v.union(v.literal("white"), v.literal("black")),
+    description: v.optional(v.string()),
+    sourceUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const existing = await ctx.db
+      .query("courses")
+      .withIndex("by_user_and_source_course_id", (q) =>
+        q.eq("userId", userId).eq("sourceCourseId", args.sourceCourseId),
+      )
+      .first();
+    if (existing) return { courseId: existing._id, created: false };
+
+    const now = Date.now();
+    const courseId = await ctx.db.insert("courses", {
+      userId,
+      name: args.name,
+      color: args.color,
+      description: args.description,
+      sourceCourseId: args.sourceCourseId,
+      sourceUrl: args.sourceUrl,
+      isPublic: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { courseId, created: true };
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("courses") },
   handler: async (ctx, args) => {

@@ -11,6 +11,13 @@ import {
   reviewLogs,
 } from '@/lib/db/schema';
 import type { ExportBundle } from './export';
+import { serializeMoveAnnotations } from '@/lib/chess/pgn-parser';
+import type { PgnMoveAnnotations } from '@/lib/chess/pgn-parser';
+
+type ImportedMove = ExportBundle['courses'][number]['chapters'][number]['moves'][number] & {
+  comment?: string | null;
+  annotations?: PgnMoveAnnotations | null;
+};
 
 export type ImportSummary = {
   coursesCreated: number;
@@ -42,13 +49,25 @@ export async function importBundle(
   // Pre-load existing positions to dedupe.
   const fenToId = new Map<string, string>();
   const existing = await db
-    .select({ id: positions.id, fen: positions.fen })
+    .select({ id: positions.id, fen: positions.fen, annotation: positions.annotation })
     .from(positions)
     .where(eq(positions.userId, targetUserId));
-  for (const p of existing) fenToId.set(p.fen, p.id);
+  const annotationByFen = new Map<string, string>();
+  for (const p of existing) {
+    fenToId.set(p.fen, p.id);
+    if (p.annotation) annotationByFen.set(p.fen, p.annotation);
+  }
 
   // Insert annotations for known FENs that the bundle has, plus new FENs.
   for (const p of bundle.positions) {
+    if (p.annotation) {
+      const previous = annotationByFen.get(p.fen);
+      annotationByFen.set(p.fen, p.annotation);
+      const existingId = fenToId.get(p.fen);
+      if (existingId && !previous) {
+        await db.update(positions).set({ annotation: p.annotation }).where(eq(positions.id, existingId));
+      }
+    }
     if (fenToId.has(p.fen)) continue;
     const id = nanoid(12);
     await db.insert(positions).values({
@@ -91,10 +110,22 @@ export async function importBundle(
       });
       summary.chaptersCreated++;
 
-      for (const m of ch.moves) {
+      for (const m of ch.moves as ImportedMove[]) {
         const parentId = fenToId.get(m.parentFen);
         const childId = fenToId.get(m.childFen);
         if (!parentId || !childId) continue;
+        const metadata = [m.comment ?? '', serializeMoveAnnotations(m.annotations ?? undefined)]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        if (metadata) {
+          const current = annotationByFen.get(m.childFen) ?? '';
+          const merged = current && !current.includes(metadata) ? `${current}\n\n${metadata}` : (current || metadata);
+          if (merged !== current) {
+            annotationByFen.set(m.childFen, merged);
+            await db.update(positions).set({ annotation: merged }).where(eq(positions.id, childId));
+          }
+        }
         const newMoveId = nanoid(12);
         await db.insert(moves).values({
           id: newMoveId,

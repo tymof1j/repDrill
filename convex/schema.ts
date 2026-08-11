@@ -2,6 +2,37 @@ import { defineSchema, defineTable } from "convex/server";
 import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
+// PGN annotations are kept on the move that introduced them.  Keeping these
+// bounded per move avoids putting a growing list on a course/chapter document,
+// while preserving Chessable drawings, NAGs and Lichess clock metadata.
+const pgnArrow = v.object({
+  start: v.string(),
+  end: v.string(),
+  color: v.optional(v.string()),
+  raw: v.optional(v.string()),
+});
+
+const pgnCircle = v.object({
+  square: v.string(),
+  color: v.optional(v.string()),
+  raw: v.optional(v.string()),
+});
+
+const pgnDirective = v.object({
+  name: v.string(),
+  args: v.record(v.string(), v.string()),
+  value: v.optional(v.string()),
+  raw: v.string(),
+});
+
+const pgnAnnotations = v.object({
+  nags: v.optional(v.array(v.number())),
+  directives: v.optional(v.array(pgnDirective)),
+  arrows: v.optional(v.array(pgnArrow)),
+  circles: v.optional(v.array(pgnCircle)),
+  clocks: v.optional(v.array(v.string())),
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -25,12 +56,16 @@ export default defineSchema({
     name: v.string(),
     color: v.union(v.literal('white'), v.literal('black')),
     description: v.optional(v.string()),
+    sourceCourseId: v.optional(v.string()),
+    sourceUrl: v.optional(v.string()),
     isPublic: v.boolean(),
     shareToken: v.optional(v.string()),
     lastChapterReorderAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_user", ["userId"]).index("by_share_token", ["shareToken"]),
+  }).index("by_user", ["userId"])
+    .index("by_user_and_source_course_id", ["userId", "sourceCourseId"])
+    .index("by_share_token", ["shareToken"]),
 
   shareLinks: defineTable({
     ownerId: v.id("users"),
@@ -72,6 +107,8 @@ export default defineSchema({
     chapterType: v.optional(v.union(v.literal("training"), v.literal("info_only"))),
     sortOrder: v.number(),
     description: v.optional(v.string()),
+    sourceChapterId: v.optional(v.string()),
+    sourceFile: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_course", ["courseId"]),
 
@@ -127,6 +164,10 @@ export default defineSchema({
     isMainLine: v.boolean(),
     moveType: v.union(v.literal('repertoire'), v.literal('opponent'), v.literal('alternative')),
     sortOrder: v.number(),
+    // `comment` is duplicated from the child position for line-specific notes;
+    // the position annotation remains the backwards-compatible search field.
+    comment: v.optional(v.string()),
+    annotations: v.optional(pgnAnnotations),
   }).index("by_chapter", ["chapterId"]).index("by_parent", ["parentPositionId"]),
 
   courseImports: defineTable({
@@ -149,6 +190,8 @@ export default defineSchema({
     sortOrder: v.number(),
     courseColor: v.union(v.literal("white"), v.literal("black")),
     rootFen: v.string(),
+    sourceChapterId: v.optional(v.string()),
+    sourceFile: v.optional(v.string()),
     status: v.union(v.literal("queued"), v.literal("processing"), v.literal("done"), v.literal("failed")),
     totalMoves: v.number(),
     processedMoves: v.number(),
@@ -157,7 +200,12 @@ export default defineSchema({
     error: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_import_and_sort_order", ["importId", "sortOrder"]).index("by_course_and_created_at", ["courseId", "createdAt"]),
+  }).index("by_import_and_sort_order", ["importId", "sortOrder"])
+    .index("by_course_and_created_at", ["courseId", "createdAt"])
+    // Archive imports use source chapter ids as an idempotency key.  Keep the
+    // lookup on the import child row so retries can skip chapters that have
+    // already been queued even when their background work is still running.
+    .index("by_course_and_source_chapter_id", ["courseId", "sourceChapterId"]),
 
   courseImportMoveChunks: defineTable({
     chapterImportId: v.id("courseImportChapters"),
@@ -172,6 +220,7 @@ export default defineSchema({
         colorToMove: v.union(v.literal("white"), v.literal("black")),
         comment: v.optional(v.string()),
         isMainLine: v.boolean(),
+        annotations: v.optional(pgnAnnotations),
       }),
     ),
     createdAt: v.number(),

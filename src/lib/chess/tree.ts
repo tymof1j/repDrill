@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js';
 import { normalizeFen } from './fen';
-import type { PgnGame, PgnMoveNode } from './pgn-parser';
+import type { PgnGame, PgnMoveAnnotations, PgnMoveNode } from './pgn-parser';
 
 /** A position in the imported repertoire tree.
  *  `parentFen` = position before this move; `fen` = position after. */
@@ -12,6 +12,7 @@ export type TreeMove = {
   moveNumber: number;
   colorToMove: 'white' | 'black'; // color to move AFTER this move
   comment?: string;
+  annotations?: PgnMoveAnnotations;
   isMainLine: boolean;
 };
 
@@ -21,7 +22,9 @@ export type ImportedTree = {
 };
 
 export function buildTree(game: PgnGame, startFen?: string): ImportedTree {
-  const initial = startFen ? new Chess(startFen) : new Chess();
+  // Respect [FEN] headers for studies and tactics.  The explicit argument is
+  // retained for callers that already resolved a starting position.
+  const initial = new Chess(startFen ?? game.startFen ?? game.headers.FEN ?? undefined);
   const rootFen = normalizeFen(initial.fen());
   const moves: TreeMove[] = [];
   walk(initial, game.moves, moves, true);
@@ -52,6 +55,7 @@ function walk(chess: Chess, nodes: PgnMoveNode[], out: TreeMove[], onMainLine: b
       moveNumber,
       colorToMove: turnAfter,
       comment: node.comment,
+      annotations: node.annotations,
       isMainLine: onMainLine,
     });
 

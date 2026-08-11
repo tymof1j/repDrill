@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { positions, moves } from '@/lib/db/schema';
 import type { ImportedTree } from '@/lib/chess/tree';
+import { serializeMoveAnnotations } from '@/lib/chess/pgn-parser';
 
 /** Insert positions (deduped by userId+fen) and moves for an imported tree. */
 export async function importTreeIntoChapter(params: {
@@ -15,12 +16,19 @@ export async function importTreeIntoChapter(params: {
   const { userId, chapterId, courseColor, tree } = params;
 
   const fenToId = new Map<string, string>();
+  const annotationByFen = new Map<string, string>();
 
   const upsertPosition = async (fen: string, annotation?: string): Promise<string> => {
     const cached = fenToId.get(fen);
     if (cached) {
-      // If we have an annotation now but didn't before, we might want to update it.
-      // But for performance in this loop, we'll skip for now or handle it outside.
+      if (annotation) {
+        const previous = annotationByFen.get(fen) ?? '';
+        const merged = previous && !previous.includes(annotation) ? `${previous}\n\n${annotation}` : (previous || annotation);
+        if (merged !== previous) {
+          annotationByFen.set(fen, merged);
+          await db.update(positions).set({ annotation: merged }).where(eq(positions.id, cached));
+        }
+      }
       return cached;
     }
 
@@ -31,11 +39,14 @@ export async function importTreeIntoChapter(params: {
       .limit(1);
 
     if (existing[0]) {
-      if (annotation && !existing[0].annotation) {
-        await db
-          .update(positions)
-          .set({ annotation })
-          .where(eq(positions.id, existing[0].id));
+      if (existing[0].annotation) annotationByFen.set(fen, existing[0].annotation);
+      if (annotation) {
+        const previous = existing[0].annotation ?? '';
+        const merged = previous && !previous.includes(annotation) ? `${previous}\n\n${annotation}` : (previous || annotation);
+        if (merged !== previous) {
+          await db.update(positions).set({ annotation: merged }).where(eq(positions.id, existing[0].id));
+          annotationByFen.set(fen, merged);
+        }
       }
       fenToId.set(fen, existing[0].id);
       return existing[0].id;
@@ -43,6 +54,7 @@ export async function importTreeIntoChapter(params: {
 
     const id = nanoid(12);
     await db.insert(positions).values({ id, userId, fen, annotation: annotation ?? null });
+    if (annotation) annotationByFen.set(fen, annotation);
     fenToId.set(fen, id);
     return id;
   };
@@ -58,7 +70,9 @@ export async function importTreeIntoChapter(params: {
   for (const [index, mv] of tree.moves.entries()) {
     const before = fenToId.size;
     const parentId = await upsertPosition(mv.parentFen);
-    const childId = await upsertPosition(mv.fen, mv.comment);
+    const structured = serializeMoveAnnotations(mv.annotations);
+    const annotation = [mv.comment, structured].filter(Boolean).join(' ').trim() || undefined;
+    const childId = await upsertPosition(mv.fen, annotation);
     positionsCreated += fenToId.size - before;
 
     const dup = await db
