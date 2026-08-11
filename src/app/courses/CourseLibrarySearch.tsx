@@ -323,22 +323,18 @@ function useBuiltInBookProgress(course: CourseListItem): BookPuzzleProgress | nu
   ));
 
   useEffect(() => {
-    if (!book) {
-      setProgress(null);
-      return;
-    }
+    if (!book) return;
     const refresh = () => setProgress(readBookPuzzleProgress(book));
     const eventName = getBookProgressEventName();
     window.addEventListener(eventName, refresh);
     window.addEventListener('storage', refresh);
-    refresh();
     return () => {
       window.removeEventListener(eventName, refresh);
       window.removeEventListener('storage', refresh);
     };
   }, [book]);
 
-  return progress;
+  return book ? progress : null;
 }
 
 function getBuiltInBookKey(course: CourseListItem): BookTrainingKey | null {

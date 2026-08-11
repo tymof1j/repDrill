@@ -31,7 +31,9 @@ export default function TrainPage() {
   const learnMode = searchParams.get('mode') === 'learn';
 
   const [cardsReady, setCardsReady] = useState(false);
-  const [resumeLineId, setResumeLineId] = useState<string | null>(null);
+  const resumeLineId = learnMode && courseParam && !chapterParam
+    ? readLearnResume(courseParam)
+    : null;
   const [selection, setSelection] = useState<Selection>(() =>
     courseParam
       ? { type: 'course', id: courseParam as Id<'courses'> }
@@ -48,17 +50,6 @@ export default function TrainPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelection(courseParam ? { type: 'course', id: courseParam as Id<'courses'> } : { type: 'all' });
   }, [courseParam]);
-
-  useEffect(() => {
-    if (!learnMode || !courseParam || chapterParam) {
-      setResumeLineId(null);
-      return;
-    }
-    // Resume is intentionally local: it is immediate, works offline while
-    // the queue is loading, and does not leak a user's study position to a
-    // shared course owner.
-    setResumeLineId(readLearnResume(courseParam));
-  }, [courseParam, chapterParam, learnMode]);
 
   useEffect(() => {
     if (isLoading) return;

@@ -74,12 +74,9 @@ export function WoodpeckerTrainer({
   const [status, setStatus] = useState<TrainerStatus>('ready');
   const [lastMove, setLastMove] = useState<[string, string] | undefined>();
   const [progress, setProgress] = useState<BookPuzzleProgress>(() => readBookPuzzleProgress(courseKey));
-  const [methodEnabled, setMethodEnabled] = useState(true);
+  const [methodEnabled, setMethodEnabled] = useState(() => isBookMethodEnabled(courseKey));
   const [methodProgress, setMethodProgress] = useState<BookMethodProgress>(() => readBookMethodProgress(courseKey));
-  const [solution, setSolution] = useState<PuzzleSolution>({
-    solutionSan: puzzle.solutionSan,
-    solutionUci: puzzle.solutionUci,
-  });
+  const [solution, setSolution] = useState<PuzzleSolution>(() => readSolutionOverride(courseKey, puzzle));
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionDraft, setCorrectionDraft] = useState('');
   const [correctionError, setCorrectionError] = useState('');
@@ -91,33 +88,19 @@ export function WoodpeckerTrainer({
   const answerPdfPage = isWoodpeckerOne ? solutionPdfPage(puzzle.exercise) : null;
 
   useEffect(() => {
-    const refreshProgress = () => setProgress(readBookPuzzleProgress(courseKey));
+    const refreshProgress = () => {
+      setProgress(readBookPuzzleProgress(courseKey));
+      setMethodEnabled(isBookMethodEnabled(courseKey));
+      setMethodProgress(readBookMethodProgress(courseKey));
+    };
     const eventName = getBookProgressEventName();
     window.addEventListener(eventName, refreshProgress);
     window.addEventListener('storage', refreshProgress);
-    refreshProgress();
-    setMethodEnabled(isBookMethodEnabled(courseKey));
-    setMethodProgress(readBookMethodProgress(courseKey));
     return () => {
       window.removeEventListener(eventName, refreshProgress);
       window.removeEventListener('storage', refreshProgress);
     };
   }, [courseKey]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const values = JSON.parse(window.localStorage.getItem(solutionStorageKey) ?? '{}') as Record<string, PuzzleSolution>;
-      const override = values[String(puzzle.exercise)];
-      if (override?.solutionUci?.length && override.solutionSan?.length) {
-        setSolution({ solutionSan: override.solutionSan, solutionUci: override.solutionUci });
-      } else {
-        setSolution({ solutionSan: puzzle.solutionSan, solutionUci: puzzle.solutionUci });
-      }
-    } catch {
-      setSolution({ solutionSan: puzzle.solutionSan, solutionUci: puzzle.solutionUci });
-    }
-  }, [puzzle.exercise, puzzle.solutionSan, puzzle.solutionUci, solutionStorageKey]);
 
   useEffect(() => () => {
     if (replyTimer.current) window.clearTimeout(replyTimer.current);
@@ -597,6 +580,22 @@ function parseCorrectionNotation(fen: string, draft: string): PuzzleSolution {
     return { solutionSan, solutionUci };
   });
   return parsedLines[0];
+}
+
+function readSolutionOverride(courseKey: BookTrainingKey, puzzle: BookPuzzle): PuzzleSolution {
+  const fallback = { solutionSan: puzzle.solutionSan, solutionUci: puzzle.solutionUci };
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const values = JSON.parse(
+      window.localStorage.getItem(`repdrill:${courseKey}:solution-overrides`) ?? '{}',
+    ) as Record<string, PuzzleSolution>;
+    const override = values[String(puzzle.exercise)];
+    return override?.solutionUci?.length && override.solutionSan?.length
+      ? { solutionSan: override.solutionSan, solutionUci: override.solutionUci }
+      : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function MethodProgressCard({
