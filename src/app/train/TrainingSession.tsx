@@ -85,6 +85,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const [tracePreviewIndex, setTracePreviewIndex] = useState<number | null>(null);
   const [queuedPremove, setQueuedPremove] = useState<{ from: string; to: string } | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
+  const viewportRestoreFrameRef = useRef<number | null>(null);
   const submitRatings = useMutation(api.training.submitLineRatings);
   const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
 
@@ -113,6 +114,35 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     if (!studyMode || !line) return;
     recordLearnResume(line.courseId, line.lineId);
   }, [line, studyMode]);
+
+  // A move changes prompt, feedback, trace and sometimes an annotation. Some
+  // browsers can still adjust the viewport after that reflow even with scroll
+  // anchoring disabled. Lock only the two paints following a user answer.
+  const preserveViewportAfterMove = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const top = window.scrollY;
+    const restore = () => {
+      if (Math.abs(window.scrollY - top) < 1) return;
+      const root = document.documentElement;
+      const previousBehavior = root.style.scrollBehavior;
+      root.style.scrollBehavior = 'auto';
+      window.scrollTo(0, top);
+      root.style.scrollBehavior = previousBehavior;
+    };
+    window.requestAnimationFrame(() => {
+      restore();
+      if (viewportRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(viewportRestoreFrameRef.current);
+      }
+      viewportRestoreFrameRef.current = window.requestAnimationFrame(restore);
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (viewportRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(viewportRestoreFrameRef.current);
+    }
+  }, []);
   const userStepIndexes = useMemo(
     () => (line ? line.steps.map((s, i) => (s.isUserMove ? i : -1)).filter((i) => i >= 0) : []),
     [line],
@@ -294,6 +324,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           }
           const delay = hasStudyMarkup ? 1500 : 650;
           setTimeout(() => {
+            preserveViewportAfterMove();
             setFeedback(null);
             setShowAnnotation(false);
             if (!inErrorRecovery) setQuestionIndex((i) => i + 1);
@@ -318,10 +349,13 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         // invalid move
       }
     },
-    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, errorCorrectStreak],
+    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, errorCorrectStreak, preserveViewportAfterMove],
   );
 
-  const onBoardMove = useCallback((orig: string, dest: string) => tryMove(orig, dest), [tryMove]);
+  const onBoardMove = useCallback((orig: string, dest: string) => {
+    preserveViewportAfterMove();
+    tryMove(orig, dest);
+  }, [tryMove, preserveViewportAfterMove]);
 
   const handleNotationSubmit = useCallback(() => {
     if (!step || !waitingForUser) return;
@@ -336,11 +370,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         setNotationError('Invalid move.');
         return;
       }
+      preserveViewportAfterMove();
       tryMove(result.from, result.to, result.promotion ?? undefined);
     } catch {
       setNotationError('Invalid move.');
     }
-  }, [step, waitingForUser, notationInput, tryMove]);
+  }, [step, waitingForUser, notationInput, tryMove, preserveViewportAfterMove]);
 
   const legalDests = useMemo(() => {
     if (!step || !waitingForUser || linePhase !== 'drill') return undefined;
