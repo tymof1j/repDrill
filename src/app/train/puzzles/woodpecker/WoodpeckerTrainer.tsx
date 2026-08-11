@@ -63,6 +63,7 @@ export function WoodpeckerTrainer({
   const attemptStartedAt = useRef<number | null>(null);
   const attemptOpen = useRef(true);
   const [fen, setFen] = useState(puzzle.fen);
+  const [boardKey, setBoardKey] = useState(0);
   const [ply, setPly] = useState(0);
   const [status, setStatus] = useState<TrainerStatus>('ready');
   const [lastMove, setLastMove] = useState<[string, string] | undefined>();
@@ -186,6 +187,9 @@ export function WoodpeckerTrainer({
   const resetBoard = () => {
     if (replyTimer.current) window.clearTimeout(replyTimer.current);
     replyTimer.current = null;
+    // Chessground keeps its own piece positions. Remount it when the FEN is
+    // unchanged so a failed attempt cannot leave the incorrect move on board.
+    setBoardKey((key) => key + 1);
     setFen(puzzle.fen);
     setPly(0);
     setLastMove(undefined);
@@ -254,6 +258,7 @@ export function WoodpeckerTrainer({
       const attempted = move ? `${move.from}${move.to}${move.promotion ?? ''}` : `${from}${to}`;
       if (!move || attempted !== expected) {
         markMissed();
+        setBoardKey((key) => key + 1);
         setFen(puzzle.fen);
         setPly(0);
         setLastMove(undefined);
@@ -289,6 +294,7 @@ export function WoodpeckerTrainer({
       }, 420);
     } catch {
       markMissed();
+      setBoardKey((key) => key + 1);
       setFen(puzzle.fen);
       setPly(0);
       setLastMove(undefined);
@@ -398,6 +404,7 @@ export function WoodpeckerTrainer({
 
           <div className="overflow-hidden rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-2 shadow-[0_22px_70px_rgba(47,58,50,0.12)]">
             <ChessBoard
+              key={`${puzzle.exercise}-${boardKey}`}
               fen={fen}
               orientation={puzzle.turn}
               lastMove={lastMove}
