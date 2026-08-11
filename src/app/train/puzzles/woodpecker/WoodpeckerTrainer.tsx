@@ -559,37 +559,49 @@ function CorrectionWorkspace({
   onClose: () => void;
 }) {
   return (
-    <div className="mt-4 rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">Source correction</p>
-          <h3 className="mt-2 font-display text-xl font-semibold">Check the book’s answer</h3>
-        </div>
-        <button type="button" onClick={onClose} className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Close</button>
-      </div>
-      <p className="mt-3 text-xs leading-relaxed text-[color:var(--ink-soft)]">Edit one legal line per row. SAN and coordinate notation are accepted. Your correction stays on this device and is used for later attempts.</p>
-      <textarea
-        value={draft}
-        onChange={(event) => onChange(event.target.value)}
-        rows={4}
-        className="mt-4 w-full resize-y rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3 py-2 font-mono text-xs leading-relaxed text-[color:var(--ink)] outline-none focus:border-[color:var(--library-green)]"
-        aria-label={`Corrected solution for exercise ${exercise}`}
-      />
-      {error && <p className="mt-2 text-xs text-[color:var(--margin-red)]" role="alert">{error}</p>}
-      <button type="button" onClick={onSave} disabled={saving} className="mt-4 rounded-md bg-[color:var(--ink)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] disabled:opacity-60">Save corrected key</button>
-      {answerPdfPage && sourcePdfAvailable ? (
-        <div className="mt-5 overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)]">
-          <div className="flex items-center justify-between gap-3 border-b border-[color:var(--paper-rule)] px-3 py-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Book answer · page {answerPdfPage - 1}</span>
-            <a href={`/api/source-documents/woodpecker#page=${answerPdfPage}`} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--library-green)] underline decoration-current/30 underline-offset-4">Full page ↗</a>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[color:var(--ink)]/35 p-4 backdrop-blur-[2px] md:items-center md:p-8"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="source-correction-title"
+        className="w-full max-w-3xl overflow-y-auto rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] p-5 shadow-[0_28px_100px_rgba(23,26,23,0.28)] md:max-h-[calc(100vh-4rem)] md:p-7"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--library-green)]">Source correction</p>
+            <h3 id="source-correction-title" className="mt-2 font-display text-xl font-semibold">Check the book’s answer</h3>
           </div>
-          <iframe key={`${exercise}-${answerPdfPage}`} src={`/api/source-documents/woodpecker#page=${answerPdfPage}&view=FitH`} title={`Woodpecker Method answer for exercise ${exercise}`} className="h-[30rem] w-full border-0" />
+          <button type="button" onClick={onClose} className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Close</button>
         </div>
-      ) : answerPdfPage ? (
-        <p className="mt-5 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3 py-3 text-xs leading-relaxed text-[color:var(--ink-soft)]">
-          Source PDF preview is not configured on this deployment. You can still save a corrected key locally; no book file or private source URL is bundled with the app.
-        </p>
-      ) : null}
+        <p className="mt-3 text-xs leading-relaxed text-[color:var(--ink-soft)]">Edit one legal line per row. SAN and coordinate notation are accepted. Your correction stays on this device and is used for later attempts.</p>
+        <textarea
+          value={draft}
+          onChange={(event) => onChange(event.target.value)}
+          rows={4}
+          className="mt-4 w-full resize-y rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3 py-2 font-mono text-xs leading-relaxed text-[color:var(--ink)] outline-none focus:border-[color:var(--library-green)]"
+          aria-label={`Corrected solution for exercise ${exercise}`}
+        />
+        {error && <p className="mt-2 text-xs text-[color:var(--margin-red)]" role="alert">{error}</p>}
+        <button type="button" onClick={onSave} disabled={saving} className="mt-4 rounded-md bg-[color:var(--ink)] px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] disabled:opacity-60">Save corrected key</button>
+        {answerPdfPage && sourcePdfAvailable ? (
+          <div className="mt-5 overflow-hidden rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)]">
+            <div className="flex items-center justify-between gap-3 border-b border-[color:var(--paper-rule)] px-3 py-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">Book answer · page {answerPdfPage - 1}</span>
+              <a href={`/api/source-documents/woodpecker#page=${answerPdfPage}`} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--library-green)] underline decoration-current/30 underline-offset-4">Full page ↗</a>
+            </div>
+            <iframe key={`${exercise}-${answerPdfPage}`} src={`/api/source-documents/woodpecker#page=${answerPdfPage}&view=FitH`} title={`Woodpecker Method answer for exercise ${exercise}`} className="h-[22rem] w-full border-0 md:h-[30rem]" />
+          </div>
+        ) : answerPdfPage ? (
+          <p className="mt-5 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--surface)] px-3 py-3 text-xs leading-relaxed text-[color:var(--ink-soft)]">
+            Source PDF preview is not configured on this deployment. You can still save a corrected key locally; no book file or private source URL is bundled with the app.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
