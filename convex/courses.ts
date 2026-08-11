@@ -376,11 +376,94 @@ export const deleteChapter = mutation({
     const course = await ctx.db.get(chapter.courseId);
     if (!course || course.userId !== userId) throw new Error("Not found");
 
-    const moves = await ctx.db.query("moves").withIndex("by_chapter", q => q.eq("chapterId", args.id)).collect();
+    // Stop an import worker from recreating moves under a chapter that the
+    // user has just removed. Keep the import record for history, but mark any
+    // unfinished work as cancelled before deleting the chapter itself.
+    const chapterImports = await ctx.db
+      .query("courseImportChapters")
+      .withIndex("by_created_chapter_id", (q) => q.eq("createdChapterId", args.id))
+      .collect();
+    for (const chapterImport of chapterImports) {
+      if (chapterImport.status === "queued" || chapterImport.status === "processing") {
+        await ctx.db.patch(chapterImport._id, {
+          status: "failed",
+          error: "Chapter deleted by user",
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    // Remove the parent immediately so the chapter disappears from the UI and
+    // training queries. Child rows are cleaned up in bounded background
+    // mutations so a large imported chapter cannot exceed Convex limits.
+    await ctx.db.delete(args.id);
+    await ctx.scheduler.runAfter(0, internal.courses.cleanupDeletedChapter, { chapterId: args.id });
+  },
+});
+
+/**
+ * Delete rows owned by a chapter in small retryable batches. Review logs and
+ * cards are removed with their moves; shared position rows are intentionally
+ * retained because another chapter may still reference the same FEN.
+ */
+export const cleanupDeletedChapter = internalMutation({
+  args: { chapterId: v.id("chapters") },
+  handler: async (ctx, args) => {
+    const moves = await ctx.db
+      .query("moves")
+      .withIndex("by_chapter", (q) => q.eq("chapterId", args.chapterId))
+      .take(40);
+
     for (const move of moves) {
+      const cards = await ctx.db
+        .query("reviewCards")
+        .withIndex("by_move", (q) => q.eq("moveId", move._id))
+        .collect();
+      for (const card of cards) {
+        const logs = await ctx.db
+          .query("reviewLogs")
+          .withIndex("by_card", (q) => q.eq("cardId", card._id))
+          .collect();
+        for (const log of logs) await ctx.db.delete(log._id);
+        await ctx.db.delete(card._id);
+      }
       await ctx.db.delete(move._id);
     }
-    await ctx.db.delete(args.id);
+
+    if (moves.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.courses.cleanupDeletedChapter, { chapterId: args.chapterId });
+      return;
+    }
+
+    const settings = await ctx.db
+      .query("chapterLineSettings")
+      .withIndex("by_chapter", (q) => q.eq("chapterId", args.chapterId))
+      .take(100);
+    for (const setting of settings) await ctx.db.delete(setting._id);
+
+    const views = await ctx.db
+      .query("infoLineViews")
+      .withIndex("by_chapter", (q) => q.eq("chapterId", args.chapterId))
+      .take(100);
+    for (const view of views) await ctx.db.delete(view._id);
+
+    const imports = await ctx.db
+      .query("courseImportChapters")
+      .withIndex("by_created_chapter_id", (q) => q.eq("createdChapterId", args.chapterId))
+      .take(20);
+    let chunksRemain = false;
+    for (const chapterImport of imports) {
+      const chunks = await ctx.db
+        .query("courseImportMoveChunks")
+        .withIndex("by_chapter_import_and_chunk_index", (q) => q.eq("chapterImportId", chapterImport._id))
+        .take(100);
+      for (const chunk of chunks) await ctx.db.delete(chunk._id);
+      if (chunks.length > 0) chunksRemain = true;
+    }
+
+    if (settings.length === 100 || views.length === 100 || chunksRemain) {
+      await ctx.scheduler.runAfter(0, internal.courses.cleanupDeletedChapter, { chapterId: args.chapterId });
+    }
   },
 });
 

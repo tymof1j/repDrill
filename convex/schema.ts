@@ -125,7 +125,7 @@ export default defineSchema({
     chapterId: v.id("chapters"),
     lineKey: v.string(),
     viewedAt: v.number(),
-  }).index("by_user_and_chapter_and_line_key", ["userId", "chapterId", "lineKey"]).index("by_user", ["userId"]),
+  }).index("by_user_and_chapter_and_line_key", ["userId", "chapterId", "lineKey"]).index("by_user", ["userId"]).index("by_chapter", ["chapterId"]),
 
   // Built-in book courses are shared application data, but every training
   // result is private to the signed-in user.  Keep the small current-cycle
@@ -294,7 +294,8 @@ export default defineSchema({
     // Archive imports use source chapter ids as an idempotency key.  Keep the
     // lookup on the import child row so retries can skip chapters that have
     // already been queued even when their background work is still running.
-    .index("by_course_and_source_chapter_id", ["courseId", "sourceChapterId"]),
+    .index("by_course_and_source_chapter_id", ["courseId", "sourceChapterId"])
+    .index("by_created_chapter_id", ["createdChapterId"]),
 
   courseImportMoveChunks: defineTable({
     chapterImportId: v.id("courseImportChapters"),

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { GripVertical, Pencil } from 'lucide-react';
 import { useQuery } from 'convex/react';
+import { useRouter } from 'next/navigation';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import {
@@ -168,6 +169,8 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
   const [chapterOrderOverride, setChapterOrderOverride] = useState<string[] | null>(null);
   const [draggingChapterId, setDraggingChapterId] = useState<string | null>(null);
   const [dragArmedChapterId, setDragArmedChapterId] = useState<string | null>(null);
+  const [chapterActionError, setChapterActionError] = useState<string | null>(null);
+  const router = useRouter();
   const courseImports = useQuery(api.import.listCourseImports, { courseId: course.id as Id<'courses'> }) ?? [];
   const activeImport = courseImports.find((item) => item.status === 'queued' || item.status === 'processing') ?? null;
 
@@ -288,11 +291,25 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
   };
 
   const handleDeleteChapter = (chapterId: string) => {
+    const chapter = chaptersById.get(chapterId);
+    if (!chapter) return;
+    const lineCount = linesByChapter.get(chapterId)?.length ?? 0;
+    const confirmed = window.confirm(
+      `Delete “${chapter.name}”? This permanently removes its ${lineCount} line${lineCount === 1 ? '' : 's'} and training history.`,
+    );
+    if (!confirmed) return;
+
+    setChapterActionError(null);
+    if (selectedChapterId === chapterId) setSelectedChapterId(null);
     const fd = new FormData();
     fd.set('id', chapterId);
     fd.set('courseId', course.id);
     startTransition(() => {
-      void deleteChapterAction(fd);
+      void deleteChapterAction(fd)
+        .then(() => router.refresh())
+        .catch((error: unknown) => {
+          setChapterActionError(error instanceof Error ? error.message : 'Could not delete the chapter.');
+        });
     });
   };
 
@@ -465,6 +482,11 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
 
           {chaptersOpen && (
             <>
+              {chapterActionError && (
+                <p role="alert" className="mx-5 mt-5 rounded-lg border border-[color:var(--margin-red)]/40 bg-[color:var(--margin-red)]/10 px-4 py-3 text-sm text-[color:var(--margin-red)] md:mx-7">
+                  {chapterActionError}
+                </p>
+              )}
               <div className="px-5 py-5 md:px-7">
                 <div className="flex items-baseline gap-3 rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-3">
                   <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
