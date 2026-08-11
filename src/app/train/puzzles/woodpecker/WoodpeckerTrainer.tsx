@@ -43,6 +43,9 @@ type PuzzleSolution = { solutionSan: string[]; solutionUci: string[] };
 type TrainerStatus = 'ready' | 'wrong' | 'correct' | 'revealed';
 
 const forcedRecheckExercise = 110;
+// Leave just enough time for the player's move to render before the prepared
+// reply lands; a longer pause feels like network latency during a drill.
+const COMPUTER_REPLY_DELAY_MS = 120;
 
 export function WoodpeckerTrainer({
   puzzle,
@@ -291,7 +294,7 @@ export function WoodpeckerTrainer({
         }
         setPly(nextUserPly);
         setStatus('ready');
-      }, 420);
+      }, COMPUTER_REPLY_DELAY_MS);
     } catch {
       markMissed();
       setBoardKey((key) => key + 1);
