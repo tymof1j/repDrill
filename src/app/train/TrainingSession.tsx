@@ -334,14 +334,11 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         setSolutionPreviewIndex(currentStepIndex + 1);
 
         if (correct) {
-          const hasStudyMarkup = Boolean(
-            step.annotation?.trim() || step.annotations?.arrows?.length || step.annotations?.circles?.length,
-          );
-          setFeedback({ type: 'correct', text: step.san });
-          setShowAnnotation(hasStudyMarkup);
-          // Keep the submitted answer on screen so the learner can inspect
-          // the solution with the forward/back controls before continuing.
-          setNeedsManualNext(true);
+          // Correct moves should stay out of the way. Continue directly to
+          // the next prepared move; annotations are reserved for mistakes.
+          setFeedback(null);
+          setShowAnnotation(false);
+          setNeedsManualNext(false);
           if (inErrorRecovery) {
             const nextStreak = errorCorrectStreak + 1;
             setErrorCorrectStreak(nextStreak);
@@ -349,6 +346,8 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
               setErrorQueue((q) => q.filter((idx) => idx !== currentStepIndex));
               setErrorCorrectStreak(0);
             }
+          } else {
+            setQuestionIndex((index) => index + 1);
           }
           return;
         }
