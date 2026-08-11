@@ -21,6 +21,7 @@ export default async function WoodpeckerTrainingPage({
       key={puzzle.exercise}
       puzzle={puzzle}
       total={woodpeckerPuzzles.length}
+      sourcePdfAvailable={Boolean(process.env.WOODPECKER_SOURCE_PDF_URL)}
     />
   );
 }
