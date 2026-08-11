@@ -26,7 +26,7 @@ export default function ImportBehaviorDocPage() {
           PGN naming and info-only mode
         </h1>
         <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
-          This page explains exactly how chapter names are chosen during PGN import and how
+          This page explains exactly how PGN records are grouped and named during import and how
           info-only chapters/lines behave in viewer and Learn flows.
         </p>
       </header>
@@ -35,6 +35,11 @@ export default function ImportBehaviorDocPage() {
         <h2 className="font-display text-2xl font-semibold tracking-[-0.01em] text-[color:var(--ink)]">
           Chapter naming
         </h2>
+        <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
+          Multiple PGN records with the same <strong>Chapter</strong> or <strong>ChapterName</strong>
+          header are grouped into one chapter; each record becomes a line in that chapter. Records
+          without either header retain the one-record, one-chapter behavior.
+        </p>
         <ol className="mt-4 list-decimal space-y-2 pl-5 text-[14px] leading-relaxed text-[color:var(--ink-soft)]">
           <li>Use `ChapterName` PGN header if present and not `?`.</li>
           <li>Otherwise use `Event` PGN header if present and not `?`.</li>

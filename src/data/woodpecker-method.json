@@ -2977,7 +2977,7 @@
   },
   {
     "exercise": 110,
-    "fen": "3r2k1/p2r1p2/4b1p1/qPp1R2p/P1p4P/8/5PP1/4RBK1 w - - 0 1",
+    "fen": "3r2k1/p2r1p2/4b1p1/qPp1R2p/P1p4P/8/5PP1/Q3RBK1 w - - 0 1",
     "turn": "white",
     "section": "easy",
     "pdfPage": 51,

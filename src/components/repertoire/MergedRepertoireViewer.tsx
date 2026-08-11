@@ -216,7 +216,7 @@ export function MergedRepertoireViewer({
   };
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[auto_minmax(420px,1fr)] lg:gap-14">
+    <div className="grid min-w-0 gap-10 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-14">
       {/* ── Left page: the diagram ─────────────────────────── */}
       <div>
         {hasBothSides && (
@@ -329,7 +329,7 @@ export function MergedRepertoireViewer({
       </div>
 
       {/* ── Right page: line + branches + annotation ───────── */}
-      <div className="space-y-10">
+      <div className="min-w-0 space-y-10">
         {/* Line */}
         <section>
           <p className="border-b border-[color:var(--paper-edge)] pb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">

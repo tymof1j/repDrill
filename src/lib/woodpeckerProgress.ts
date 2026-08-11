@@ -43,6 +43,26 @@ export type BookProgressSnapshot = BookPuzzleProgress & {
   sourceMarker: string | null;
 };
 
+/**
+ * Find the next puzzle in the main sequence.
+ *
+ * `position` is the monotonic mainline cursor.  A missed puzzle is deliberately
+ * not treated as the next puzzle here; missed work has its own explicit review
+ * action.  The current puzzle is also excluded so a failed/revealed answer can
+ * never send the normal Next action back to itself.
+ */
+export function findNextUnsolvedPuzzle(
+  progress: Pick<BookProgressSnapshot, 'position' | 'setSize' | 'solved'>,
+  currentPuzzle: number,
+) {
+  const solved = new Set(progress.solved);
+  const firstCandidate = Math.max(1, progress.position, currentPuzzle + 1);
+  for (let puzzle = firstCandidate; puzzle <= progress.setSize; puzzle += 1) {
+    if (!solved.has(puzzle)) return puzzle;
+  }
+  return null;
+}
+
 function readCachedSnapshot(book: BookTrainingKey): BookProgressSnapshot | null {
   if (typeof window === 'undefined') return null;
   try {

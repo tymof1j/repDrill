@@ -155,6 +155,10 @@ body {
   padding-left: 1rem;
   color: var(--ink-soft);
   line-height: 1.55;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* Corner-bracket frame — for "diagram" panels */

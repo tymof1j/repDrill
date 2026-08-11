@@ -1,8 +1,9 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 async function canReadSharedCourse(ctx: QueryCtx, courseId: Id<"courses">, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
@@ -257,18 +258,56 @@ export const remove = mutation({
     if (!userId) throw new Error("Unauthorized");
     const course = await ctx.db.get(args.id);
     if (!course || course.userId !== userId) throw new Error("Course not found or access denied");
-    
-    // We should also delete chapters, moves, etc. 
-    // Convex doesn't have CASCADE delete out of the box, so we need to clean them up.
-    const chapters = await ctx.db.query("chapters").withIndex("by_course", q => q.eq("courseId", args.id)).collect();
+
+    // Delete the course record in this small transaction first. The previous
+    // implementation tried to remove every chapter and move in one mutation;
+    // large Chessable imports exceeded Convex's transaction limits and the
+    // whole deletion rolled back. Background imports could then keep writing
+    // to the course. The course disappears immediately, while the cleanup
+    // worker removes its child rows in bounded batches.
+    await ctx.db.delete(args.id);
+    await ctx.scheduler.runAfter(0, internal.courses.cleanupRemovedCourse, { courseId: args.id });
+  },
+});
+
+/**
+ * Remove child rows left behind after a course record is deleted.
+ *
+ * This intentionally does only a bounded amount of work per mutation. It is
+ * safe to retry: missing rows are ignored and any in-flight import worker
+ * stops as soon as it sees that the parent course no longer exists.
+ */
+export const cleanupRemovedCourse = internalMutation({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, args) => {
+    const chapters = await ctx.db
+      .query("chapters")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .take(4);
+
     for (const chapter of chapters) {
-      const moves = await ctx.db.query("moves").withIndex("by_chapter", q => q.eq("chapterId", chapter._id)).collect();
-      for (const move of moves) {
+      const moves = await ctx.db
+        .query("moves")
+        .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+        .take(101);
+
+      for (const move of moves.slice(0, 100)) {
         await ctx.db.delete(move._id);
       }
+
+      // If this chapter still has moves, leave it in place and continue it in
+      // the next scheduled mutation. This keeps each transaction small.
+      if (moves.length > 100) {
+        await ctx.scheduler.runAfter(0, internal.courses.cleanupRemovedCourse, { courseId: args.courseId });
+        return;
+      }
+
       await ctx.db.delete(chapter._id);
     }
-    await ctx.db.delete(args.id);
+
+    if (chapters.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.courses.cleanupRemovedCourse, { courseId: args.courseId });
+    }
   },
 });
 

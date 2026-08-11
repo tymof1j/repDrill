@@ -97,12 +97,10 @@ export async function importPgnAction(formData: FormData): Promise<void> {
   }> = [];
 
   let invalidGames = 0;
+  const chapterGroups = new Map<string, (typeof chapters)[number]>();
   for (const [i, game] of games.entries()) {
-    const chapterNameFromHeaders =
-      game.headers.Chapter ||
-      game.headers.ChapterName ||
-      game.headers.Event ||
-      game.headers.White;
+    const explicitChapterName = game.headers.Chapter || game.headers.ChapterName;
+    const chapterNameFromHeaders = explicitChapterName || game.headers.Event || game.headers.White;
     const chapterName =
       chapterNameFromHeaders && chapterNameFromHeaders !== '?'
         ? chapterNameFromHeaders
@@ -113,24 +111,42 @@ export async function importPgnAction(formData: FormData): Promise<void> {
 
     try {
       const tree = buildTree(game);
-      chapters.push({
-        chapterName,
-        chapterType,
-        sortOrder: i,
-        courseColor: course.color,
-        rootFen: tree.rootFen,
-        moves: tree.moves.map((m) => ({
-          parentFen: m.parentFen,
-          fen: m.fen,
-          san: m.san,
-          uci: m.uci,
-          moveNumber: m.moveNumber,
-          colorToMove: m.colorToMove,
-          comment: m.comment,
-          annotations: m.annotations,
-          isMainLine: m.isMainLine,
-        })),
-      });
+      const moves = tree.moves.map((m) => ({
+        parentFen: m.parentFen,
+        fen: m.fen,
+        san: m.san,
+        uci: m.uci,
+        moveNumber: m.moveNumber,
+        colorToMove: m.colorToMove,
+        comment: m.comment,
+        annotations: m.annotations,
+        isMainLine: m.isMainLine,
+      }));
+
+      // Chessable-style exports represent one chapter as several PGN game
+      // records, one variation per record. Group records that share an
+      // explicit Chapter/ChapterName header so the UI gets one chapter with
+      // all of its lines. Records without that header keep the old one-game,
+      // one-chapter behavior.
+      const groupKey = explicitChapterName && explicitChapterName !== '?'
+        ? `chapter:${explicitChapterName.trim().toLocaleLowerCase()}`
+        : `game:${i}`;
+      const existing = chapterGroups.get(groupKey);
+      if (existing) {
+        existing.moves.push(...moves);
+        if (chapterType === 'training') existing.chapterType = 'training';
+      } else {
+        const chapter = {
+          chapterName,
+          chapterType,
+          sortOrder: i,
+          courseColor: course.color,
+          rootFen: tree.rootFen,
+          moves,
+        } satisfies (typeof chapters)[number];
+        chapterGroups.set(groupKey, chapter);
+        chapters.push(chapter);
+      }
     } catch (error) {
       invalidGames++;
       console.warn('[PGN import] skipped invalid game', {

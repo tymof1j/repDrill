@@ -141,8 +141,14 @@ function buildChapterLines(
       inPath.delete(positionId);
     };
 
-    if (rootPositionId) {
-      walk(rootPositionId, []);
+    const childIds = new Set(chapterMoves.map((move) => move.childPositionId));
+    const roots = Array.from(new Set(chapterMoves.map((move) => move.parentPositionId)))
+      .filter((positionId) => !childIds.has(positionId));
+    const orderedRoots = roots.includes(rootPositionId)
+      ? [rootPositionId, ...roots.filter((positionId) => positionId !== rootPositionId)]
+      : roots;
+    for (const root of orderedRoots) {
+      walk(root, []);
     }
     linesByChapter.set(chapter.id, chapterLines);
   }
@@ -213,6 +219,14 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
         : moves,
     [moves, selectedChapterId],
   );
+  const viewerRootPositionId = useMemo(() => {
+    if (!selectedChapterId) return rootPositionId;
+    const chapterMoves = moves.filter((move) => move.chapterId === selectedChapterId);
+    const childIds = new Set(chapterMoves.map((move) => move.childPositionId));
+    const roots = Array.from(new Set(chapterMoves.map((move) => move.parentPositionId)))
+      .filter((positionId) => !childIds.has(positionId));
+    return roots.includes(rootPositionId) ? rootPositionId : (roots[0] ?? rootPositionId);
+  }, [moves, rootPositionId, selectedChapterId]);
   const lineStatusMap = useMemo(
     () => new Map(lineStatuses.map((status) => [`${status.chapterId}:${status.lineIndex}`, status])),
     [lineStatuses],
@@ -689,7 +703,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
           <RepertoireViewer
             key={selectedChapterId ?? 'all-chapters'}
             repertoireColor={course.color as 'white' | 'black'}
-            rootPositionId={rootPositionId}
+            rootPositionId={viewerRootPositionId}
             positions={positions}
             moves={visibleMoves}
             chapters={chapters}

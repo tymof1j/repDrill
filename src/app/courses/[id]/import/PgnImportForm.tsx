@@ -74,7 +74,7 @@ export function PgnImportForm({ courseId }: { courseId: string }) {
           )}
         </p>
         <p className="mt-3 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
-          Each game becomes a chapter; variations and comments are preserved.
+          Records sharing a PGN Chapter header become lines in one chapter; variations and comments are preserved.
         </p>
         <input
           ref={fileRef}

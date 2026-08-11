@@ -24,7 +24,7 @@ export default async function ImportPgnPage({ params }: { params: Promise<{ id: 
             Add <span className="font-display-italic">theory</span> to the course.
           </>
         }
-        body="Drop a PGN file, paste from disk, or transcribe directly. Each game becomes its own chapter inside this course."
+        body="Drop a PGN file, paste from disk, or transcribe directly. PGN records sharing a Chapter header are grouped into one chapter with multiple lines."
       />
 
       <PgnImportForm courseId={id} />

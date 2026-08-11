@@ -9,7 +9,6 @@ import {
   AppSurface,
   BackLink,
   GhostButton,
-  PremiumButton,
   SecondaryButton,
   Stamp,
 } from '@/components/ui/Premium';
@@ -20,6 +19,7 @@ import {
 } from '@/lib/bookTrainingPreferences';
 import { useBookProgress } from '@/lib/hooks/useBookProgress';
 import type { BookProgressSnapshot } from '@/lib/woodpeckerProgress';
+import { findNextUnsolvedPuzzle } from '@/lib/woodpeckerProgress';
 import { solutionPdfPage } from '@/lib/woodpeckerPdf';
 
 type BookPuzzle = {
@@ -165,19 +165,11 @@ export function WoodpeckerTrainer({
     router.push(`/train/puzzles/${courseSlug}?n=${Math.min(Math.max(exercise, 1), total)}`);
   };
 
-  const remainingMissed = progress.missed.filter((exercise) => exercise !== puzzle.exercise);
-  const remainingMissedCount = Math.max(
-    0,
-    progress.missedCount - (progress.missed.includes(puzzle.exercise) ? 1 : 0),
-  );
   const currentSetLimit = Math.min(total, progress.setSize);
-  const nextExercise = () => {
-    if (remainingMissed.length > 0) return remainingMissed[0];
-    if (progress.unresolvedMissedCount > 0 && progress.position !== puzzle.exercise) {
-      return progress.position;
-    }
-    return puzzle.exercise < currentSetLimit ? puzzle.exercise + 1 : null;
-  };
+  const nextExercise = () => findNextUnsolvedPuzzle(
+    { ...progress, setSize: currentSetLimit },
+    puzzle.exercise,
+  );
 
   const resetBoard = () => {
     // Chessground keeps its own piece positions. Remount it when the FEN is
@@ -357,7 +349,7 @@ export function WoodpeckerTrainer({
               onClick={reviewMissed}
               className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--margin-red)] underline decoration-current/30 underline-offset-4"
             >
-              {progress.missedCount} missed · review
+              {progress.missedCount} skipped · solve skipped
             </button>
           )}
         </div>
@@ -430,7 +422,7 @@ export function WoodpeckerTrainer({
             )}
             {status === 'wrong' && (
               <p className="mb-5 rounded-md bg-[color:var(--paper-shade)] px-4 py-3 text-sm text-[color:var(--margin-red)]">
-                Incorrect move · Added to missed · Retry, analyse, or check source.
+                Incorrect move · Added to skipped · Retry, analyse, or check source.
               </p>
             )}
             {solution.solutionUci.length === 0 && (
@@ -442,12 +434,19 @@ export function WoodpeckerTrainer({
             {answerVisible ? (
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--library-green)]">
-                  {status === 'correct' ? 'Solved' : 'Solution revealed · marked missed'}
+                  {status === 'correct' ? 'Solved' : 'Solution revealed · marked skipped'}
                 </p>
                 <p className="notation mt-3 font-display text-xl font-semibold text-[color:var(--ink)]">
                   {solution.solutionSan.join(' ') || 'See the author’s note below.'}
                 </p>
-                <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-[color:var(--ink-soft)]">{cleanSolutionText}</p>
+                {cleanSolutionText && (
+                  <details className="mt-4 rounded-md border border-[color:var(--paper-rule)] bg-[color:var(--paper-shade)] px-3 py-2">
+                    <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+                      Author note
+                    </summary>
+                    <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-[color:var(--ink-soft)]">{cleanSolutionText}</p>
+                  </details>
+                )}
                 <div className="mt-5 flex flex-wrap items-center gap-4">
                   <a
                     href={lichessUrl}
@@ -464,13 +463,30 @@ export function WoodpeckerTrainer({
                   </button>
                   {progress.missedCount > 0 && (
                     <button type="button" onClick={reviewMissed} className="font-mono text-[10px] uppercase tracking-[0.15em] text-[color:var(--margin-red)] underline decoration-current/30 underline-offset-4">
-                      Review missed ({progress.missedCount})
+                      Solve skipped ({progress.missedCount})
                     </button>
                   )}
                 </div>
-                <PremiumButton onClick={() => next && goTo(next)} disabled={!next} className="mt-7">
-                  {remainingMissedCount > 0 ? `Next missed · ${remainingMissedCount} left` : 'Next position'}
-                </PremiumButton>
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => next && goTo(next)}
+                    disabled={!next}
+                    className="rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-3 py-3 text-left font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--paper)] transition-colors hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <span className="block">Next</span>
+                    <span className="mt-1 block font-normal tracking-[0.08em] text-[color:var(--paper)]/70">{next ? `Puzzle ${next}` : 'Set complete'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={reviewMissed}
+                    disabled={progress.missedCount === 0}
+                    className="rounded-md border border-[color:var(--margin-red)] bg-[color:var(--paper-shade)] px-3 py-3 text-left font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--margin-red)] transition-colors hover:bg-[color:var(--margin-red)]/10 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <span className="block">Solve skipped</span>
+                    <span className="mt-1 block font-normal tracking-[0.08em] text-[color:var(--ink-faint)]">{progress.missedCount ? `${progress.missedCount} waiting` : 'None waiting'}</span>
+                  </button>
+                </div>
               </div>
             ) : status === 'wrong' ? (
               <div>
@@ -482,24 +498,41 @@ export function WoodpeckerTrainer({
                   Fix solution
                 </button>
                 <button type="button" onClick={reveal} className="mt-3 block font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--ink-faint)] underline decoration-current/30 underline-offset-4">
-                  Show solution (keeps this in missed)
+                  Show solution (keeps this skipped)
                 </button>
               </div>
             ) : (
               <div>
                 <p className="text-sm leading-relaxed text-[color:var(--ink-soft)]">
-                  {method.kind === 'positional'
-                    ? 'Choose the move that best carries out the position’s plan. RepDrill will compare it with the author’s move and explanation.'
-                    : 'Find the strongest move and play it on the board. RepDrill will answer with the book line.'}
+                  {method.kind === 'positional' ? 'Choose the move that best fits the position.' : 'Find the strongest move.'}
                 </p>
                 {hintVisible && firstMove && (
-                  <p className="mt-4 rounded-md bg-[color:var(--paper-shade)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--library-green)]">
-                    Hint: look at {firstMove.slice(0, 2)} → {firstMove.slice(2, 4)} · now solve it yourself · this position stays in missed
+                  <p className="mt-4 rounded-md border border-[color:var(--library-green-soft)] bg-[color:var(--paper-shade)] px-3 py-2 text-xs leading-relaxed text-[color:var(--library-green)]">
+                    Hint: look at {firstMove.slice(0, 2)} → {firstMove.slice(2, 4)}.
                   </p>
                 )}
-                <div className="mt-6 flex flex-wrap items-center gap-4">
-                  <SecondaryButton onClick={reveal}>Show solution · mark missed</SecondaryButton>
-                  {!hintVisible && <button type="button" onClick={giveHint} className="font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--ink-faint)] underline decoration-current/30 underline-offset-4">Give me a hint · mark missed</button>}
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={giveHint}
+                    disabled={hintVisible}
+                    className="rounded-md border border-[color:var(--library-green)] bg-[color:var(--paper-shade)] px-3 py-3 text-left font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--library-green)] transition-colors hover:bg-[color:var(--library-green)]/10 disabled:cursor-default disabled:opacity-60"
+                  >
+                    <span className="block">Hint</span>
+                    <span className="mt-1 block font-normal tracking-[0.08em] text-[color:var(--ink-faint)]">{hintVisible ? 'Shown' : 'Show first move'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => next && goTo(next)}
+                    disabled={!next || status === 'ready'}
+                    className="rounded-md border border-[color:var(--ink)] bg-[color:var(--ink)] px-3 py-3 text-left font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--paper)] transition-colors hover:border-[color:var(--library-green)] hover:bg-[color:var(--library-green)] disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <span className="block">Next</span>
+                    <span className="mt-1 block font-normal tracking-[0.08em] text-[color:var(--paper)]/70">{next ? `Puzzle ${next}` : 'Set complete'}</span>
+                  </button>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-4">
+                  <SecondaryButton onClick={reveal}>Show solution · mark skipped</SecondaryButton>
                 </div>
               </div>
             )}
@@ -509,7 +542,9 @@ export function WoodpeckerTrainer({
 
           <div className="mt-4 flex items-center justify-between gap-3">
             <GhostButton onClick={() => goTo(puzzle.exercise - 1)} disabled={puzzle.exercise <= 1}>← Previous</GhostButton>
-            <GhostButton onClick={() => next && goTo(next)} disabled={!next}>Next →</GhostButton>
+            <GhostButton onClick={() => next && goTo(next)} disabled={!next || status === 'ready'}>
+              Next · {next ?? '—'} →
+            </GhostButton>
           </div>
 
           {correctionOpen && (
@@ -676,7 +711,7 @@ function MethodProgressCard({
           </p>
           {progress.missedCount > 0 && (
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">
-              {progress.missedCount} missed still to review
+              {progress.missedCount} skipped still to solve
             </p>
           )}
         </div>

@@ -248,7 +248,7 @@ export function RepertoireViewer({
   }
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[auto_minmax(420px,1fr)] lg:gap-14">
+    <div className="grid min-w-0 gap-10 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-14">
       {/* ── Diagram ─────────────────────────────────────── */}
       <div>
         <div className="mb-3 flex items-baseline justify-between border-b border-[color:var(--paper-edge)] pb-2">
@@ -390,7 +390,7 @@ export function RepertoireViewer({
       </div>
 
       {/* ── Right page: line + branches + annotation + search ─ */}
-      <div className="space-y-10">
+      <div className="min-w-0 space-y-10">
         {/* Line */}
         <section>
           <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
