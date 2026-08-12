@@ -39,6 +39,9 @@ const client = postgres(databaseUrl, {
   // Supabase transaction poolers do not support prepared statements.
   prepare: false,
   max: 1,
+  connect_timeout: 15,
+  idle_timeout: 30,
+  connection: { application_name: 'repdrill-convex-import' },
 });
 let db = client;
 const storage = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -259,10 +262,39 @@ async function insertUser(document) {
   const rows = await db`
     insert into public.users (legacy_convex_id, name, image, email, email_verification_time, phone, phone_verification_time, is_anonymous, lichess_username, chesscom_username, language, last_analyze_sync_lichess_at, last_analyze_sync_chesscom_at, created_at, updated_at)
     values (${oldId}, ${document.name ?? null}, ${document.image ?? null}, ${document.email ?? null}, ${date(document.emailVerificationTime)}, ${document.phone ?? null}, ${date(document.phoneVerificationTime)}, ${document.isAnonymous ?? false}, ${document.lichessUsername ?? null}, ${document.chesscomUsername ?? null}, ${document.language ?? 'en'}, ${date(document.lastAnalyzeSyncLichessAt)}, ${date(document.lastAnalyzeSyncChesscomAt)}, ${date(document._creationTime)}, ${date(document._creationTime)})
-    on conflict (legacy_convex_id) do update set updated_at = excluded.updated_at
+    on conflict (legacy_convex_id) do nothing
     returning id
   `;
-  return rememberMap('users', oldId, rows[0].id);
+  const destinationId = rows[0]?.id ?? (await db`
+    select id from public.users where legacy_convex_id = ${oldId}
+  `)[0]?.id;
+  if (!destinationId) throw new Error(`Unable to insert users:${oldId}`);
+  return rememberMap('users', oldId, destinationId);
+}
+
+async function clearStaleImporterSessions() {
+  const cleanup = postgres(databaseUrl, {
+    prepare: false,
+    max: 1,
+    connect_timeout: 15,
+    connection: { application_name: 'repdrill-convex-cleanup' },
+  });
+  try {
+    const sessions = await cleanup`
+      select pid
+      from pg_stat_activity
+      where pid <> pg_backend_pid()
+        and usename = current_user
+        and datname = current_database()
+        and query ilike '%legacy_id%'
+    `;
+    for (const session of sessions) {
+      await cleanup`select pg_terminate_backend(${session.pid})`;
+    }
+    if (sessions.length) console.log(`Cleared ${sessions.length} stale migration database session(s).`);
+  } finally {
+    await cleanup.end({ timeout: 5 });
+  }
 }
 
 async function insertMapped(table, document, definition) {
@@ -354,6 +386,7 @@ async function importTable(table) {
 
 try {
   let imported = 0;
+  await clearStaleImporterSessions();
   await client.begin(async (transaction) => {
     // Use the transaction connection for all statements in this run.
     db = transaction;
