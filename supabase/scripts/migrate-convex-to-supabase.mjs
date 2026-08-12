@@ -494,10 +494,12 @@ async function importMappedTable(table, documents, definition) {
   })));
 }
 
-async function preserveUnknown(table, document) {
+async function preserveUnknown(table, document, fallbackId) {
+  const sourceId = document._id ?? fallbackId;
+  if (!sourceId) throw new Error(`Unknown ${table} document has no stable source id`);
   await db`
     insert into public.legacy_auth_documents (source_table, source_id, payload)
-    values (${table}, ${document._id}, ${normalizePostgresValue(document)})
+    values (${table}, ${sourceId}, ${normalizePostgresValue(document)})
     on conflict (source_table, source_id) do nothing
   `;
 }
@@ -536,7 +538,9 @@ async function importTable(table) {
   }
   const definition = tableDefinitions[table];
   if (!definition) {
-    for (const document of documents) await preserveUnknown(table, document);
+    for (let index = 0; index < documents.length; index += 1) {
+      await preserveUnknown(table, documents[index], `${table}:${index}`);
+    }
     return documents.length;
   }
   await importMappedTable(table, documents, definition);
