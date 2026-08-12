@@ -98,8 +98,8 @@ const tableDefinitions = {
   },
   chapterLineSettings: {
     target: 'chapter_line_settings',
-    columns: ['chapter_id', 'line_key', 'info_only', 'created_at', 'updated_at'],
-    values: (d, map) => [map('chapters', d.chapterId), d.lineKey, d.infoOnly ?? false, date(d.createdAt), date(d.updatedAt ?? d.createdAt)],
+    columns: ['chapter_id', 'source_chapter_id', 'line_key', 'info_only', 'created_at', 'updated_at'],
+    values: async (d, map) => [await mapOptionalId('chapters', d.chapterId), d.chapterId ?? null, d.lineKey, d.infoOnly ?? false, date(d.createdAt), date(d.updatedAt ?? d.createdAt)],
   },
   infoLineViews: {
     target: 'info_line_views',
@@ -148,13 +148,13 @@ const tableDefinitions = {
   },
   courseImports: {
     target: 'course_imports',
-    columns: ['course_id', 'user_id', 'status', 'total_chapters', 'completed_chapters', 'failed_chapters', 'created_at', 'updated_at'],
-    values: (d, map) => [map('courses', d.courseId), map('users', d.userId), d.status, d.totalChapters, d.completedChapters ?? 0, d.failedChapters ?? 0, date(d.createdAt), date(d.updatedAt ?? d.createdAt)],
+    columns: ['course_id', 'source_course_id', 'user_id', 'status', 'total_chapters', 'completed_chapters', 'failed_chapters', 'created_at', 'updated_at'],
+    values: async (d, map) => [await mapOptionalId('courses', d.courseId), d.courseId ?? null, map('users', d.userId), d.status, d.totalChapters, d.completedChapters ?? 0, d.failedChapters ?? 0, date(d.createdAt), date(d.updatedAt ?? d.createdAt)],
   },
   courseImportChapters: {
     target: 'course_import_chapters',
-    columns: ['import_id', 'course_id', 'user_id', 'chapter_name', 'chapter_type', 'sort_order', 'course_color', 'root_fen', 'source_chapter_id', 'source_file', 'status', 'total_moves', 'processed_moves', 'move_chunk_count', 'created_chapter_id', 'error', 'created_at', 'updated_at'],
-    values: (d, map) => [map('courseImports', d.importId), map('courses', d.courseId), map('users', d.userId), d.chapterName, d.chapterType, d.sortOrder, d.courseColor, d.rootFen, d.sourceChapterId ?? null, d.sourceFile ?? null, d.status, d.totalMoves, d.processedMoves ?? 0, d.moveChunkCount ?? 0, d.createdChapterId ? map('chapters', d.createdChapterId) : null, d.error ?? null, date(d.createdAt), date(d.updatedAt ?? d.createdAt)],
+    columns: ['import_id', 'course_id', 'source_course_id', 'user_id', 'chapter_name', 'chapter_type', 'sort_order', 'course_color', 'root_fen', 'source_chapter_id', 'source_file', 'status', 'total_moves', 'processed_moves', 'move_chunk_count', 'created_chapter_id', 'error', 'created_at', 'updated_at'],
+    values: async (d, map) => [map('courseImports', d.importId), await mapOptionalId('courses', d.courseId), d.courseId ?? null, map('users', d.userId), d.chapterName, d.chapterType, d.sortOrder, d.courseColor, d.rootFen, d.sourceChapterId ?? null, d.sourceFile ?? null, d.status, d.totalMoves, d.processedMoves ?? 0, d.moveChunkCount ?? 0, d.createdChapterId ? await mapOptionalId('chapters', d.createdChapterId) : null, d.error ?? null, date(d.createdAt), date(d.updatedAt ?? d.createdAt)],
   },
   courseImportMoveChunks: {
     target: 'course_import_move_chunks',
@@ -227,6 +227,41 @@ const tableDirs = readdirSync(extractionDir, { withFileTypes: true })
   .map((entry) => entry.name);
 const allTables = [...new Set([...tableOrder, ...tableDirs])].filter((table) => table !== '_storage');
 const legacyToNew = new Map();
+const INSERT_BATCH_SIZE = 500;
+
+async function insertBatches(target, rows, columns, conflictColumn = 'legacy_id') {
+  for (let offset = 0; offset < rows.length; offset += INSERT_BATCH_SIZE) {
+    const batch = rows.slice(offset, offset + INSERT_BATCH_SIZE);
+    await db`
+      insert into ${db(`public.${target}`)} ${db(batch, columns)}
+      on conflict (${db(conflictColumn)}) do nothing
+    `;
+  }
+}
+
+async function rememberMaps(table, mappings) {
+  if (mappings.length === 0) return;
+  for (let offset = 0; offset < mappings.length; offset += INSERT_BATCH_SIZE) {
+    const batch = mappings.slice(offset, offset + INSERT_BATCH_SIZE);
+    await db`
+      insert into public.legacy_id_map ${db(batch, ['source_table', 'source_id', 'destination_id'])}
+      on conflict (source_table, source_id) do nothing
+    `;
+  }
+  for (const mapping of mappings) {
+    legacyToNew.set(`${mapping.source_table}:${mapping.source_id}`, mapping.destination_id);
+  }
+}
+
+async function preloadMappings() {
+  const mappings = await db`
+    select source_table, source_id, destination_id
+    from public.legacy_id_map
+  `;
+  for (const mapping of mappings) {
+    legacyToNew.set(`${mapping.source_table}:${mapping.source_id}`, mapping.destination_id);
+  }
+}
 
 async function existingMap(table, oldId) {
   const rows = await db`
@@ -255,6 +290,44 @@ async function mapId(table, oldId) {
   return found;
 }
 
+async function mapOptionalId(table, oldId) {
+  if (!oldId) return null;
+  const key = `${table}:${oldId}`;
+  if (legacyToNew.has(key)) return legacyToNew.get(key);
+  const found = await existingMap(table, oldId);
+  if (found) legacyToNew.set(key, found);
+  return found;
+}
+
+async function ensureImportCompatibility() {
+  // Convex can retain line settings after their chapter was deleted. Keep
+  // those settings and their original chapter id without inventing a chapter.
+  await client`
+    alter table if exists public.chapter_line_settings
+      add column if not exists source_chapter_id text
+  `;
+  await client`
+    alter table if exists public.chapter_line_settings
+      alter column chapter_id drop not null
+  `;
+  await client`
+    alter table if exists public.course_imports
+      add column if not exists source_course_id text
+  `;
+  await client`
+    alter table if exists public.course_imports
+      alter column course_id drop not null
+  `;
+  await client`
+    alter table if exists public.course_import_chapters
+      add column if not exists source_course_id text
+  `;
+  await client`
+    alter table if exists public.course_import_chapters
+      alter column course_id drop not null
+  `;
+}
+
 async function insertUser(document) {
   const oldId = document._id;
   const already = await existingMap('users', oldId);
@@ -270,6 +343,38 @@ async function insertUser(document) {
   `)[0]?.id;
   if (!destinationId) throw new Error(`Unable to insert users:${oldId}`);
   return rememberMap('users', oldId, destinationId);
+}
+
+async function importUsers(documents) {
+  const rows = documents.map((document) => ({
+    legacy_convex_id: document._id,
+    name: document.name ?? null,
+    image: document.image ?? null,
+    email: document.email ?? null,
+    email_verification_time: date(document.emailVerificationTime),
+    phone: document.phone ?? null,
+    phone_verification_time: date(document.phoneVerificationTime),
+    is_anonymous: document.isAnonymous ?? false,
+    lichess_username: document.lichessUsername ?? null,
+    chesscom_username: document.chesscomUsername ?? null,
+    language: document.language ?? 'en',
+    last_analyze_sync_lichess_at: date(document.lastAnalyzeSyncLichessAt),
+    last_analyze_sync_chesscom_at: date(document.lastAnalyzeSyncChesscomAt),
+    created_at: date(document._creationTime),
+    updated_at: date(document._creationTime),
+  }));
+  await insertBatches('users', rows, Object.keys(rows[0]), 'legacy_convex_id');
+  const oldIds = documents.map((document) => document._id);
+  const imported = await db`
+    select legacy_convex_id as legacy_id, id
+    from public.users
+    where legacy_convex_id in ${db(oldIds)}
+  `;
+  await rememberMaps('users', imported.map((row) => ({
+    source_table: 'users',
+    source_id: row.legacy_id,
+    destination_id: row.id,
+  })));
 }
 
 async function clearStaleImporterSessions() {
@@ -335,6 +440,40 @@ async function insertMapped(table, document, definition) {
   return rememberMap(table, oldId, existing[0].id);
 }
 
+async function importMappedTable(table, documents, definition) {
+  const rows = [];
+  for (const document of documents) {
+    const values = await definition.values(document, (refTable, refId) => mapId(refTable, refId));
+    const resolved = [];
+    for (const value of values) {
+      const resolvedValue = value instanceof Promise ? await value : value;
+      resolved.push(normalizePostgresValue(resolvedValue));
+    }
+    const columns = ['legacy_id', ...definition.columns];
+    const data = [document._id, ...resolved];
+    const row = Object.fromEntries(columns.map((column, index) => [column, data[index]]));
+    const undefinedColumns = columns.filter((column) => row[column] === undefined);
+    if (undefinedColumns.length) {
+      throw new Error(`Undefined values for ${table}:${document._id}: ${undefinedColumns.join(', ')}`);
+    }
+    rows.push(row);
+  }
+  if (rows.length === 0) return;
+  const columns = ['legacy_id', ...definition.columns];
+  await insertBatches(definition.target, rows, columns);
+  const oldIds = documents.map((document) => document._id);
+  const imported = await db`
+    select legacy_id, id
+    from ${db(`public.${definition.target}`)}
+    where legacy_id in ${db(oldIds)}
+  `;
+  await rememberMaps(table, imported.map((row) => ({
+    source_table: table,
+    source_id: row.legacy_id,
+    destination_id: row.id,
+  })));
+}
+
 async function preserveUnknown(table, document) {
   await db`
     insert into public.legacy_auth_documents (source_table, source_id, payload)
@@ -372,7 +511,7 @@ async function importTable(table) {
   const documents = readTable(extractionDir, table);
   if (documents.length === 0) return 0;
   if (table === 'users') {
-    for (const document of documents) await insertUser(document);
+    await importUsers(documents);
     return documents.length;
   }
   const definition = tableDefinitions[table];
@@ -380,16 +519,18 @@ async function importTable(table) {
     for (const document of documents) await preserveUnknown(table, document);
     return documents.length;
   }
-  for (const document of documents) await insertMapped(table, document, definition);
+  await importMappedTable(table, documents, definition);
   return documents.length;
 }
 
 try {
   let imported = 0;
+  await ensureImportCompatibility();
   await clearStaleImporterSessions();
   await client.begin(async (transaction) => {
     // Use the transaction connection for all statements in this run.
     db = transaction;
+    await preloadMappings();
     for (const table of allTables) {
       const count = await importTable(table);
       if (count) console.log(`${table}: ${count}`);
