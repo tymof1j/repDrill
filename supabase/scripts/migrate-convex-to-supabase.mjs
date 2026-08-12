@@ -262,7 +262,12 @@ async function insertMapped(table, document, definition) {
   if (oldDestination) return rememberMap(table, oldId, oldDestination);
   const values = definition.values(document, (refTable, refId) => mapId(refTable, refId));
   const resolved = [];
-  for (const value of values) resolved.push(value instanceof Promise ? await value : value);
+  for (const value of values) {
+    const resolvedValue = value instanceof Promise ? await value : value;
+    // Convex documents can omit optional fields. The postgres client rejects
+    // `undefined`, while SQL represents an omitted optional value as NULL.
+    resolved.push(resolvedValue === undefined ? null : resolvedValue);
+  }
   const columns = ['legacy_id', ...definition.columns];
   const data = [oldId, ...resolved];
   const rows = await db`
