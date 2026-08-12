@@ -514,7 +514,7 @@ async function importStorage() {
     }
     await db`
       insert into public.legacy_storage_documents (storage_id, content_type, size_bytes, object_path, payload)
-      values (${storageId}, ${document.contentType ?? null}, ${hasBytes ? statSync(filePath).size : null}, ${hasBytes ? `repdrill-legacy/${storageId}` : null}, ${document})
+      values (${storageId}, ${document.contentType ?? null}, ${hasBytes ? statSync(filePath).size : null}, ${hasBytes ? `repdrill-legacy/${storageId}` : null}, ${normalizePostgresValue(document)})
       on conflict (storage_id) do nothing
     `;
   }
@@ -541,18 +541,25 @@ try {
   let imported = 0;
   await clearStaleImporterSessions();
   await ensureImportCompatibility();
-  await client.begin(async (transaction) => {
-    // Use the transaction connection for all statements in this run.
+  // Commit each source table independently. A single transaction for the
+  // entire snapshot can outlive Supavisor's connection lifetime; table-level
+  // commits keep the import resumable and prevent a late rollback.
+  for (const table of allTables) {
+    const count = await client.begin(async (transaction) => {
+      db = transaction;
+      await preloadMappings();
+      return importTable(table);
+    });
+    if (count) console.log(`${table}: ${count}`);
+    imported += count;
+  }
+  const storageCount = await client.begin(async (transaction) => {
     db = transaction;
-    await preloadMappings();
-    for (const table of allTables) {
-      const count = await importTable(table);
-      if (count) console.log(`${table}: ${count}`);
-      imported += count;
-    }
-    const storageCount = await importStorage();
-    if (storageCount) console.log(`_storage: ${storageCount}`);
-    imported += storageCount;
+    return importStorage();
+  });
+  if (storageCount) console.log(`_storage: ${storageCount}`);
+  imported += storageCount;
+  await client.begin(async (transaction) => {
     const users = await transaction`select id from public.users`;
     for (const user of users) {
       await transaction`select public.refresh_counter_snapshots(${user.id})`;
