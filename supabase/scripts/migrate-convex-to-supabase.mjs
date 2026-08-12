@@ -288,8 +288,7 @@ async function insertMapped(table, document, definition) {
   let rows;
   try {
     rows = await db`
-      insert into ${db(`public.${definition.target}`)} ${db(columns)}
-      values ${db(row)}
+      insert into ${db(`public.${definition.target}`)} ${db(row, columns)}
       on conflict (legacy_id) do nothing
       returning id
     `;
