@@ -2,7 +2,14 @@ import { authkitProxy } from '@workos-inc/authkit-nextjs';
 import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 import { courseAliasRedirectUrl, resolveCourseHostAlias } from "@/lib/course/hostAliases";
 
+const siteUrl = process.env.SITE_URL?.trim().replace(/\/$/, "");
+const workosRedirectUri =
+  process.env.WORKOS_REDIRECT_URI?.trim() || (siteUrl ? `${siteUrl}/auth/callback` : undefined);
+
 const workosProxy = authkitProxy({
+  // Keep OAuth callbacks on the canonical production host instead of allowing
+  // a Vercel preview URL to become the redirect URI for a real session.
+  redirectUri: workosRedirectUri,
   middlewareAuth: {
     enabled: true,
     unauthenticatedPaths: [

@@ -7,14 +7,17 @@ The migration is designed as a one-way, append-only cutover:
    - Sign-in endpoint: `/sign-in`
    - Callback URI: `/auth/callback`
    - Logout URI: `/`
-3. Add `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_REDIRECT_URI`, a random `WORKOS_COOKIE_PASSWORD` of at least 32 characters, and `SUPABASE_DB_URL` to the deployment environment.
-4. From a machine with access to the Convex project, create a complete snapshot:
+3. For production OAuth, unlock the WorkOS Production environment by adding billing information, then create a Production API key and use the Production Client ID. Staging and Production have separate keys, users, redirect URIs, and Google connections.
+4. Register exactly `https://<canonical-host>/auth/callback` and `https://<canonical-host>/` in WorkOS Production. Set `SITE_URL` to the canonical HTTPS origin and `WORKOS_REDIRECT_URI` to its `/auth/callback` URL. Do not use a Vercel preview URL for either value.
+5. In WorkOS Production → Authentication → OAuth providers → Google, configure the app's Google OAuth credentials. Copy WorkOS's displayed Google redirect URI into Google Cloud Console as an authorized redirect URI, then enable Google for the Production AuthKit application. WorkOS's default Google credentials are staging-only.
+6. Add `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_REDIRECT_URI`, a random `WORKOS_COOKIE_PASSWORD` of at least 32 characters, and `SUPABASE_DB_URL` to the production deployment environment. Never commit these values.
+7. From a machine with access to the Convex project, create a complete snapshot:
 
    ```sh
    npx convex export --prod --include-file-storage --path /private/tmp/repdrill-convex.zip
    ```
 
-5. Run the importer with the same Supabase connection string:
+8. Run the importer with the same Supabase connection string:
 
    ```sh
    SUPABASE_DB_URL='postgres://…' \
