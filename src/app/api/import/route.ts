@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
-import { fetchMutation } from 'convex/nextjs';
-import { api } from '@convex/_generated/api';
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchMutation } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
 
 export async function POST(req: Request) {
   const token = await convexAuthNextjsToken();

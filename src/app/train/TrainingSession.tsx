@@ -26,9 +26,9 @@ import {
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import type { TrainingLine, LineStep } from './types';
 import { parseStudyMarkup, toCompleteFen } from './annotation';
-import { useMutation } from 'convex/react';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
+import { useMutation } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
+import type { Id } from '@/lib/supabase/types';
 import { normalizeNotation } from '@/lib/chess/notation';
 import {
   readLearnQuizPasses,

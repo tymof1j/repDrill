@@ -2,10 +2,10 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { GripVertical, Pencil } from 'lucide-react';
-import { useQuery } from 'convex/react';
+import { useQuery } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
+import { api } from '@/lib/supabase/api';
+import type { Id } from '@/lib/supabase/types';
 import {
   RepertoireViewer,
   type ViewerMove,

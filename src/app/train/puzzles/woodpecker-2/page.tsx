@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
+import { isAuthenticated } from '@/lib/workos/server';
 import {
   getWoodpecker2Puzzle,
   woodpecker2Puzzles,
@@ -11,7 +11,7 @@ export default async function Woodpecker2TrainingPage({
 }: {
   searchParams: Promise<{ n?: string }>;
 }) {
-  if (!(await isAuthenticatedNextjs())) redirect('/login');
+  if (!(await isAuthenticated())) redirect('/login');
   const query = await searchParams;
   const requested = Number.parseInt(query.n ?? '1', 10);
   const number = Number.isFinite(requested)
@@ -29,4 +29,3 @@ export default async function Woodpecker2TrainingPage({
     />
   );
 }
-

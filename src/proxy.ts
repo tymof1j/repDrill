@@ -1,17 +1,25 @@
-import { convexAuthNextjsMiddleware, createRouteMatcher, nextjsMiddlewareRedirect } from "@convex-dev/auth/nextjs/server";
-import { NextResponse } from "next/server";
+import { authkitProxy } from '@workos-inc/authkit-nextjs';
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 import { courseAliasRedirectUrl, resolveCourseHostAlias } from "@/lib/course/hostAliases";
 
-const isSignInPage = createRouteMatcher(["/login"]);
-const isProtectedRoute = createRouteMatcher([
-  "/courses(.*)",
-  "/repertoires(.*)",
-  "/train(.*)",
-  "/analyze(.*)",
-  "/settings(.*)",
-]);
+const workosProxy = authkitProxy({
+  middlewareAuth: {
+    enabled: true,
+    unauthenticatedPaths: [
+      '/',
+      '/login',
+      '/comparison',
+      '/documentation/:path*',
+      '/share/:path*',
+      '/sign-in',
+      '/auth/:path*',
+      '/api/source-documents/:path*',
+      '/api/internal/counter-refresh',
+    ],
+  },
+});
 
-export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
+export default async function proxy(request: NextRequest, event: NextFetchEvent) {
   const courseAlias = request.nextUrl.pathname === "/"
     ? resolveCourseHostAlias(request.nextUrl.hostname)
     : null;
@@ -21,16 +29,9 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
     // protected destination is evaluated on a fresh request.
     return NextResponse.redirect(courseAliasRedirectUrl(courseAlias, request.nextUrl));
   }
-
-  const isAuthenticated = await convexAuth.isAuthenticated();
-  if (isSignInPage(request) && isAuthenticated) {
-    return nextjsMiddlewareRedirect(request, "/courses");
-  }
-  if (isProtectedRoute(request) && !isAuthenticated) {
-    return nextjsMiddlewareRedirect(request, "/login");
-  }
-});
+  return workosProxy(request, event);
+}
 
 export const config = {
-  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };

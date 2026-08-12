@@ -1,7 +1,7 @@
 'use client';
 
-import { useMutation } from "convex/react";
-import { api } from "@convex/_generated/api";
+import { useMutation } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
 import { useRouter } from 'next/navigation';
 import {
   AppSurface,

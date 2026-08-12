@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
-import { fetchQuery } from 'convex/nextjs';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
+import type { Id } from '@/lib/supabase/types';
 
 function escapeHeader(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');

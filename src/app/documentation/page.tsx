@@ -48,7 +48,7 @@ const advantages = [
   {
     title: 'Portable prep, synced workspace',
     body:
-      'Convex gives the web app reactive sync and protected writes, while PGN and JSON exports keep the library portable. The goal is to keep prep usable inside RepDrill without locking it there.',
+      'Supabase provides the web app database and protected writes, while PGN and JSON exports keep the library portable. The goal is to keep prep usable inside RepDrill without locking it there.',
   },
 ];
 

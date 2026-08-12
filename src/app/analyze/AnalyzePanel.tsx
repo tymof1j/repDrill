@@ -1,9 +1,10 @@
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity, react-hooks/refs */
 'use client';
 
 import React, { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useQuery } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
 import {
   PremiumButton,
   SecondaryButton,

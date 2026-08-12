@@ -1,8 +1,10 @@
 import { query, mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 // Import FSRS logic — we inline the pure functions here since Convex can't import from src/
 // These are the same algorithms from src/lib/srs/fsrs.ts
@@ -704,6 +706,22 @@ export type CourseLineProgress = {
   newLines: number;
 };
 
+type CounterSnapshot = {
+  courseId?: string;
+  totalLines: number;
+  learnedLines: number;
+  dueLines: number;
+  newLines: number;
+  computedAt: number;
+};
+
+async function readCounterSnapshots(ctx: QueryCtx, userId: Id<"users">) {
+  return (await ctx.db
+    .query("trainingCounterSnapshots")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect()) as CounterSnapshot[];
+}
+
 export const getCourseLineProgress = query({
   args: {
     courseIds: v.array(v.id("courses")),
@@ -716,59 +734,17 @@ export const getCourseLineProgress = query({
     if (!userId || args.courseIds.length === 0) return [] as CourseLineProgress[];
 
     const requestedIds = Array.from(new Set(args.courseIds.map((id) => id as string))).slice(0, 50);
-    const summaries = new Map<string, CourseLineProgress>();
-    for (const courseId of requestedIds) {
-      const course = await ctx.db.get(courseId as Id<"courses">);
-      if (course?.userId === userId) {
-        summaries.set(courseId, { courseId, total: 0, learned: 0, due: 0, newLines: 0 });
-      }
-    }
-    if (summaries.size === 0) return [] as CourseLineProgress[];
-
-    const cards = await ctx.db
-      .query("reviewCards")
-      .withIndex("by_user_due", (q) => q.eq("userId", userId))
-      .take(5000);
-    const moveById = new Map<string, Doc<"moves"> | null>();
-    const chapterById = new Map<string, Doc<"chapters"> | null>();
-    const now = Date.now();
-
-    for (const card of cards) {
-      const moveKey = card.moveId as string;
-      let move = moveById.get(moveKey);
-      if (move === undefined) {
-        move = await ctx.db.get(card.moveId);
-        moveById.set(moveKey, move);
-      }
-      if (!move || move.moveType !== "repertoire") continue;
-
-      const chapterKey = move.chapterId as string;
-      let chapter = chapterById.get(chapterKey);
-      if (chapter === undefined) {
-        chapter = await ctx.db.get(move.chapterId);
-        chapterById.set(chapterKey, chapter);
-      }
-      const summary = chapter ? summaries.get(chapter.courseId as string) : undefined;
-      if (!summary) continue;
-
-      summary.total += 1;
-      // A failed recall can legitimately remain in FSRS state `new`, but it
-      // is still an attempted position.  `lastReview` is the durable signal
-      // that the learner has seen the card at least once, so progress should
-      // not stay at zero after a completed training line.
-      const hasBeenReviewed = card.lastReview !== undefined || card.state !== 0;
-      if (hasBeenReviewed) {
-        summary.learned += 1;
-        // New cards belong to Learn, not Review. A Review count should only
-        // contain positions the learner has already seen and which are now
-        // due again.
-        if (card.due <= now) summary.due += 1;
-      } else {
-        summary.newLines += 1;
-      }
-    }
-
-    return Array.from(summaries.values());
+    const requested = new Set(requestedIds);
+    const snapshots = await readCounterSnapshots(ctx, userId);
+    return snapshots
+      .filter((row) => row.courseId && requested.has(row.courseId))
+      .map((row) => ({
+        courseId: row.courseId!,
+        total: row.totalLines,
+        learned: row.learnedLines,
+        due: row.dueLines,
+        newLines: row.newLines,
+      }));
   },
 });
 
@@ -778,20 +754,155 @@ export const getQuickStats = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return { totalLines: 0, dueLines: 0, newLines: 0 };
+    const aggregate = (await readCounterSnapshots(ctx, userId)).find((row) => !row.courseId);
+    return aggregate
+      ? {
+          totalLines: aggregate.totalLines,
+          dueLines: aggregate.dueLines,
+          newLines: aggregate.newLines,
+        }
+      : { totalLines: 0, dueLines: 0, newLines: 0 };
+  },
+});
+
+/**
+ * Fast page-load counter. The old line DFS is intentionally kept for the
+ * training details that need exact line topology, but library headers must
+ * never run it synchronously. This snapshot is refreshed at most every 20
+ * minutes and is safe to render even while a refresh is queued.
+ */
+export const getCachedLineStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { totalLines: 0, dueLines: 0, newLines: 0, computedAt: null };
+    const aggregate = (await readCounterSnapshots(ctx, userId)).find((row) => !row.courseId);
+    return aggregate
+      ? {
+          totalLines: aggregate.totalLines,
+          dueLines: aggregate.dueLines,
+          newLines: aggregate.newLines,
+          computedAt: aggregate.computedAt,
+        }
+      : { totalLines: 0, dueLines: 0, newLines: 0, computedAt: null };
+  },
+});
+
+export const ensureCounterSnapshot = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("trainingCounterSnapshots")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const aggregate = rows.find((row) => row.courseId === undefined);
+    const stale = !aggregate || now - aggregate.computedAt >= 20 * 60 * 1000;
+    const recentlyRequested = aggregate?.refreshRequestedAt !== undefined &&
+      now - aggregate.refreshRequestedAt < 60 * 1000;
+    if (!stale || recentlyRequested) return aggregate?.computedAt ?? null;
+
+    if (aggregate) {
+      await ctx.db.patch(aggregate._id, { refreshRequestedAt: now });
+    } else {
+      await ctx.db.insert("trainingCounterSnapshots", {
+        userId,
+        totalLines: 0,
+        learnedLines: 0,
+        dueLines: 0,
+        newLines: 0,
+        computedAt: 0,
+        refreshRequestedAt: now,
+      });
+    }
+    await ctx.scheduler.runAfter(0, internal.training.refreshCounterSnapshot, { userId });
+    return aggregate?.computedAt ?? null;
+  },
+});
+
+/** Background-only aggregation. The expensive graph traversal is kept off
+ * the request path and remains idempotent if the scheduler retries it. */
+export const refreshCounterSnapshot = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const trainableCourses = await getTrainableCourses(ctx, args.userId);
+    const courseIds = new Set(trainableCourses.map(({ course }) => course._id as string));
+    const courseByMoveId = new Map<string, string>();
+
+    for (const { course } of trainableCourses) {
+      const chapters = await ctx.db
+        .query("chapters")
+        .withIndex("by_course", (q) => q.eq("courseId", course._id))
+        .collect();
+      for (const chapter of chapters) {
+        const moves = await ctx.db
+          .query("moves")
+          .withIndex("by_chapter", (q) => q.eq("chapterId", chapter._id))
+          .collect();
+        for (const move of moves) {
+          if (move.moveType === "repertoire") courseByMoveId.set(move._id as string, course._id as string);
+        }
+      }
+    }
+
+    const summaries = new Map<string, {
+      totalLines: number;
+      learnedLines: number;
+      dueLines: number;
+      newLines: number;
+    }>();
+    for (const courseId of courseIds) {
+      const totalLines = Array.from(courseByMoveId.values()).filter((id) => id === courseId).length;
+      summaries.set(courseId, { totalLines, learnedLines: 0, dueLines: 0, newLines: totalLines });
+    }
 
     const now = Date.now();
     const cards = await ctx.db
       .query("reviewCards")
-      .withIndex("by_user_due", (q) => q.eq("userId", userId))
+      .withIndex("by_user_due", (q) => q.eq("userId", args.userId))
       .collect();
-    const trainableMoveIds = await getTrainableMoveIds(ctx, userId);
-    const activeCards = cards.filter((card) => trainableMoveIds.has(card.moveId as string));
+    for (const card of cards) {
+      const courseId = courseByMoveId.get(card.moveId as string);
+      const summary = courseId ? summaries.get(courseId) : undefined;
+      if (!summary) continue;
+      const reviewed = card.lastReview !== undefined || card.state !== 0;
+      if (reviewed) {
+        summary.learnedLines += 1;
+        summary.newLines = Math.max(0, summary.newLines - 1);
+        if (card.due <= now) summary.dueLines += 1;
+      }
+    }
 
-    return {
-      totalLines: activeCards.length,
-      dueLines: activeCards.filter((c) => c.due <= now && !isUnseenCard(c)).length,
-      newLines: activeCards.filter((c) => isUnseenCard(c)).length,
-    };
+    const oldRows = await ctx.db
+      .query("trainingCounterSnapshots")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const row of oldRows) await ctx.db.delete(row._id);
+
+    let aggregate = { totalLines: 0, learnedLines: 0, dueLines: 0, newLines: 0 };
+    for (const [courseId, summary] of summaries) {
+      aggregate = {
+        totalLines: aggregate.totalLines + summary.totalLines,
+        learnedLines: aggregate.learnedLines + summary.learnedLines,
+        dueLines: aggregate.dueLines + summary.dueLines,
+        newLines: aggregate.newLines + summary.newLines,
+      };
+      await ctx.db.insert("trainingCounterSnapshots", {
+        userId: args.userId,
+        courseId: courseId as Id<"courses">,
+        ...summary,
+        computedAt: now,
+      });
+    }
+    await ctx.db.insert("trainingCounterSnapshots", {
+      userId: args.userId,
+      ...aggregate,
+      computedAt: now,
+    });
+    return aggregate;
   },
 });
 
@@ -970,6 +1081,9 @@ export const submitLineRatings = mutation({
         prevState: card.state,
       });
     }
+    // Keep the next library visit cheap while making the updated count
+    // available shortly after a session completes.
+    await ctx.scheduler.runAfter(0, internal.training.refreshCounterSnapshot, { userId });
   },
 });
 

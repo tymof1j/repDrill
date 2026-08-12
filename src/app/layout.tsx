@@ -6,8 +6,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { I18nProvider } from '@/components/i18n/I18nProvider';
 import { normalizeLanguage } from '@/lib/i18n/translations';
 import { cookies } from 'next/headers';
-import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
-import { ConvexClientProvider } from "@/components/ConvexClientProvider";
+import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
+import { withAuth } from '@workos-inc/authkit-nextjs';
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
@@ -41,10 +41,11 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const initialLanguage = normalizeLanguage(cookieStore.get('repdrill-language')?.value);
+  const auth = await withAuth();
+  const { accessToken: _accessToken, ...initialAuth } = auth;
 
   return (
-    <ConvexAuthNextjsServerProvider>
-      <html
+    <html
         lang={initialLanguage}
         data-scroll-behavior="smooth"
         suppressHydrationWarning
@@ -57,15 +58,14 @@ export default async function RootLayout({
             }}
           />
         </head>
-        <body className="min-h-full text-[color:var(--ink)]">
-          <ConvexClientProvider>
+      <body className="min-h-full text-[color:var(--ink)]">
+          <AuthKitProvider initialAuth={initialAuth}>
             <I18nProvider initialLanguage={initialLanguage}>
               <AppShell sidebar={<Sidebar />}>{children}</AppShell>
             </I18nProvider>
             <SpeedInsights />
-          </ConvexClientProvider>
-        </body>
-      </html>
-    </ConvexAuthNextjsServerProvider>
+          </AuthKitProvider>
+      </body>
+    </html>
   );
 }

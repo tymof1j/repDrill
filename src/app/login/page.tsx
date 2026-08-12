@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { isAuthenticatedNextjs } from "@convex-dev/auth/nextjs/server";
+import { getSignInUrl, withAuth } from '@workos-inc/authkit-nextjs';
 import { redirect } from 'next/navigation';
 import { SignInButton } from './SignInButton';
 
@@ -13,8 +13,10 @@ export default async function LoginPage({
     requestedRedirectTo && requestedRedirectTo.startsWith('/') && !requestedRedirectTo.startsWith('//')
       ? requestedRedirectTo
       : '/courses';
-  const isLoggedIn = await isAuthenticatedNextjs();
+  const { user } = await withAuth();
+  const isLoggedIn = Boolean(user);
   if (isLoggedIn) redirect(redirectTo);
+  const signInUrl = await getSignInUrl({ returnTo: redirectTo });
 
   return (
     <div className="relative min-h-screen bg-[color:var(--paper)] text-[color:var(--ink)]">
@@ -49,7 +51,7 @@ export default async function LoginPage({
           <div className="grid max-w-lg grid-cols-3 gap-3">
             {[
               ['FSRS', 'Recall'],
-              ['Convex', 'Storage'],
+              ['Supabase', 'Storage'],
               ['AGPL-3', 'License'],
             ].map(([value, label]) => (
               <div key={value} className="rounded-lg border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-3">
@@ -73,7 +75,7 @@ export default async function LoginPage({
             </p>
 
             <div className="mt-10">
-              <SignInButton redirectTo={redirectTo} />
+              <SignInButton href={signInUrl} />
             </div>
 
             <p className="mt-10 border-t border-[color:var(--paper-rule)] pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">

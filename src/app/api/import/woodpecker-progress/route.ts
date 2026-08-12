@@ -1,12 +1,11 @@
-import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
-import { api } from '@convex/_generated/api';
-import { fetchMutation } from 'convex/nextjs';
-import type { FunctionArgs } from 'convex/server';
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { api } from '@/lib/supabase/api';
+import { fetchMutation } from '@/lib/supabase/server-client';
 import { NextResponse } from 'next/server';
 
 const MAX_BODY_BYTES = 512 * 1_024;
 
-type LegacyImportArgs = FunctionArgs<typeof api.bookProgress.importLegacyWoodpecker>;
+type LegacyImportArgs = Record<string, unknown>;
 
 /**
  * One-time bridge for the user's normalized Woodpecker legacy export.

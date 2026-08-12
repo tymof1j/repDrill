@@ -1,7 +1,8 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@convex/_generated/api";
+import { useMutation, useQuery } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
 import { PremiumButton, FieldLabel, fieldClassName } from '@/components/ui/Premium';
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {

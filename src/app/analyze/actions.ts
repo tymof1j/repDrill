@@ -1,9 +1,9 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchMutation, fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchMutation, fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
 import { fetchLichessGames } from '@/lib/games/lichess';
 import { fetchChessComGames } from '@/lib/games/chesscom';
 import { detectDeviation } from '@/lib/games/deviation';
@@ -12,6 +12,7 @@ import type { UserBook } from '@/lib/games/deviation';
 import { Chess } from 'chess.js';
 import { parsePgn } from '@/lib/chess/pgn-parser';
 import { buildTree } from '@/lib/chess/tree';
+import type { Id } from '@/lib/supabase/types';
 
 export type GameAnalysisRow = {
   id?: string;
@@ -363,7 +364,7 @@ export async function saveAnalysisAnnotations(gameId: string, annotations: Recor
   const token = await requireToken();
   await fetchMutation(
     api.analyze.saveAnnotations,
-    { id: gameId as import('@convex/_generated/dataModel').Id<'analyzedGames'>, annotations: JSON.stringify(annotations) },
+    { id: gameId as Id<'analyzedGames'>, annotations: JSON.stringify(annotations) },
     { token },
   );
 }

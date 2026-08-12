@@ -2,14 +2,16 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { useQuery, useConvexAuth } from 'convex/react';
+import { useQuery } from '@/lib/supabase/client';
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@convex/_generated/api';
+import { api } from '@/lib/supabase/api';
 import { AppSurface, PageHeader, PremiumButton } from '@/components/ui/Premium';
 import { AnalyzePanel } from './AnalyzePanel';
 
 export default function AnalyzePage() {
-  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { loading: isLoading, user: authUser } = useAuth();
+  const isAuthenticated = Boolean(authUser);
   const router = useRouter();
   const searchParams = useSearchParams();
 
