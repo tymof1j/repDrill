@@ -405,7 +405,13 @@ async function clearStaleImporterSessions() {
       where pid <> pg_backend_pid()
         and usename = current_user
         and datname = current_database()
-        and application_name = 'repdrill-convex-import'
+        and state = 'idle in transaction'
+        and (
+          query ilike '%legacy_id_map%'
+          or query ilike '%course_import_move_chunks%'
+          or query ilike '%course_import_chapters%'
+          or query ilike '%chapter_line_settings%'
+        )
     `;
     for (const session of sessions) {
       await cleanup`select pg_terminate_backend(${session.pid})`;
@@ -540,7 +546,6 @@ async function importTable(table) {
 try {
   let imported = 0;
   await clearStaleImporterSessions();
-  await ensureImportCompatibility();
   // Commit each source table independently. A single transaction for the
   // entire snapshot can outlive Supavisor's connection lifetime; table-level
   // commits keep the import resumable and prevent a late rollback.
