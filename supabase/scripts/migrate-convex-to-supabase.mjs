@@ -391,7 +391,7 @@ async function clearStaleImporterSessions() {
       where pid <> pg_backend_pid()
         and usename = current_user
         and datname = current_database()
-        and query ilike '%legacy_id%'
+        and application_name = 'repdrill-convex-import'
     `;
     for (const session of sessions) {
       await cleanup`select pg_terminate_backend(${session.pid})`;
@@ -525,8 +525,8 @@ async function importTable(table) {
 
 try {
   let imported = 0;
-  await ensureImportCompatibility();
   await clearStaleImporterSessions();
+  await ensureImportCompatibility();
   await client.begin(async (transaction) => {
     // Use the transaction connection for all statements in this run.
     db = transaction;
