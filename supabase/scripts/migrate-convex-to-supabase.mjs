@@ -295,7 +295,9 @@ async function mapOptionalId(table, oldId) {
   const key = `${table}:${oldId}`;
   if (legacyToNew.has(key)) return legacyToNew.get(key);
   const found = await existingMap(table, oldId);
-  if (found) legacyToNew.set(key, found);
+  // Cache misses too: migration snapshots can contain thousands of rows
+  // referring to a course/chapter that was deleted in Convex.
+  legacyToNew.set(key, found ?? null);
   return found;
 }
 
