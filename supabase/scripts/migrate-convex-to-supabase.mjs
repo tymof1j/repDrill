@@ -280,11 +280,16 @@ async function insertMapped(table, document, definition) {
   }
   const columns = ['legacy_id', ...definition.columns];
   const data = [oldId, ...resolved];
+  const row = Object.fromEntries(columns.map((column, index) => [column, data[index]]));
+  const undefinedColumns = columns.filter((column) => row[column] === undefined);
+  if (undefinedColumns.length) {
+    throw new Error(`Undefined values for ${table}:${oldId}: ${undefinedColumns.join(', ')}`);
+  }
   let rows;
   try {
     rows = await db`
       insert into ${db(`public.${definition.target}`)} ${db(columns)}
-      values ${db(data)}
+      values ${db(row)}
       on conflict (legacy_id) do nothing
       returning id
     `;
