@@ -477,7 +477,7 @@ async function importMappedTable(table, documents, definition) {
 async function preserveUnknown(table, document) {
   await db`
     insert into public.legacy_auth_documents (source_table, source_id, payload)
-    values (${table}, ${document._id}, ${document})
+    values (${table}, ${document._id}, ${normalizePostgresValue(document)})
     on conflict (source_table, source_id) do nothing
   `;
 }
