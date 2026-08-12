@@ -227,6 +227,9 @@ const tableDirs = readdirSync(extractionDir, { withFileTypes: true })
   .map((entry) => entry.name);
 const allTables = [...new Set([...tableOrder, ...tableDirs])].filter((table) => table !== '_storage');
 const legacyToNew = new Map();
+const snapshotIdsByTable = new Map(
+  allTables.map((table) => [table, new Set(readTable(extractionDir, table).map((document) => document._id))]),
+);
 const INSERT_BATCH_SIZE = 500;
 
 async function insertBatches(target, rows, columns, conflictColumn = 'legacy_id') {
@@ -284,6 +287,10 @@ async function mapId(table, oldId) {
   if (!oldId) throw new Error(`Missing ${table} reference during import`);
   const key = `${table}:${oldId}`;
   if (legacyToNew.has(key)) return legacyToNew.get(key);
+  const sourceIds = snapshotIdsByTable.get(table);
+  if (sourceIds && !sourceIds.has(oldId)) {
+    throw new Error(`Missing imported ${table} row for ${oldId}`);
+  }
   const found = await existingMap(table, oldId);
   if (!found) throw new Error(`Missing imported ${table} row for ${oldId}`);
   legacyToNew.set(key, found);
@@ -294,6 +301,11 @@ async function mapOptionalId(table, oldId) {
   if (!oldId) return null;
   const key = `${table}:${oldId}`;
   if (legacyToNew.has(key)) return legacyToNew.get(key);
+  const sourceIds = snapshotIdsByTable.get(table);
+  if (sourceIds && !sourceIds.has(oldId)) {
+    legacyToNew.set(key, null);
+    return null;
+  }
   const found = await existingMap(table, oldId);
   // Cache misses too: migration snapshots can contain thousands of rows
   // referring to a course/chapter that was deleted in Convex.
