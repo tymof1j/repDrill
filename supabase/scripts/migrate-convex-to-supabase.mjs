@@ -186,6 +186,15 @@ function date(value) {
   return new Date(typeof number === 'number' ? number : number);
 }
 
+function normalizePostgresValue(value) {
+  if (value === undefined) return null;
+  if (Array.isArray(value)) return value.map(normalizePostgresValue);
+  if (value && typeof value === 'object' && !(value instanceof Date) && !Buffer.isBuffer(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, normalizePostgresValue(nested)]));
+  }
+  return value;
+}
+
 function resourceTable(resourceType) {
   if (resourceType === 'course') return 'courses';
   if (resourceType === 'repertoire') return 'repertoires';
@@ -265,17 +274,23 @@ async function insertMapped(table, document, definition) {
   for (const value of values) {
     const resolvedValue = value instanceof Promise ? await value : value;
     // Convex documents can omit optional fields. The postgres client rejects
-    // `undefined`, while SQL represents an omitted optional value as NULL.
-    resolved.push(resolvedValue === undefined ? null : resolvedValue);
+    // `undefined`, including when it is nested in a JSON value, while SQL
+    // represents an omitted optional value as NULL.
+    resolved.push(normalizePostgresValue(resolvedValue));
   }
   const columns = ['legacy_id', ...definition.columns];
   const data = [oldId, ...resolved];
-  const rows = await db`
-    insert into ${db(`public.${definition.target}`)} ${db(columns)}
-    values ${db(data)}
-    on conflict (legacy_id) do nothing
-    returning id
-  `;
+  let rows;
+  try {
+    rows = await db`
+      insert into ${db(`public.${definition.target}`)} ${db(columns)}
+      values ${db(data)}
+      on conflict (legacy_id) do nothing
+      returning id
+    `;
+  } catch (error) {
+    throw new Error(`Failed to import ${table}:${oldId} into ${definition.target}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+  }
   if (rows[0]?.id) return rememberMap(table, oldId, rows[0].id);
   const existing = await db`
     select id from ${db(`public.${definition.target}`)} where legacy_id = ${oldId}
