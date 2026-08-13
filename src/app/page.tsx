@@ -56,7 +56,7 @@ export default async function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[color:var(--paper)] text-[color:var(--ink)]">
-      <LandingNav ctaHref="/login" ctaLabel="Start training" isLoggedIn={false} />
+      <LandingNav ctaHref="/sign-in" ctaLabel="Start training" isLoggedIn={false} />
 
       <section className="mx-auto grid min-h-[92vh] w-full max-w-7xl items-center gap-14 px-5 pb-16 pt-28 md:px-10 lg:grid-cols-[minmax(0,1.03fr)_minmax(0,.97fr)] lg:px-14">
         <LandingReveal className="min-w-0">
@@ -76,7 +76,7 @@ export default async function Home() {
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-4">
             <Link
-              href="/login"
+              href="/sign-in"
               className="group inline-flex min-h-12 items-center gap-4 rounded-md bg-[color:var(--ink)] px-6 py-3 text-sm font-semibold text-[color:var(--paper)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)]"
             >
               Build my training library
@@ -170,7 +170,7 @@ export default async function Home() {
               stays hidden until you commit to a move.
             </p>
             <Link
-              href="/login"
+              href="/sign-in"
               className="mt-9 inline-flex items-center gap-3 rounded-md bg-[color:var(--paper)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] hover:bg-white"
             >
               Build a puzzle course from your book <span aria-hidden>→</span>
@@ -273,7 +273,7 @@ export default async function Home() {
             </p>
           </div>
           <Link
-            href="/login"
+            href="/sign-in"
             className="inline-flex min-h-12 w-max items-center gap-4 rounded-md bg-[color:var(--margin-red)] px-6 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
           >
             Start training <span aria-hidden>→</span>

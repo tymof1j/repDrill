@@ -1,6 +1,7 @@
 import { handleAuth } from '@workos-inc/authkit-nextjs';
+import { getCanonicalSiteUrl } from '@/lib/workos/config';
 
-const siteUrl = process.env.SITE_URL?.trim().replace(/\/$/, '');
+const siteUrl = getCanonicalSiteUrl();
 
 // Explicitly pin the callback exchange to the canonical origin in production.
 // This prevents the request host (for example, a Vercel preview URL) from
