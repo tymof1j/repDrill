@@ -29,13 +29,19 @@ import type { TrainingLine, LineStep } from './types';
 import { parseStudyMarkup, toCompleteFen } from './annotation';
 import { useMutation } from '@/lib/supabase/client';
 import { api } from '@/lib/supabase/api';
-import type { Id } from '@/lib/supabase/types';
 import { normalizeNotation } from '@/lib/chess/notation';
 import {
   readLearnQuizPasses,
   recordLearnResume,
   type LearnQuizPasses,
 } from '@/lib/bookTrainingPreferences';
+import {
+  createTrainingSaveId,
+  enqueuePendingLineSave,
+  readPendingLineSaves,
+  removePendingLineSave,
+  type PendingLineSave,
+} from './trainingSaveQueue';
 
 type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
 type LinePhase = 'browse' | 'drill' | 'line-done';
@@ -109,9 +115,10 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const moveStartTimeRef = useRef(0);
   const [inErrorRecovery, setInErrorRecovery] = useState(false);
   const [errorQueue, setErrorQueue] = useState<number[]>([]);
-  const [lineSaving, setLineSaving] = useState(false);
   const [lineSaved, setLineSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingSaveCount, setPendingSaveCount] = useState(0);
+  const [saveExitInFlight, setSaveExitInFlight] = useState(false);
 
   const [boardFen, setBoardFen] = useState('');
   const [lastMoveUci, setLastMoveUci] = useState<[string, string] | undefined>();
@@ -126,11 +133,11 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const [queuedPremove, setQueuedPremove] = useState<{ from: string; to: string } | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
-  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
-  const lineAdvanceInFlightRef = useRef(false);
+  const saveQueueInFlightRef = useRef<Promise<boolean> | null>(null);
+  const saveKeysInFlightRef = useRef(new Set<string>());
+  const currentLineSaveRef = useRef<PendingLineSave | null>(null);
   const lineSaveAttemptedRef = useRef(false);
   const submitRatings = useMutation(api.training.submitLineRatings);
-  const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
 
   const [sessionStats, setSessionStats] = useState({
     linesCompleted: 0,
@@ -239,7 +246,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     moveStartTimeRef.current = 0;
     setInErrorRecovery(false);
     setErrorQueue([]);
-    setLineSaving(false);
     setLineSaved(false);
     setSaveError(null);
     lineSaveAttemptedRef.current = false;
@@ -319,65 +325,132 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [linePhase, feedback, inErrorRecovery, questionIndex, userStepIndexes.length, drillRun, drillPassCount, lineCorrect, lineWrong, errorQueue.length, line]);
 
-  const persistLineProgress = useCallback(async (completeLine: boolean) => {
-    if (lineSaved) return true;
-    if (saveInFlightRef.current) return saveInFlightRef.current;
+  const sendLineSave = useCallback(async (save: PendingLineSave) => {
+    await submitRatings({
+      saveId: save.saveId,
+      courseIds: [save.courseId],
+      results: save.results,
+      infoLines: save.infoLines,
+    });
+  }, [submitRatings]);
+
+  const flushPendingSaves = useCallback(async () => {
+    if (saveQueueInFlightRef.current) return saveQueueInFlightRef.current;
 
     const promise = (async () => {
-      setLineSaving(true);
-      setSaveError(null);
-      try {
-        if (completeLine && line?.isInfoOnly) {
-          await markInfoLineViewed({
-            chapterId: line.chapterId as Id<'chapters'>,
-            lineKey: line.lineKey,
-          });
+      let allSaved = true;
+      const attemptedSaveIds = new Set<string>();
+      while (true) {
+        const queue = readPendingLineSaves();
+        setPendingSaveCount(queue.length);
+        const save = queue.find((candidate) => (
+          !attemptedSaveIds.has(candidate.saveId)
+          && !saveKeysInFlightRef.current.has(candidate.saveId)
+        ));
+        if (!save) {
+          // A new line may have been queued while the last request resolved.
+          // Give that synchronous localStorage write one paint to become
+          // visible before deciding the queue is drained.
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+          const latestQueue = readPendingLineSaves();
+          if (latestQueue.some((candidate) => !attemptedSaveIds.has(candidate.saveId))) continue;
+          break;
         }
-        if (lineResults.length > 0) {
-          await submitRatings({
-            results: lineResults.map((r) => ({
-              cardId: r.cardId as Id<'reviewCards'>,
-              correct: r.correct,
-              responseTimeMs: r.responseTimeMs,
-            })),
-          });
+        attemptedSaveIds.add(save.saveId);
+        if (saveKeysInFlightRef.current.has(save.saveId)) continue;
+        saveKeysInFlightRef.current.add(save.saveId);
+        let saved = false;
+        try {
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+              await sendLineSave(save);
+              saved = true;
+              break;
+            } catch {
+              if (attempt < 2) {
+                await new Promise((resolve) => window.setTimeout(resolve, 500 * 2 ** attempt));
+              }
+            }
+          }
+          if (saved) {
+            setPendingSaveCount(removePendingLineSave(save.saveId));
+          } else {
+            allSaved = false;
+            setSaveError('Some training progress is waiting to be saved. Keep this tab open or use Save & exit to retry.');
+          }
+        } finally {
+          saveKeysInFlightRef.current.delete(save.saveId);
         }
-        if (completeLine) {
-          setSessionStats((s) => ({
-            ...s,
-            linesCompleted: s.linesCompleted + 1,
-            totalCorrect: s.totalCorrect + lineCorrect,
-            totalWrong: s.totalWrong + lineWrong,
-          }));
-          setLineSaved(true);
-        }
-        return true;
-      } catch {
-        setSaveError('Progress could not be saved. Try again while this session is still open.');
-        return false;
-      } finally {
-        setLineSaving(false);
       }
+      return allSaved && readPendingLineSaves().length === 0;
     })();
 
-    saveInFlightRef.current = promise;
+    saveQueueInFlightRef.current = promise;
     try {
       return await promise;
     } finally {
-      if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
+      if (saveQueueInFlightRef.current === promise) saveQueueInFlightRef.current = null;
     }
-  }, [line, lineResults, lineCorrect, lineWrong, lineSaved, markInfoLineViewed, submitRatings]);
+  }, [sendLineSave]);
+
+  const queueCurrentLineSave = useCallback((completeLine: boolean) => {
+    if (!line) return null;
+    if (completeLine && currentLineSaveRef.current) return currentLineSaveRef.current;
+
+    const save: PendingLineSave = {
+      saveId: createTrainingSaveId(),
+      courseId: line.courseId,
+      results: lineResults.map((result) => ({
+        cardId: result.cardId,
+        correct: result.correct,
+        responseTimeMs: result.responseTimeMs,
+      })),
+      infoLines: completeLine && line.isInfoOnly
+        ? [{ chapterId: line.chapterId, lineKey: line.lineKey }]
+        : [],
+    };
+    if (completeLine) {
+      currentLineSaveRef.current = save;
+      setSessionStats((s) => ({
+        ...s,
+        linesCompleted: s.linesCompleted + 1,
+        totalCorrect: s.totalCorrect + lineCorrect,
+        totalWrong: s.totalWrong + lineWrong,
+      }));
+      setLineSaved(true);
+    }
+    setSaveError(null);
+    setPendingSaveCount(enqueuePendingLineSave(save));
+    void flushPendingSaves();
+    return save;
+  }, [flushPendingSaves, line, lineCorrect, lineResults, lineWrong]);
 
   useEffect(() => {
-    if (linePhase !== 'line-done' || lineSaving || lineSaved || lineSaveAttemptedRef.current) return;
+    currentLineSaveRef.current = null;
+    setPendingSaveCount(readPendingLineSaves().length);
+  }, [line]);
+
+  useEffect(() => {
+    if (linePhase !== 'line-done' || lineSaved || lineSaveAttemptedRef.current) return;
     lineSaveAttemptedRef.current = true;
-    void persistLineProgress(true);
-  }, [linePhase, lineSaving, lineSaved, persistLineProgress]);
+    queueCurrentLineSave(true);
+  }, [linePhase, lineSaved, queueCurrentLineSave]);
+
+  useEffect(() => {
+    setPendingSaveCount(readPendingLineSaves().length);
+    void flushPendingSaves();
+  }, [flushPendingSaves]);
 
   const saveAndExit = useCallback(async () => {
-    const saved = await persistLineProgress(false);
-    if (saved) router.push('/courses');
-  }, [persistLineProgress, router]);
+    setSaveExitInFlight(true);
+    try {
+      if (!lineSaved) queueCurrentLineSave(false);
+      const saved = await flushPendingSaves();
+      if (saved) router.push('/courses');
+    } finally {
+      setSaveExitInFlight(false);
+    }
+  }, [flushPendingSaves, lineSaved, queueCurrentLineSave, router]);
 
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
@@ -574,19 +647,13 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [line, lineIndex, lines, studyMode]);
 
-  const continueToNextLine = useCallback(async () => {
-    // The automatic save starts as soon as the line is completed. Space/click
-    // should wait for that same request instead of being ignored while it is
-    // in flight.
-    if (lineAdvanceInFlightRef.current) return;
-    lineAdvanceInFlightRef.current = true;
-    try {
-      const saved = await persistLineProgress(true);
-      if (saved) advanceLine();
-    } finally {
-      lineAdvanceInFlightRef.current = false;
-    }
-  }, [advanceLine, persistLineProgress]);
+  const continueToNextLine = useCallback(() => {
+    if (linePhase !== 'line-done') return;
+    // Queueing is synchronous from the UI's perspective. The actual network
+    // write continues in the background, so the next line never waits on it.
+    if (!lineSaved) queueCurrentLineSave(true);
+    advanceLine();
+  }, [advanceLine, linePhase, lineSaved, queueCurrentLineSave]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -788,16 +855,21 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           )}
           <SecondaryButton
             onClick={saveAndExit}
-            aria-busy={lineSaving}
+            disabled={saveExitInFlight}
+            aria-busy={saveExitInFlight}
             className="min-h-12 px-4 text-[11px]"
           >
-            {lineSaving ? 'Save & exit · waiting…' : 'Save & exit'}
+            {saveExitInFlight ? 'Save & exit · waiting…' : 'Save & exit'}
           </SecondaryButton>
           {isLineDone && (
-            <PremiumButton onClick={continueToNextLine} aria-busy={lineSaving} className="min-h-12 px-5 text-[11px]">
+            <PremiumButton onClick={continueToNextLine} className="min-h-12 px-5 text-[11px]">
               {lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
-              {lineSaving && <span className="ml-2 font-mono text-[9px] font-normal uppercase tracking-[0.14em] text-[color:var(--paper)]/60">saving</span>}
             </PremiumButton>
+          )}
+          {pendingSaveCount > 0 && (
+            <span className="basis-full text-right font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--ink-faint)]">
+              Saving {pendingSaveCount} line{pendingSaveCount === 1 ? '' : 's'} in background
+            </span>
           )}
         </div>
       </div>
