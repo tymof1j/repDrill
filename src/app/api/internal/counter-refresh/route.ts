@@ -20,7 +20,7 @@ async function refreshCounters(request: NextRequest) {
 
   const db = getSupabaseDb();
   const jobs = await db`
-    select user_id, force_refresh
+    select user_id, force_refresh, course_ids
     from public.counter_refresh_jobs
     where status = 'queued'
        or (status = 'running' and started_at < now() - interval '30 minutes')
@@ -40,16 +40,19 @@ async function refreshCounters(request: NextRequest) {
         select max(rl.reviewed_at) as reviewed_at
         from public.review_logs rl
         join public.review_cards rc on rc.id = rl.card_id
+        join public.moves m on m.id = rc.move_id
+        join public.chapters ch on ch.id = m.chapter_id
         where rc.user_id = ${job.user_id}
+          and (${job.course_ids}::uuid[] is null or ch.course_id = any(${job.course_ids}::uuid[]))
       `;
       const computedAt = snapshots[0]?.computed_at ? new Date(snapshots[0].computed_at).getTime() : 0;
       const reviewedAt = activity[0]?.reviewed_at ? new Date(activity[0].reviewed_at).getTime() : 0;
       const shouldRefresh = Boolean(job.force_refresh) || !computedAt || reviewedAt > computedAt;
       if (shouldRefresh) {
-        await db`select public.refresh_counter_snapshots(${job.user_id})`;
+        await db`select public.refresh_counter_snapshots(${job.user_id}, ${job.course_ids}::uuid[])`;
         refreshedUsers++;
       }
-      await db`update public.counter_refresh_jobs set status = 'done', force_refresh = false, completed_at = now() where user_id = ${job.user_id}`;
+      await db`update public.counter_refresh_jobs set status = 'done', force_refresh = false, course_ids = null, completed_at = now() where user_id = ${job.user_id}`;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await db`update public.counter_refresh_jobs set status = 'failed', error = ${message} where user_id = ${job.user_id}`;
