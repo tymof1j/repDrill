@@ -861,6 +861,23 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
   }
   if (operation === 'training.submitLineRatings') {
     const results = Array.isArray(args.results) ? args.results : [];
+    const saveId = String(args.saveId ?? `legacy-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const courseIds = Array.isArray(args.courseIds)
+      ? [...new Set(args.courseIds.map(String).filter(Boolean))]
+      : [];
+    const infoLines = Array.isArray(args.infoLines) ? args.infoLines : [];
+
+    if (infoLines.length > 0) {
+      await db`
+        insert into public.info_line_views (user_id, chapter_id, line_key, viewed_at)
+        select ${user.id}, item.chapter_id, item.line_key, now()
+        from jsonb_to_recordset(${JSON.stringify(infoLines)}::jsonb)
+          as item(chapter_id uuid, line_key text)
+        join public.chapters ch on ch.id = item.chapter_id
+        join public.courses c on c.id = ch.course_id and c.user_id = ${user.id}
+        on conflict (user_id, chapter_id, line_key) do update set viewed_at = excluded.viewed_at
+      `;
+    }
     if (results.length > 0) {
       // The old implementation performed select + update + log as three
       // sequential round-trips for every move. A long line could therefore
@@ -869,6 +886,7 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
       // ordered recursive CTE and write all rows in one database request.
       const ratingPayload = JSON.stringify((results as any[]).map((item, sequence) => ({
         sequence,
+        save_id: saveId,
         card_id: String(item.cardId),
         correct: Boolean(item.correct),
         response_time_ms: Math.max(0, Number(item.responseTimeMs) || 0),
@@ -877,15 +895,25 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
         with recursive
         attempts as (
           select
+            item.save_id,
+            item.sequence,
             item.card_id,
             item.correct,
             item.response_time_ms,
             row_number() over (partition by item.card_id order by item.sequence)::integer as attempt_no
           from jsonb_to_recordset(${ratingPayload}::jsonb)
-            as item(sequence integer, card_id uuid, correct boolean, response_time_ms integer)
+            as item(sequence integer, save_id text, card_id uuid, correct boolean, response_time_ms integer)
           where item.card_id is not null
+            and not exists (
+              select 1
+              from public.review_logs existing
+              where existing.save_batch_id = item.save_id
+                and existing.save_sequence = item.sequence
+            )
         ),
         review_steps (
+          save_id,
+          save_sequence,
           card_id,
           attempt_no,
           correct,
@@ -904,6 +932,8 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
           state
         ) as (
           select
+            attempt.save_id,
+            attempt.sequence,
             card.id,
             attempt.attempt_no,
             attempt.correct,
@@ -932,6 +962,8 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
           union all
 
           select
+            next_attempt.save_id,
+            next_attempt.sequence,
             next_attempt.card_id,
             next_attempt.attempt_no,
             next_attempt.correct,
@@ -981,6 +1013,8 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
           returning card.id
         )
         insert into public.review_logs (
+          save_batch_id,
+          save_sequence,
           card_id,
           rating,
           response_time_ms,
@@ -990,6 +1024,8 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
           prev_state
         )
         select
+          step.save_id,
+          step.save_sequence,
           step.card_id,
           case
             when not step.correct then 1
@@ -1006,7 +1042,26 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
         join updated on updated.id = step.card_id
       `;
     }
-    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', false) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = public.counter_refresh_jobs.force_refresh or excluded.force_refresh`;
+    await db`
+      insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh, course_ids)
+      values (${user.id}, now(), 'queued', false, ${courseIds.length ? courseIds : null}::uuid[])
+      on conflict (user_id) do update set
+        requested_at = excluded.requested_at,
+        status = 'queued',
+        force_refresh = public.counter_refresh_jobs.force_refresh or excluded.force_refresh,
+        course_ids = case
+          -- A null list means a legacy/full refresh. Never narrow it because
+          -- a review arrived while that refresh was still queued.
+          when public.counter_refresh_jobs.force_refresh
+            or public.counter_refresh_jobs.course_ids is null
+            or excluded.course_ids is null
+            then public.counter_refresh_jobs.course_ids
+          else (
+            select array_agg(distinct ids.id)
+            from unnest(public.counter_refresh_jobs.course_ids || excluded.course_ids) as ids(id)
+          )
+        end
+    `;
     return null;
   }
   if (operation === 'training.markInfoLineViewed') {
