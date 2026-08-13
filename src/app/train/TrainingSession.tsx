@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { Chess } from 'chess.js';
 
 const ChessBoard = dynamic(
@@ -85,6 +86,7 @@ function buildLinePgn(line: TrainingLine) {
 }
 
 export function TrainingSession({ initialLines, filterBar, studyMode = false, initialLineId = null }: Props) {
+  const router = useRouter();
   const [lines] = useState(initialLines);
   const [lineIndex, setLineIndex] = useState(0);
   const [linePhase, setLinePhase] = useState<LinePhase>('browse');
@@ -107,9 +109,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const moveStartTimeRef = useRef(0);
   const [inErrorRecovery, setInErrorRecovery] = useState(false);
   const [errorQueue, setErrorQueue] = useState<number[]>([]);
-  const [errorCorrectStreak, setErrorCorrectStreak] = useState(0);
   const [lineSaving, setLineSaving] = useState(false);
   const [lineSaved, setLineSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [boardFen, setBoardFen] = useState('');
   const [lastMoveUci, setLastMoveUci] = useState<[string, string] | undefined>();
@@ -124,6 +126,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const [queuedPremove, setQueuedPremove] = useState<{ from: string; to: string } | null>(null);
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const lineAdvanceInFlightRef = useRef(false);
+  const lineSaveAttemptedRef = useRef(false);
   const submitRatings = useMutation(api.training.submitLineRatings);
   const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
 
@@ -234,9 +239,10 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     moveStartTimeRef.current = 0;
     setInErrorRecovery(false);
     setErrorQueue([]);
-    setErrorCorrectStreak(0);
     setLineSaving(false);
     setLineSaved(false);
+    setSaveError(null);
+    lineSaveAttemptedRef.current = false;
     setLastMoveUci(undefined);
     setNotationInput('');
     setNotationError(null);
@@ -286,7 +292,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           setWaitingForUser(false);
           setTracePreviewIndex(null);
           setErrorQueue([]);
-          setErrorCorrectStreak(0);
         }, 900);
         return () => clearTimeout(t);
       }
@@ -314,35 +319,65 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [linePhase, feedback, inErrorRecovery, questionIndex, userStepIndexes.length, drillRun, drillPassCount, lineCorrect, lineWrong, errorQueue.length, line]);
 
-  useEffect(() => {
-    if (linePhase !== 'line-done' || lineSaving || lineSaved) return;
-    setLineSaving(true);
-    void (async () => {
-      if (line?.isInfoOnly) {
-        await markInfoLineViewed({
-          chapterId: line.chapterId as Id<'chapters'>,
-          lineKey: line.lineKey,
-        }).catch(() => undefined);
+  const persistLineProgress = useCallback(async (completeLine: boolean) => {
+    if (lineSaved) return true;
+    if (saveInFlightRef.current) return saveInFlightRef.current;
+
+    const promise = (async () => {
+      setLineSaving(true);
+      setSaveError(null);
+      try {
+        if (completeLine && line?.isInfoOnly) {
+          await markInfoLineViewed({
+            chapterId: line.chapterId as Id<'chapters'>,
+            lineKey: line.lineKey,
+          });
+        }
+        if (lineResults.length > 0) {
+          await submitRatings({
+            results: lineResults.map((r) => ({
+              cardId: r.cardId as Id<'reviewCards'>,
+              correct: r.correct,
+              responseTimeMs: r.responseTimeMs,
+            })),
+          });
+        }
+        if (completeLine) {
+          setSessionStats((s) => ({
+            ...s,
+            linesCompleted: s.linesCompleted + 1,
+            totalCorrect: s.totalCorrect + lineCorrect,
+            totalWrong: s.totalWrong + lineWrong,
+          }));
+          setLineSaved(true);
+        }
+        return true;
+      } catch {
+        setSaveError('Progress could not be saved. Try again while this session is still open.');
+        return false;
+      } finally {
+        setLineSaving(false);
       }
-      if (lineResults.length > 0) {
-        await submitRatings({
-          results: lineResults.map((r) => ({
-            cardId: r.cardId as Id<'reviewCards'>,
-            correct: r.correct,
-            responseTimeMs: r.responseTimeMs,
-          })),
-        }).catch(() => undefined);
-      }
-      setSessionStats((s) => ({
-        ...s,
-        linesCompleted: s.linesCompleted + 1,
-        totalCorrect: s.totalCorrect + lineCorrect,
-        totalWrong: s.totalWrong + lineWrong,
-      }));
-      setLineSaved(true);
-      setLineSaving(false);
     })();
-  }, [linePhase, lineSaving, lineSaved, lineResults, submitRatings, lineCorrect, lineWrong, line, markInfoLineViewed]);
+
+    saveInFlightRef.current = promise;
+    try {
+      return await promise;
+    } finally {
+      if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
+    }
+  }, [line, lineResults, lineCorrect, lineWrong, lineSaved, markInfoLineViewed, submitRatings]);
+
+  useEffect(() => {
+    if (linePhase !== 'line-done' || lineSaving || lineSaved || lineSaveAttemptedRef.current) return;
+    lineSaveAttemptedRef.current = true;
+    void persistLineProgress(true);
+  }, [linePhase, lineSaving, lineSaved, persistLineProgress]);
+
+  const saveAndExit = useCallback(async () => {
+    const saved = await persistLineProgress(false);
+    if (saved) router.push('/courses');
+  }, [persistLineProgress, router]);
 
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
@@ -376,12 +411,10 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           setShowAnnotation(false);
           setNeedsManualNext(false);
           if (inErrorRecovery) {
-            const nextStreak = errorCorrectStreak + 1;
-            setErrorCorrectStreak(nextStreak);
-            if (nextStreak >= 2) {
-              setErrorQueue((q) => q.filter((idx) => idx !== currentStepIndex));
-              setErrorCorrectStreak(0);
-            }
+            // One correct retry resolves the missed move. Keeping the old
+            // two-answer streak here made a completed line look stuck in
+            // recovery and hid the next-line controls from the learner.
+            setErrorQueue((q) => q.filter((idx) => idx !== currentStepIndex));
           } else {
             setQuestionIndex((index) => index + 1);
           }
@@ -398,14 +431,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         setNeedsManualNext(true);
         if (!inErrorRecovery) {
           setErrorQueue((prev) => (prev.includes(currentStepIndex) ? prev : [...prev, currentStepIndex]));
-        } else {
-          setErrorCorrectStreak(0);
         }
       } catch {
         // invalid move
       }
     },
-    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, errorCorrectStreak],
+    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex],
   );
 
   const onBoardMove = useCallback((orig: string, dest: string) => {
@@ -509,7 +540,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setQuestionIndex(0);
     setInErrorRecovery(false);
     setErrorQueue([]);
-    setErrorCorrectStreak(0);
     setFeedback(null);
     setShowAnnotation(false);
     setWaitingForUser(false);
@@ -533,8 +563,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [needsManualNext, inErrorRecovery]);
 
-  const nextLine = useCallback(() => {
-    if (!lineSaved) return;
+  const advanceLine = useCallback(() => {
     const next = lineIndex + 1;
     if (next >= lines.length) {
       if (studyMode && line) recordLearnResume(line.courseId, null);
@@ -543,7 +572,21 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
       setLineIndex(next);
       if (studyMode && line) recordLearnResume(line.courseId, lines[next]?.lineId ?? null);
     }
-  }, [line, lineSaved, lineIndex, lines, studyMode]);
+  }, [line, lineIndex, lines, studyMode]);
+
+  const continueToNextLine = useCallback(async () => {
+    // The automatic save starts as soon as the line is completed. Space/click
+    // should wait for that same request instead of being ignored while it is
+    // in flight.
+    if (lineAdvanceInFlightRef.current) return;
+    lineAdvanceInFlightRef.current = true;
+    try {
+      const saved = await persistLineProgress(true);
+      if (saved) advanceLine();
+    } finally {
+      lineAdvanceInFlightRef.current = false;
+    }
+  }, [advanceLine, persistLineProgress]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -576,9 +619,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           return;
         }
       }
-      if (e.key === ' ' && linePhase === 'line-done' && lineSaved && !lineSaving) {
+      if (e.key === ' ' && linePhase === 'line-done') {
         e.preventDefault();
-        nextLine();
+        void continueToNextLine();
         return;
       }
       if (e.key === ' ' && needsManualNext && feedback) {
@@ -597,7 +640,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [linePhase, browseIndex, browseLimit, line, waitingForUser, needsManualNext, feedback, startDrilling, continueAfterWrong, lineSaved, lineSaving, nextLine]);
+  }, [linePhase, browseIndex, browseLimit, line, waitingForUser, needsManualNext, feedback, startDrilling, continueAfterWrong, continueToNextLine]);
 
   useEffect(() => {
     if (!queuedPremove || !waitingForUser || linePhase !== 'drill' || needsManualNext) return;
@@ -727,7 +770,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
 
   return (
     <AppSurface className="training-surface training-scroll-stable lg:py-5">
-      {filterBar ? <div className="mb-3 flex min-h-9 items-start justify-end">{filterBar}</div> : null}
       <div key={phaseKey} data-training-phase={linePhase} className="contents">
       <div className="mb-4 grid items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2 md:grid-cols-[auto_1fr_auto] md:gap-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">
@@ -736,20 +778,34 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         <p className="truncate font-display-italic text-[15px] text-[color:var(--ink-soft)]">
           {line.courseName} <span className="text-[color:var(--ink-ghost)]">·</span> {line.chapterName}
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {filterBar}
           <Stamp tone={isBrowsing ? 'gold' : isLineDone ? 'green' : betweenDrills ? 'gold' : 'red'}>
             {isBrowsing ? 'Study' : isLineDone ? 'Done' : betweenDrills ? 'Pass done' : inErrorRecovery ? 'Recovery' : `Drill ${drillRun}/${drillPassCount}`}
           </Stamp>
           {isDrilling && !betweenDrills && (
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)] tabular-nums">{playedUserMoves}/{userMovesInLine}</span>
           )}
+          <SecondaryButton
+            onClick={saveAndExit}
+            disabled={lineSaving}
+            className="min-h-12 px-4 text-[11px]"
+          >
+            {lineSaving ? 'Saving…' : 'Save & exit'}
+          </SecondaryButton>
           {isLineDone && (
-            <PremiumButton onClick={nextLine} disabled={!lineSaved || lineSaving}>
-              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? 'Next line' : 'Finish session'}
+            <PremiumButton onClick={continueToNextLine} disabled={lineSaving} className="min-h-12 px-5 text-[11px]">
+              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
             </PremiumButton>
           )}
         </div>
       </div>
+
+      {saveError && (
+        <p role="alert" className="mb-4 border-l-2 border-[color:var(--margin-red)] pl-3 font-display-italic text-sm text-[color:var(--margin-red)]">
+          {saveError}
+        </p>
+      )}
 
       <div className="mb-6 h-px bg-[color:var(--paper-rule)]">
         <div className="h-full bg-[color:var(--margin-red)] transition-[width] duration-500 ease-out" style={{ width: `${lineProgress}%` }} />
