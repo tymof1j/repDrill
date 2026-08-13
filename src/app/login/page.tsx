@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getSignInUrl, withAuth } from '@workos-inc/authkit-nextjs';
+import { withAuth } from '@workos-inc/authkit-nextjs';
 import { redirect } from 'next/navigation';
 import { SignInButton } from './SignInButton';
 
@@ -16,7 +16,10 @@ export default async function LoginPage({
   const { user } = await withAuth();
   const isLoggedIn = Boolean(user);
   if (isLoggedIn) redirect(redirectTo);
-  const signInUrl = await getSignInUrl({ returnTo: redirectTo });
+  // `getSignInUrl` writes the PKCE verifier cookie. That is only legal from a
+  // Route Handler or Server Action, not while rendering this Server Component.
+  // The /sign-in Route Handler performs the cookie write and redirect safely.
+  const signInUrl = `/sign-in?returnTo=${encodeURIComponent(redirectTo)}`;
 
   return (
     <div className="relative min-h-screen bg-[color:var(--paper)] text-[color:var(--ink)]">
