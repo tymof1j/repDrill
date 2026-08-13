@@ -788,14 +788,15 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           )}
           <SecondaryButton
             onClick={saveAndExit}
-            disabled={lineSaving}
+            aria-busy={lineSaving}
             className="min-h-12 px-4 text-[11px]"
           >
-            {lineSaving ? 'Saving…' : 'Save & exit'}
+            {lineSaving ? 'Save & exit · waiting…' : 'Save & exit'}
           </SecondaryButton>
           {isLineDone && (
-            <PremiumButton onClick={continueToNextLine} disabled={lineSaving} className="min-h-12 px-5 text-[11px]">
-              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
+            <PremiumButton onClick={continueToNextLine} aria-busy={lineSaving} className="min-h-12 px-5 text-[11px]">
+              {lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
+              {lineSaving && <span className="ml-2 font-mono text-[9px] font-normal uppercase tracking-[0.14em] text-[color:var(--paper)]/60">saving</span>}
             </PremiumButton>
           )}
         </div>
