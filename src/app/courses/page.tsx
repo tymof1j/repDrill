@@ -83,13 +83,23 @@ export default function CoursesListPage() {
         action={<SecondaryButton href="/courses/new">New course</SecondaryButton>}
       />
 
-      {visibleStats && visibleStats.dueLines > 0 && (
-        <section className="mb-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-y border-[color:var(--paper-edge)] py-4">
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-[2.9rem] font-semibold leading-none tabular-nums text-[color:var(--margin-red)]">
-              {visibleStats.dueLines}
-            </span>
-            <span className="text-[32px] leading-none text-[color:var(--ink-soft)]">lines to repeat now</span>
+      {visibleStats && visibleStats.totalLines > 0 && (
+        <section className="mb-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-y border-[color:var(--paper-edge)] py-4">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-[2.9rem] font-semibold leading-none tabular-nums text-[color:var(--library-green)]">
+                {visibleStats.learnedLines}
+              </span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[color:var(--ink-soft)]">
+                / {visibleStats.totalLines} lines learned
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-[2.9rem] font-semibold leading-none tabular-nums text-[color:var(--margin-red)]">
+                {visibleStats.dueLines}
+              </span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[color:var(--ink-soft)]">lines to repeat now</span>
+            </div>
           </div>
           <Link
             href="/train"
