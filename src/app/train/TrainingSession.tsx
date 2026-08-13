@@ -109,7 +109,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const moveStartTimeRef = useRef(0);
   const [inErrorRecovery, setInErrorRecovery] = useState(false);
   const [errorQueue, setErrorQueue] = useState<number[]>([]);
-  const [errorCorrectStreak, setErrorCorrectStreak] = useState(0);
   const [lineSaving, setLineSaving] = useState(false);
   const [lineSaved, setLineSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -239,7 +238,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     moveStartTimeRef.current = 0;
     setInErrorRecovery(false);
     setErrorQueue([]);
-    setErrorCorrectStreak(0);
     setLineSaving(false);
     setLineSaved(false);
     setSaveError(null);
@@ -293,7 +291,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           setWaitingForUser(false);
           setTracePreviewIndex(null);
           setErrorQueue([]);
-          setErrorCorrectStreak(0);
         }, 900);
         return () => clearTimeout(t);
       }
@@ -413,12 +410,10 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           setShowAnnotation(false);
           setNeedsManualNext(false);
           if (inErrorRecovery) {
-            const nextStreak = errorCorrectStreak + 1;
-            setErrorCorrectStreak(nextStreak);
-            if (nextStreak >= 2) {
-              setErrorQueue((q) => q.filter((idx) => idx !== currentStepIndex));
-              setErrorCorrectStreak(0);
-            }
+            // One correct retry resolves the missed move. Keeping the old
+            // two-answer streak here made a completed line look stuck in
+            // recovery and hid the next-line controls from the learner.
+            setErrorQueue((q) => q.filter((idx) => idx !== currentStepIndex));
           } else {
             setQuestionIndex((index) => index + 1);
           }
@@ -435,14 +430,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         setNeedsManualNext(true);
         if (!inErrorRecovery) {
           setErrorQueue((prev) => (prev.includes(currentStepIndex) ? prev : [...prev, currentStepIndex]));
-        } else {
-          setErrorCorrectStreak(0);
         }
       } catch {
         // invalid move
       }
     },
-    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, errorCorrectStreak],
+    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex],
   );
 
   const onBoardMove = useCallback((orig: string, dest: string) => {
@@ -546,7 +539,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setQuestionIndex(0);
     setInErrorRecovery(false);
     setErrorQueue([]);
-    setErrorCorrectStreak(0);
     setFeedback(null);
     setShowAnnotation(false);
     setWaitingForUser(false);
@@ -580,11 +572,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
       if (studyMode && line) recordLearnResume(line.courseId, lines[next]?.lineId ?? null);
     }
   }, [line, lineIndex, lines, studyMode]);
-
-  const nextLine = useCallback(() => {
-    if (!lineSaved || lineSaving) return;
-    advanceLine();
-  }, [advanceLine, lineSaved, lineSaving]);
 
   const continueToNextLine = useCallback(async () => {
     if (lineSaving) return;
@@ -626,9 +613,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           return;
         }
       }
-      if (e.key === ' ' && linePhase === 'line-done' && lineSaved && !lineSaving) {
+      if (e.key === ' ' && linePhase === 'line-done') {
         e.preventDefault();
-        nextLine();
+        void continueToNextLine();
         return;
       }
       if (e.key === ' ' && needsManualNext && feedback) {
@@ -647,7 +634,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [linePhase, browseIndex, browseLimit, line, waitingForUser, needsManualNext, feedback, startDrilling, continueAfterWrong, lineSaved, lineSaving, nextLine]);
+  }, [linePhase, browseIndex, browseLimit, line, waitingForUser, needsManualNext, feedback, startDrilling, continueAfterWrong, continueToNextLine]);
 
   useEffect(() => {
     if (!queuedPremove || !waitingForUser || linePhase !== 'drill' || needsManualNext) return;
@@ -802,7 +789,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           </SecondaryButton>
           {isLineDone && (
             <PremiumButton onClick={continueToNextLine} disabled={lineSaving} className="min-h-12 px-5 text-[11px]">
-              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? 'Next line' : 'Finish session'}
+              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
             </PremiumButton>
           )}
         </div>
