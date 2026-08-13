@@ -243,18 +243,21 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
     [positions, rootPositionId],
   );
   const courseProgress = useMemo(() => {
-    const total = Array.from(linesByChapter.values()).reduce((sum, lines) => sum + lines.length, 0);
+    // Use the same terminal-line statuses as the training queue. Counting the
+    // rendered move tree here used to include info-only branches and could
+    // also mark lines without a review card as mastered.
     const trainable = lineStatuses.filter((status) => !status.isInfoOnly && status.category !== 'info');
+    const total = trainable.length;
     const learned = trainable.filter((status) => status.category !== 'new').length;
     const due = trainable.filter((status) => status.category === 'due').length;
     const percent = total > 0 ? (learned / total) * 100 : 0;
     return { total, learned, due, percent };
-  }, [lineStatuses, linesByChapter]);
+  }, [lineStatuses]);
   const chapterProgress = useMemo(() => {
     const result = new Map<string, { total: number; learned: number; due: number; percent: number }>();
     for (const chapter of orderedChapters) {
-      const total = linesByChapter.get(chapter.id)?.length ?? 0;
       const statuses = lineStatuses.filter((status) => status.chapterId === chapter.id && !status.isInfoOnly && status.category !== 'info');
+      const total = statuses.length;
       const learned = statuses.filter((status) => status.category !== 'new').length;
       const due = statuses.filter((status) => status.category === 'due').length;
       result.set(chapter.id, { total, learned, due, percent: total > 0 ? (learned / total) * 100 : 0 });
@@ -394,7 +397,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
           <aside className="flex flex-col border-t border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-7">
             <div className="flex items-center justify-between gap-4"><span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">Course progress</span><span className="font-display text-3xl font-semibold tracking-[-0.05em] text-[color:var(--library-green)]">{Math.round(courseProgress.percent)}%</span></div>
             <div className="mt-4"><ProgressBar value={courseProgress.percent} label={`${courseProgress.learned} / ${courseProgress.total || '—'} lines`} tone={courseProgress.due > 0 ? 'red' : 'green'} /></div>
-            <div className="mt-6 grid grid-cols-2 gap-3 border-y border-[color:var(--paper-rule)] py-5"><Metric value={orderedChapters.length} label="Chapters" /><Metric value={courseProgress.due} label="Due now" tone={courseProgress.due > 0 ? 'red' : 'ink'} /></div>
+            <div className="mt-6 grid grid-cols-3 gap-3 border-y border-[color:var(--paper-rule)] py-5"><Metric value={courseProgress.learned} label="Learned" /><Metric value={courseProgress.due} label="Repeat now" tone={courseProgress.due > 0 ? 'red' : 'ink'} /><Metric value={orderedChapters.length} label="Chapters" /></div>
             <div className="mt-auto flex flex-col gap-2 pt-6 lg:sticky lg:top-6">
               <PremiumButton href={`/train?courseId=${encodeURIComponent(course.id)}`}>Review due lines <span className="ml-1">→</span></PremiumButton>
               <SecondaryButton href={`/train?courseId=${encodeURIComponent(course.id)}&mode=learn`}>Learn course <span className="ml-1">→</span></SecondaryButton>
@@ -604,7 +607,7 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
                               {ch.name}
                             </span>
                             <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ink-faint)]">
-                              {lineCount} line{lineCount === 1 ? '' : 's'} · {chapterStats.learned} learned
+                              {chapterStats.total} line{chapterStats.total === 1 ? '' : 's'} · {chapterStats.learned} learned · {chapterStats.due} repeat now
                             </span>
                             <div className="mt-3 max-w-sm"><ProgressBar value={chapterStats.percent} label={`${Math.round(chapterStats.percent)}%`} tone={chapterStats.due > 0 ? 'red' : 'green'} /></div>
                           </button>

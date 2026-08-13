@@ -337,7 +337,10 @@ async function buildTrainingLines(db: any, user: AppUser, args: Record<string, u
           annotation: move.comment?.trim() || child?.annotation || null,
           annotations: move.annotations ?? null,
           cardId: card?.id ?? null,
-          isNew: Boolean(isUnseenCard(card)),
+          // Course detail can ask for statuses before the training page has
+          // called ensureCards. A missing review card is still a new line,
+          // not a mastered one.
+          isNew: move.move_type === 'repertoire' && (!card || Boolean(isUnseenCard(card))),
         };
       });
       if (!steps.some((step) => step.isUserMove) && !infoOnly) return;
@@ -858,22 +861,149 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
   }
   if (operation === 'training.submitLineRatings') {
     const results = Array.isArray(args.results) ? args.results : [];
-    for (const item of results as any[]) {
-      const cards = await db`select * from public.review_cards where id = ${String(item.cardId)} and user_id = ${user.id} limit 1`;
-      const card = cards[0];
-      if (!card) continue;
-      const now = new Date();
-      const correct = Boolean(item.correct);
-      const responseMs = Math.max(0, Number(item.responseTimeMs) || 0);
-      const due = new Date(now.getTime() + (correct ? Math.max(1, Number(card.scheduled_days) || 1) * 24 * 60 * 60 * 1000 : 10 * 60 * 1000));
+    if (results.length > 0) {
+      // The old implementation performed select + update + log as three
+      // sequential round-trips for every move. A long line could therefore
+      // take 10 seconds to save. Keep every attempt (including a wrong move
+      // followed by a correct retry), but calculate each card's state in one
+      // ordered recursive CTE and write all rows in one database request.
+      const ratingPayload = JSON.stringify((results as any[]).map((item, sequence) => ({
+        sequence,
+        card_id: String(item.cardId),
+        correct: Boolean(item.correct),
+        response_time_ms: Math.max(0, Number(item.responseTimeMs) || 0),
+      })));
       await db`
-        update public.review_cards
-        set due = ${due}, stability = ${Math.max(1, Number(card.stability) + (correct ? 0.5 : -0.2))}, difficulty = ${Math.max(1, Math.min(10, Number(card.difficulty) + (correct ? -0.1 : 0.2)))}, elapsed_days = ${Number(card.elapsed_days) || 0}, scheduled_days = ${correct ? Math.max(1, Number(card.scheduled_days) || 1) * 2 : 0}, reps = ${Number(card.reps) + (correct ? 1 : 0)}, lapses = ${Number(card.lapses) + (correct ? 0 : 1)}, state = ${correct ? 2 : 1}, last_review = ${now}
-        where id = ${card.id} and user_id = ${user.id}
-      `;
-      await db`
-        insert into public.review_logs (card_id, rating, response_time_ms, reviewed_at, prev_stability, prev_difficulty, prev_state)
-        values (${card.id}, ${correct ? (responseMs < 3000 ? 4 : responseMs < 8000 ? 3 : 2) : 1}, ${responseMs}, ${now}, ${card.stability}, ${card.difficulty}, ${card.state})
+        with recursive
+        attempts as (
+          select
+            item.card_id,
+            item.correct,
+            item.response_time_ms,
+            row_number() over (partition by item.card_id order by item.sequence)::integer as attempt_no
+          from jsonb_to_recordset(${ratingPayload}::jsonb)
+            as item(sequence integer, card_id uuid, correct boolean, response_time_ms integer)
+          where item.card_id is not null
+        ),
+        review_steps (
+          card_id,
+          attempt_no,
+          correct,
+          response_time_ms,
+          reviewed_at,
+          prev_stability,
+          prev_difficulty,
+          prev_state,
+          due,
+          stability,
+          difficulty,
+          elapsed_days,
+          scheduled_days,
+          reps,
+          lapses,
+          state
+        ) as (
+          select
+            card.id,
+            attempt.attempt_no,
+            attempt.correct,
+            attempt.response_time_ms,
+            now(),
+            card.stability,
+            card.difficulty,
+            card.state,
+            now() + case
+              when attempt.correct then greatest(1::double precision, card.scheduled_days) * interval '1 day'
+              else interval '10 minutes'
+            end,
+            greatest(1::double precision, card.stability + case when attempt.correct then 0.5 else -0.2 end),
+            greatest(1::double precision, least(10::double precision, card.difficulty + case when attempt.correct then -0.1 else 0.2 end)),
+            card.elapsed_days,
+            case when attempt.correct then greatest(1::double precision, card.scheduled_days) * 2 else 0 end,
+            card.reps + case when attempt.correct then 1 else 0 end,
+            card.lapses + case when attempt.correct then 0 else 1 end,
+            case when attempt.correct then 2 else 1 end
+          from attempts attempt
+          join public.review_cards card
+            on card.id = attempt.card_id
+           and card.user_id = ${user.id}
+          where attempt.attempt_no = 1
+
+          union all
+
+          select
+            next_attempt.card_id,
+            next_attempt.attempt_no,
+            next_attempt.correct,
+            next_attempt.response_time_ms,
+            now(),
+            previous.stability,
+            previous.difficulty,
+            previous.state,
+            now() + case
+              when next_attempt.correct then greatest(1::double precision, previous.scheduled_days) * interval '1 day'
+              else interval '10 minutes'
+            end,
+            greatest(1::double precision, previous.stability + case when next_attempt.correct then 0.5 else -0.2 end),
+            greatest(1::double precision, least(10::double precision, previous.difficulty + case when next_attempt.correct then -0.1 else 0.2 end)),
+            previous.elapsed_days,
+            case when next_attempt.correct then greatest(1::double precision, previous.scheduled_days) * 2 else 0 end,
+            previous.reps + case when next_attempt.correct then 1 else 0 end,
+            previous.lapses + case when next_attempt.correct then 0 else 1 end,
+            case when next_attempt.correct then 2 else 1 end
+          from review_steps previous
+          join attempts next_attempt
+            on next_attempt.card_id = previous.card_id
+           and next_attempt.attempt_no = previous.attempt_no + 1
+        ),
+        latest as (
+          select card_id, max(attempt_no)::integer as attempt_no
+          from review_steps
+          group by card_id
+        ),
+        updated as (
+          update public.review_cards card
+          set due = step.due,
+              stability = step.stability,
+              difficulty = step.difficulty,
+              elapsed_days = step.elapsed_days,
+              scheduled_days = step.scheduled_days,
+              reps = step.reps,
+              lapses = step.lapses,
+              state = step.state,
+              last_review = step.reviewed_at
+          from latest
+          join review_steps step
+            on step.card_id = latest.card_id
+           and step.attempt_no = latest.attempt_no
+          where card.id = step.card_id
+            and card.user_id = ${user.id}
+          returning card.id
+        )
+        insert into public.review_logs (
+          card_id,
+          rating,
+          response_time_ms,
+          reviewed_at,
+          prev_stability,
+          prev_difficulty,
+          prev_state
+        )
+        select
+          step.card_id,
+          case
+            when not step.correct then 1
+            when step.response_time_ms < 3000 then 4
+            when step.response_time_ms < 8000 then 3
+            else 2
+          end,
+          step.response_time_ms,
+          step.reviewed_at,
+          step.prev_stability,
+          step.prev_difficulty,
+          step.prev_state
+        from review_steps step
+        join updated on updated.id = step.card_id
       `;
     }
     await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', false) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = public.counter_refresh_jobs.force_refresh or excluded.force_refresh`;
@@ -910,6 +1040,7 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
     const aggregate = rows.find((row: BackendRow) => row.course_id === null);
     return {
       totalLines: aggregate?.total_lines ?? 0,
+      learnedLines: aggregate?.learned_lines ?? 0,
       dueLines: aggregate?.due_lines ?? 0,
       newLines: aggregate?.new_lines ?? 0,
       computedAt: aggregate ? dateMs(aggregate.computed_at) : null,
