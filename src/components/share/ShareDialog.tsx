@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Link2, Lock, Mail, Share2, Users, X } from 'lucide-react';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useMutation, useQuery } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
 import { sendShareInvitationAction } from '@/app/share/actions';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 

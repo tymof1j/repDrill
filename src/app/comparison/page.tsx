@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
+import { isAuthenticated } from '@/lib/workos/server';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LandingReveal } from '@/components/landing/LandingReveal';
 
@@ -84,7 +84,7 @@ const summaryCards = [
 ];
 
 export default async function ComparisonPage() {
-  const isLoggedIn = await isAuthenticatedNextjs();
+  const isLoggedIn = await isAuthenticated();
   const ctaHref = isLoggedIn ? '/courses' : '/login';
   const ctaLabel = isLoggedIn ? 'Open library' : 'Start studying';
 

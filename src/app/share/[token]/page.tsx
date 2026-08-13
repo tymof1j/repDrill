@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
-import { convexAuthNextjsToken, isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
-import { fetchQuery } from 'convex/nextjs';
-import { api } from '@convex/_generated/api';
+import { convexAuthNextjsToken, isAuthenticatedNextjs } from '@/lib/workos/convex-compat';
+import { fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
 import { AppSurface, PageHeader, BackLink } from '@/components/ui/Premium';
 import { SharedAnalysisView } from './SharedAnalysisView';
 import { SharePublicView } from './SharePublicView';
@@ -161,7 +161,7 @@ export default async function SharedCoursePage({
   const positionsById = new Map<string, { _id: string; fen: string; annotation?: string }>();
   for (const tree of chapterTrees) {
     for (const position of tree?.positions ?? []) {
-      positionsById.set(position._id, position);
+      positionsById.set(position._id, { ...position, annotation: position.annotation ?? undefined });
     }
   }
   const allPositions = Array.from(positionsById.values());

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
+import { isAuthenticated } from '@/lib/workos/server';
 import {
   AppSurface,
   BackLink,
@@ -61,7 +61,7 @@ const sections: Array<{
 ];
 
 export default async function Woodpecker2CoursePage() {
-  if (!(await isAuthenticatedNextjs())) redirect('/login');
+  if (!(await isAuthenticated())) redirect('/login');
   const playable = woodpecker2Puzzles.filter((puzzle) => puzzle.solutionUci.length > 0);
 
   return (

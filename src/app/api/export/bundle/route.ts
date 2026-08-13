@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
-import { fetchQuery } from 'convex/nextjs';
-import { api } from '@convex/_generated/api';
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
 
 export async function GET() {
   const token = await convexAuthNextjsToken();

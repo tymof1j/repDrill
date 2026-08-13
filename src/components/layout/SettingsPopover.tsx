@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthActions } from '@convex-dev/auth/react';
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { updateLanguageAction } from '@/app/settings/actions';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import {
@@ -55,7 +55,7 @@ export function SettingsPopover({
   const [saved, setSaved] = useState(false);
   const [optimisticLanguage, setOptimisticLanguage] = useState<'en' | 'uk' | null>(null);
   const [arrowTheme, setArrowThemeState] = useState<ArrowTheme>(() => getArrowTheme());
-  const { signOut } = useAuthActions();
+  const { signOut } = useAuth();
   const selectedLanguage = optimisticLanguage ?? normalizeLanguage(language);
   const text = copy[selectedLanguage];
 

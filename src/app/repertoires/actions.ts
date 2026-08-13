@@ -2,10 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchMutation, fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchMutation, fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
+import type { Id } from '@/lib/supabase/types';
 
 async function requireToken() {
   const token = await convexAuthNextjsToken();

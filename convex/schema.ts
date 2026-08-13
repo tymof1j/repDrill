@@ -369,4 +369,19 @@ export default defineSchema({
     analyzedAt: v.number(),
     annotations: v.optional(v.string()),
   }).index("by_user", ["userId"]).index("by_user_source", ["userId", "source"]),
+
+  // Expensive line/card aggregates are refreshed asynchronously. Pages read
+  // this table instead of traversing every chapter and move graph on visit.
+  trainingCounterSnapshots: defineTable({
+    userId: v.id("users"),
+    courseId: v.optional(v.id("courses")),
+    totalLines: v.number(),
+    learnedLines: v.number(),
+    dueLines: v.number(),
+    newLines: v.number(),
+    computedAt: v.number(),
+    refreshRequestedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_and_course", ["userId", "courseId"]),
 });

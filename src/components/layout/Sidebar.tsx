@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
+import { ensureAppUser, withAuth } from '@/lib/workos/server';
 import { LanguageSync } from '@/components/i18n/LanguageSync';
 import { normalizeLanguage } from '@/lib/i18n/translations';
 import { MobileNav, SidebarNav } from './SidebarNav';
@@ -9,8 +7,8 @@ import { ThemeToggle } from './ThemeToggle';
 import { SettingsPopover } from './SettingsPopover';
 
 export async function Sidebar() {
-  const token = await convexAuthNextjsToken();
-  const user = token ? await fetchQuery(api.users.current, {}, { token }) : null;
+  const { user: workosUser } = await withAuth();
+  const user = workosUser ? await ensureAppUser() : null;
   const language = normalizeLanguage(user?.language);
 
   return (
@@ -19,8 +17,8 @@ export async function Sidebar() {
       <MobileNav
         language={language}
         email={user?.email ?? null}
-        lichessUsername={user?.lichessUsername ?? null}
-        chesscomUsername={user?.chesscomUsername ?? null}
+        lichessUsername={user?.lichess_username ?? null}
+        chesscomUsername={user?.chesscom_username ?? null}
       />
       <aside className="relative z-30 hidden w-72 shrink-0 bg-[color:var(--surface)] md:block">
         <div className="sticky top-0 flex h-screen flex-col px-5 py-5">

@@ -1,7 +1,7 @@
-import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
-import { fetchQuery } from 'convex/nextjs';
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchQuery } from '@/lib/supabase/server-client';
 import { redirect } from 'next/navigation';
-import { api } from '@convex/_generated/api';
+import { api } from '@/lib/supabase/api';
 
 function normalizeCourseName(name: string) {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();

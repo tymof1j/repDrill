@@ -1,4 +1,4 @@
-import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';

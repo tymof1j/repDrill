@@ -1,8 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
+import type { Id } from '@/lib/supabase/types';
 import { CourseDetailClient } from './CourseDetailClient';
 
 export default async function CourseDetailPage({
@@ -34,7 +34,7 @@ export default async function CourseDetailPage({
   const positionsById = new Map<string, { _id: string; fen: string; annotation?: string }>();
   for (const tree of chapterTrees) {
     for (const position of tree?.positions ?? []) {
-      positionsById.set(position._id, position);
+      positionsById.set(position._id, { ...position, annotation: position.annotation ?? undefined });
     }
   }
   const allPositions = Array.from(positionsById.values());

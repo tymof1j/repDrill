@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useAuthActions } from '@convex-dev/auth/react';
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { ThemeToggle } from './ThemeToggle';
 import { LanguageToggle } from '@/components/i18n/LanguageToggle';
 import { updateLanguageAction } from '@/app/settings/actions';
@@ -123,7 +123,7 @@ export function MobileNav({
   const [open, setOpen] = useState(false);
   const lang = normalizeLanguage(language);
   const items = navCopy[lang].items;
-  const { signOut } = useAuthActions();
+  const { signOut } = useAuth();
 
   // Lock body scroll when open
   useEffect(() => {

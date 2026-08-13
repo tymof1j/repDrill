@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@convex/_generated/api';
+import { useMutation, useQuery } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
 import {
   BOOK_METHODS,
   isBookMethodEnabled,

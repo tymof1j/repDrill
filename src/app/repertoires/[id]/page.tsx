@@ -1,8 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
+import type { Id } from '@/lib/supabase/types';
 import { normalizeFen } from '@/lib/chess/fen';
 import type { MergedMove, MergedPosition, MergedChoice } from '@/components/repertoire/MergedRepertoireViewer';
 import { RepertoireDetailClient } from './RepertoireDetailClient';

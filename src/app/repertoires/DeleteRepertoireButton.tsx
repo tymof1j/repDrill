@@ -1,10 +1,10 @@
 'use client';
 
-import { useMutation } from "convex/react";
-import { api } from "@convex/_generated/api";
+import { useMutation } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
 import { useRouter } from 'next/navigation';
 import { GhostButton } from '@/components/ui/Premium';
-import type { Id } from "@convex/_generated/dataModel";
+import type { Id } from '@/lib/supabase/types';
 
 export function DeleteRepertoireButton({ id }: { id: Id<"repertoires"> }) {
   const router = useRouter();

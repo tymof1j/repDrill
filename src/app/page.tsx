@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
+import { isAuthenticated } from '@/lib/workos/server';
 import { redirect } from 'next/navigation';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LandingReveal } from '@/components/landing/LandingReveal';
@@ -51,7 +51,7 @@ const workflowSteps = [
 ];
 
 export default async function Home() {
-  const isLoggedIn = await isAuthenticatedNextjs();
+  const isLoggedIn = await isAuthenticated();
   if (isLoggedIn) redirect('/courses');
 
   return (

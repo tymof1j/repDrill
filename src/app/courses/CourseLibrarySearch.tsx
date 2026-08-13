@@ -3,9 +3,8 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Fuse from 'fuse.js';
-import { useQuery } from 'convex/react';
-import type { Id } from '@convex/_generated/dataModel';
-import { api } from '@convex/_generated/api';
+import { useQuery } from '@/lib/supabase/client';
+import { api } from '@/lib/supabase/api';
 import {
   EmptyState,
   GhostButton,
@@ -84,12 +83,12 @@ export function CourseLibrarySearch({ courses }: Props) {
   const trainableCourseIds = useMemo(
     () => courses
       .filter((course) => !course.isBuiltIn && !course.isShared)
-      .map((course) => course.id as Id<'courses'>),
+      .map((course) => course.id),
     [courses],
   );
   const progressRows = useQuery(
     api.training.getCourseLineProgress,
-    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds, version: 3 } : 'skip',
+    trainableCourseIds.length > 0 ? { courseIds: trainableCourseIds, version: 4 } : 'skip',
   ) as CourseLineProgressSummary[] | undefined;
   const progressByCourseId = useMemo(
     () => new Map((progressRows ?? []).map((row) => [row.courseId, row])),

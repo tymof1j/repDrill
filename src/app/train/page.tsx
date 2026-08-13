@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery, useMutation, useConvexAuth } from 'convex/react';
+import { useQuery, useMutation } from '@/lib/supabase/client';
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@convex/_generated/api';
+import { api } from '@/lib/supabase/api';
 import {
   AppSurface,
   EmptyState,
@@ -13,8 +14,9 @@ import {
   StatTile,
 } from '@/components/ui/Premium';
 import { TrainingSession } from './TrainingSession';
-import type { Id } from '@convex/_generated/dataModel';
+import type { Id } from '@/lib/supabase/types';
 import { readLearnResume } from '@/lib/bookTrainingPreferences';
+import type { TrainingLine } from './types';
 
 type Selection =
   | { type: 'all' }
@@ -22,7 +24,8 @@ type Selection =
   | { type: 'course'; id: Id<'courses'> };
 
 export default function TrainPage() {
-  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { loading: isLoading, user } = useAuth();
+  const isAuthenticated = Boolean(user);
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromParam = searchParams.get('from') ?? undefined;
@@ -194,7 +197,7 @@ export default function TrainPage() {
   return (
     <TrainingSession
       key={sessionScopeKey}
-      initialLines={result.lines}
+      initialLines={result.lines as unknown as TrainingLine[]}
       filterBar={filterBar}
       studyMode={learnMode}
       initialLineId={resumeLineId}

@@ -2,10 +2,10 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
-import { fetchMutation, fetchQuery } from "convex/nextjs";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
+import { convexAuthNextjsToken } from '@/lib/workos/convex-compat';
+import { fetchMutation, fetchQuery } from '@/lib/supabase/server-client';
+import { api } from '@/lib/supabase/api';
+import type { Id } from '@/lib/supabase/types';
 import { parsePgn } from '@/lib/chess/pgn-parser';
 import { buildTree } from '@/lib/chess/tree';
 import type { PgnMoveAnnotations } from '@/lib/chess/pgn-parser';
@@ -240,7 +240,7 @@ export async function copySharedCourseAction(formData: FormData): Promise<void> 
     for (const position of tree?.positions ?? []) {
       positionsById.set(position._id, {
         fen: position.fen,
-        annotation: position.annotation,
+        annotation: position.annotation ?? undefined,
       });
     }
   }

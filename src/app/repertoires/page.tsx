@@ -3,15 +3,17 @@
 import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Pencil } from 'lucide-react';
-import { useQuery, useConvexAuth } from 'convex/react';
+import { useQuery } from '@/lib/supabase/client';
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { useRouter } from 'next/navigation';
-import { api } from '@convex/_generated/api';
+import { api } from '@/lib/supabase/api';
 import { AppSurface, EmptyState, GhostButton, PageHeader, PremiumButton } from '@/components/ui/Premium';
 import { DeleteRepertoireButton } from './DeleteRepertoireButton';
 import { renameRepertoireAction } from './actions';
 
 export default function RepertoiresListPage() {
-  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { loading: isLoading, user } = useAuth();
+  const isAuthenticated = Boolean(user);
   const router = useRouter();
   const [tab, setTab] = useState<'mine' | 'shared'>('mine');
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
