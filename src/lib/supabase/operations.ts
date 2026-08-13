@@ -876,7 +876,7 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
         values (${card.id}, ${correct ? (responseMs < 3000 ? 4 : responseMs < 8000 ? 3 : 2) : 1}, ${responseMs}, ${now}, ${card.stability}, ${card.difficulty}, ${card.state})
       `;
     }
-    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status) values (${user.id}, now(), 'queued') on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued'`;
+    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', false) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = public.counter_refresh_jobs.force_refresh or excluded.force_refresh`;
     return null;
   }
   if (operation === 'training.markInfoLineViewed') {
@@ -917,12 +917,12 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
   }
   if (operation === 'training.ensureCounterSnapshot') {
     const rows = await db`select * from public.counter_snapshots where user_id = ${user.id} and course_id is null limit 1`;
-    const stale = !rows[0] || Date.now() - Number(dateMs(rows[0].computed_at) ?? 0) >= 20 * 60 * 1000;
+    const stale = !rows[0] || Date.now() - Number(dateMs(rows[0].computed_at) ?? 0) >= 60 * 1000;
     if (stale) {
       await db`
-        insert into public.counter_refresh_jobs (user_id, requested_at, status, error)
-        values (${user.id}, now(), 'queued', null)
-        on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', error = null
+        insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh, error)
+        values (${user.id}, now(), 'queued', ${!rows[0]}, null)
+        on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = public.counter_refresh_jobs.force_refresh or excluded.force_refresh, error = null
       `;
     }
     return rows[0] ? dateMs(rows[0].computed_at) : null;
@@ -1034,7 +1034,7 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
       completed++;
     }
     await db`update public.course_imports set status = 'done', completed_chapters = ${completed}, updated_at = now() where id = ${importId}`;
-    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status) values (${user.id}, now(), 'queued') on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued'`;
+    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', true) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = true`;
     return importId;
   }
   if (operation === 'import.importBundle') {
@@ -1079,7 +1079,7 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
         }
       }
     }
-    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status) values (${user.id}, now(), 'queued') on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued'`;
+    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', true) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = true`;
     return { coursesCreated, chaptersCreated, movesCreated, cardsCreated: 0 };
   }
 

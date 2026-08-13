@@ -410,6 +410,7 @@ create table if not exists public.counter_refresh_jobs (
   started_at timestamptz,
   completed_at timestamptz,
   status text not null default 'queued' check (status in ('queued', 'running', 'done', 'failed')),
+  force_refresh boolean not null default false,
   error text
 );
 

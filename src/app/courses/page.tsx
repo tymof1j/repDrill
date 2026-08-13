@@ -14,7 +14,8 @@ export default function CoursesListPage() {
   const isAuthenticated = Boolean(user);
   const router = useRouter();
   const [tab, setTab] = useState<'mine' | 'shared'>('mine');
-  const stats = useQuery(api.training.getCachedLineStats);
+  const [statsTick, setStatsTick] = useState(0);
+  const stats = useQuery(api.training.getCachedLineStats, { tick: statsTick });
   const ensureCounterSnapshot = useMutation(api.training.ensureCounterSnapshot);
 
   useEffect(() => {
@@ -24,9 +25,14 @@ export default function CoursesListPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     // This is a cheap freshness check. It only schedules a background
-    // refresh when the 20-minute snapshot is stale; the page never waits for
+    // refresh when the one-minute snapshot is stale; the page never waits for
     // a graph traversal or displays an in-flight counter as its main state.
     void ensureCounterSnapshot({}).catch(() => undefined);
+    const interval = window.setInterval(() => {
+      setStatsTick((tick) => tick + 1);
+      void ensureCounterSnapshot({}).catch(() => undefined);
+    }, 60_000);
+    return () => window.clearInterval(interval);
   }, [ensureCounterSnapshot, isAuthenticated]);
 
   const items = useQuery(api.courses.list);
@@ -83,7 +89,7 @@ export default function CoursesListPage() {
             <span className="font-display text-[2.9rem] font-semibold leading-none tabular-nums text-[color:var(--margin-red)]">
               {visibleStats.dueLines}
             </span>
-            <span className="text-[32px] leading-none text-[color:var(--ink-soft)]">to repeat now</span>
+            <span className="text-[32px] leading-none text-[color:var(--ink-soft)]">lines to repeat now</span>
           </div>
           <Link
             href="/train"
