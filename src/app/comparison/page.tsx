@@ -85,7 +85,7 @@ const summaryCards = [
 
 export default async function ComparisonPage() {
   const isLoggedIn = await isAuthenticated();
-  const ctaHref = isLoggedIn ? '/courses' : '/login';
+  const ctaHref = isLoggedIn ? '/courses' : '/sign-in';
   const ctaLabel = isLoggedIn ? 'Open library' : 'Start studying';
 
   return (

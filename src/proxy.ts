@@ -1,10 +1,9 @@
 import { authkitProxy } from '@workos-inc/authkit-nextjs';
 import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 import { courseAliasRedirectUrl, resolveCourseHostAlias } from "@/lib/course/hostAliases";
+import { getWorkOSRedirectUri } from "@/lib/workos/config";
 
-const siteUrl = process.env.SITE_URL?.trim().replace(/\/$/, "");
-const workosRedirectUri =
-  process.env.WORKOS_REDIRECT_URI?.trim() || (siteUrl ? `${siteUrl}/auth/callback` : undefined);
+const workosRedirectUri = getWorkOSRedirectUri();
 
 const workosProxy = authkitProxy({
   // Keep OAuth callbacks on the canonical production host instead of allowing

@@ -37,7 +37,7 @@ export function SharePublicView({
 }) {
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyName, setCopyName] = useState(`${course.name} (copy)`);
-  const loginHref = `/login?redirectTo=${encodeURIComponent(`/share/${shareToken}`)}`;
+  const loginHref = `/sign-in?returnTo=${encodeURIComponent(`/share/${shareToken}`)}`;
   const accessLabel =
     access === 'collaborate'
       ? 'Full access: view, copy, and collaborate where supported'
