@@ -127,6 +127,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
   const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const lineAdvanceInFlightRef = useRef(false);
   const lineSaveAttemptedRef = useRef(false);
   const submitRatings = useMutation(api.training.submitLineRatings);
   const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
@@ -574,13 +575,18 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   }, [line, lineIndex, lines, studyMode]);
 
   const continueToNextLine = useCallback(async () => {
-    if (lineSaving) return;
-    if (!lineSaved) {
+    // The automatic save starts as soon as the line is completed. Space/click
+    // should wait for that same request instead of being ignored while it is
+    // in flight.
+    if (lineAdvanceInFlightRef.current) return;
+    lineAdvanceInFlightRef.current = true;
+    try {
       const saved = await persistLineProgress(true);
-      if (!saved) return;
+      if (saved) advanceLine();
+    } finally {
+      lineAdvanceInFlightRef.current = false;
     }
-    advanceLine();
-  }, [advanceLine, lineSaved, lineSaving, persistLineProgress]);
+  }, [advanceLine, persistLineProgress]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
