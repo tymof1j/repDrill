@@ -250,6 +250,20 @@ async function buildTrainingLines(db: any, user: AppUser, args: Record<string, u
   const posById = new Map<string, any>(positions.map((position: any) => [String(position.id), position] as [string, any]));
   const cards = await db`select * from public.review_cards where user_id = ${user!.id}`;
   const cardByMoveId = new Map<string, any>(cards.map((card: any) => [String(card.move_id), card] as [string, any]));
+  // Keep the review queue on the database clock.  The cached library counter
+  // uses the same predicate, while comparing timestamp/state values after
+  // they have crossed the Postgres -> Node boundary can silently produce an
+  // empty Review queue even though the counter says cards are due.
+  const dueCardRows = await db`
+    select rc.id
+    from public.review_cards rc
+    join public.moves m on m.id = rc.move_id
+    where rc.user_id = ${user!.id}
+      and m.chapter_id in ${db(chapterIds)}
+      and rc.due <= now()
+      and (rc.last_review is not null or rc.state <> 0)
+  `;
+  const dueCardIds = new Set(dueCardRows.map((row: any) => String(row.id)));
   const settings = await db`select * from public.chapter_line_settings where chapter_id in ${db(chapterIds)}`;
   const settingByKey = new Map(settings.map((setting: any) => [`${setting.chapter_id}:${setting.line_key}`, Boolean(setting.info_only)]));
   const views = await db`select * from public.info_line_views where user_id = ${user!.id} and chapter_id in ${db(chapterIds)}`;
@@ -262,7 +276,6 @@ async function buildTrainingLines(db: any, user: AppUser, args: Record<string, u
     chapterMoves.set(String(move.chapter_id), list);
   }
   for (const list of chapterMoves.values()) list.sort((a, b) => Number(b.is_main_line) - Number(a.is_main_line) || Number(a.sort_order) - Number(b.sort_order));
-  const now = Date.now();
   const extracted: any[] = [];
   let totalLines = 0;
   let dueLines = 0;
@@ -332,8 +345,7 @@ async function buildTrainingLines(db: any, user: AppUser, args: Record<string, u
       if (infoOnly && viewed.has(`${chapter.id}:${lineKey}`) && !args.learnMode) return;
       const lineIsNew = steps.some((step) => step.isNew);
       const dueCount = steps.filter((step) => {
-        const card = step.cardId ? cardByMoveId.get(String(step.cardId)) : null;
-        return card && new Date(card.due).getTime() <= now && !isUnseenCard(card);
+        return step.cardId ? dueCardIds.has(String(step.cardId)) : false;
       }).length;
       if (!args.learnMode && !args.fromPositionId && !infoOnly && dueCount === 0) return;
       totalLines++;
