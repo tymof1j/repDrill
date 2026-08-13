@@ -38,11 +38,25 @@ credentials: WorkOS owns new sessions, while the old auth documents remain
 available for audit and reconciliation.
 
 The counter design is separate from the migration. `counter_snapshots` stores
-the last computed totals and the app reads them immediately. A refresh is
-queued only when stale, so a large course graph is never traversed during a
-page visit.
+the last computed totals and the app reads them immediately. The totals are
+aggregated terminal training lines, not individual positions. A refresh is
+checked every minute, but it only traverses the graph when a course was
+actually reviewed after the last snapshot (or when imported course data needs
+its first snapshot).
 
-For a fully independent refresh after cutover, schedule a Supabase Cron job
-every 20 minutes that POSTs to `/api/internal/counter-refresh` with
-`Authorization: Bearer $COUNTER_REFRESH_SECRET`. The endpoint is deliberately
-not public and the browser never waits for it.
+For a fully independent refresh after cutover, enable Supabase's Cron module
+(`pg_cron`). Migration `0002` schedules `repdrill-counter-refresh` every
+minute and runs `public.process_counter_refresh_jobs()` inside Postgres, so no
+Vercel cron plan is required. If the module was not enabled when the migration
+ran, enable it under Supabase → Integrations → Cron and run:
+
+```sql
+select cron.schedule(
+  'repdrill-counter-refresh',
+  '* * * * *',
+  'select public.process_counter_refresh_jobs();'
+);
+```
+
+The `/api/internal/counter-refresh` endpoint remains available for a secured
+manual or external scheduler using `Authorization: Bearer $COUNTER_REFRESH_SECRET`.

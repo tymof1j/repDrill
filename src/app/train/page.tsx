@@ -150,12 +150,16 @@ export default function TrainPage() {
   if (result.lines.length === 0) {
     return (
       <AppSurface>
-        {filterBar}
         <PageHeader
           eyebrow="Part III — Training"
           title="The queue is quiet."
           body="Nothing is due right now. The scheduler will surface lines when memory has had time to fade."
-          action={<SecondaryButton href="/courses">Back to library</SecondaryButton>}
+          action={
+            <>
+              {filterBar}
+              <SecondaryButton href="/courses">Back to library</SecondaryButton>
+            </>
+          }
         />
 
         <div className="mb-12 grid grid-cols-3 gap-x-2 gap-y-6 border-y border-[color:var(--paper-edge)] py-8">

@@ -320,7 +320,7 @@ function getProgress(
     };
   }
   if (!summary) {
-    return { percent: 0, label: 'Loading progress', variationLabel: 'Reading course positions…', due: 0, newLines: 0, dueLabel: 'Please wait' };
+    return { percent: 0, label: 'Loading progress', variationLabel: 'Counting course lines…', due: 0, newLines: 0, dueLabel: 'Please wait' };
   }
   if (summary.total === 0) {
     return { percent: 0, label: 'Ready to train', variationLabel: 'Open course to create review cards', due: 0, newLines: 0, dueLabel: 'Ready when you are' };
@@ -329,7 +329,7 @@ function getProgress(
   return {
     percent,
     label: `${Math.round(percent)}%`,
-    variationLabel: `${summary.learned} / ${summary.total} positions`,
+    variationLabel: `${summary.learned} / ${summary.total} lines`,
     due: summary.due,
     newLines: summary.newLines,
     dueLabel: summary.due > 0 ? `${summary.due} due` : 'Ready when you are',
