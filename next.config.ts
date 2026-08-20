@@ -11,14 +11,6 @@ const nextConfig: NextConfig = {
   ...(workosRedirectUri
     ? { env: { NEXT_PUBLIC_WORKOS_REDIRECT_URI: workosRedirectUri } }
     : {}),
-  async rewrites() {
-    return [
-      {
-        source: "/about/:path*",
-        destination: "https://tymofii-site.vercel.app/about/:path*",
-      },
-    ];
-  },
 };
 
 export default nextConfig;
