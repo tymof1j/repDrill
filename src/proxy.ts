@@ -15,6 +15,7 @@ const workosProxy = authkitProxy({
       '/',
       '/login',
       '/comparison',
+      '/about/:path*',
       '/documentation/:path*',
       '/share/:path*',
       '/sign-in',
