@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
+        source: "/about",
+        destination: "https://tymofii-site.vercel.app/about",
+      },
+      {
         source: "/about/:path*",
         destination: "https://tymofii-site.vercel.app/about/:path*",
       },
