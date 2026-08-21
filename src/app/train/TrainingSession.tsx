@@ -138,6 +138,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
   const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const lineAdvanceInFlightRef = useRef(false);
   const lineSaveAttemptedRef = useRef(false);
   const submitRatings = useMutation(api.training.submitLineRatings);
   const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
@@ -618,12 +619,18 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [line, lineIndex, lines, studyMode]);
 
-  const continueToNextLine = useCallback(() => {
-    // Optimistic: the automatic save already fired when the line completed,
-    // and its closure captured this line's results. Advancing must never wait
-    // on the network — if the save fails, the error surfaces via saveError.
-    void persistLineProgress(true);
-    advanceLine();
+  const continueToNextLine = useCallback(async () => {
+    // The automatic save starts at completion. Wait for that same request so
+    // a transient failure leaves this line open and retryable instead of
+    // losing its ratings after we advance to the next line.
+    if (lineAdvanceInFlightRef.current) return;
+    lineAdvanceInFlightRef.current = true;
+    try {
+      const saved = await persistLineProgress(true);
+      if (saved) advanceLine();
+    } finally {
+      lineAdvanceInFlightRef.current = false;
+    }
   }, [advanceLine, persistLineProgress]);
 
   useEffect(() => {
@@ -834,13 +841,14 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           )}
           <SecondaryButton
             onClick={saveAndExit}
+            disabled={lineSaving}
             className="min-h-12 px-4 text-[11px]"
           >
-            Save & exit
+            {lineSaving ? 'Saving…' : 'Save & exit'}
           </SecondaryButton>
           {isLineDone && (
-            <PremiumButton onClick={continueToNextLine} className="min-h-12 px-5 text-[11px]">
-              {lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
+            <PremiumButton onClick={continueToNextLine} disabled={lineSaving} className="min-h-12 px-5 text-[11px]">
+              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
             </PremiumButton>
           )}
         </div>

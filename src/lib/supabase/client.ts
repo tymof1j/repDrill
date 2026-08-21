@@ -32,7 +32,8 @@ export function useQuery<RefName extends Ref>(ref: RefName, args: Record<string,
   const skipped = args === 'skip';
   const serializedArgs = skipped ? '' : JSON.stringify(args);
   const cacheKey = `${ref}\u0000${serializedArgs}`;
-  const [state, setState] = useState<{ value: any; error: Error | null }>(() => ({
+  const [state, setState] = useState<{ key: string; value: any; error: Error | null }>(() => ({
+    key: cacheKey,
     value: skipped ? undefined : primeCache(cacheKey),
     error: null,
   }));
@@ -41,18 +42,18 @@ export function useQuery<RefName extends Ref>(ref: RefName, args: Record<string,
     let cancelled = false;
     if (skipped) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setState({ value: undefined, error: null });
+      setState({ key: cacheKey, value: undefined, error: null });
       return () => { cancelled = true; };
     }
     callBackend(ref, JSON.parse(serializedArgs))
       .then((value) => {
         queryCache.set(cacheKey, { value });
-        if (!cancelled) setState({ value, error: null });
+        if (!cancelled) setState({ key: cacheKey, value, error: null });
       })
       .catch((error: unknown) => {
         // Keep showing stale cached data on a failed revalidation.
         if (!cancelled && primeCache(cacheKey) === undefined) {
-          setState({ value: undefined, error: error instanceof Error ? error : new Error(String(error)) });
+          setState({ key: cacheKey, value: undefined, error: error instanceof Error ? error : new Error(String(error)) });
         }
       });
     return () => { cancelled = true; };
@@ -61,6 +62,11 @@ export function useQuery<RefName extends Ref>(ref: RefName, args: Record<string,
   // Match the old reactive client's non-throwing loading behavior. A backend
   // outage should leave the page in a recoverable loading/empty state rather
   // than crash the whole React tree.
+  // A hook instance can be reused with a new query key before its effect
+  // starts. Never render the previous key's value in that interval: it may be
+  // a different course, filter, or resource. A cached value for the new key
+  // can still be returned synchronously.
+  if (state.key !== cacheKey) return primeCache(cacheKey) as BackendResult<RefName> | undefined;
   if (state.error) return undefined;
   return state.value as BackendResult<RefName> | undefined;
 }
