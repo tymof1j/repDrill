@@ -26,6 +26,25 @@ const enabledKey = (book: BookTrainingKey) => `repdrill:${book}:author-method`;
 const progressKey = (book: BookTrainingKey) => `repdrill:${book}:method-progress`;
 const learnQuizPassesKey = 'repdrill:learn-quiz-passes';
 const learnResumeKey = (courseId: string) => `repdrill:learn-resume:${courseId}`;
+const playbackMsKey = 'repdrill:study-playback-ms';
+
+/** Autoplay speed for Study mode, in ms per move. */
+export const PLAYBACK_SPEEDS = [
+  { label: 'Slow', ms: 2400 },
+  { label: 'Normal', ms: 1200 },
+  { label: 'Fast', ms: 600 },
+  { label: 'Blitz', ms: 300 },
+] as const;
+
+export function readPlaybackMs(): number {
+  if (typeof window === 'undefined') return 1200;
+  const value = Number(window.localStorage.getItem(playbackMsKey));
+  return PLAYBACK_SPEEDS.some((s) => s.ms === value) ? value : 1200;
+}
+
+export function setPlaybackMs(ms: number) {
+  window.localStorage.setItem(playbackMsKey, String(ms));
+}
 
 function emitBookProgress(book: BookTrainingKey) {
   if (typeof window === 'undefined') return;

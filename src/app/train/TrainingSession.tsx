@@ -32,8 +32,11 @@ import { api } from '@/lib/supabase/api';
 import type { Id } from '@/lib/supabase/types';
 import { normalizeNotation } from '@/lib/chess/notation';
 import {
+  PLAYBACK_SPEEDS,
   readLearnQuizPasses,
+  readPlaybackMs,
   recordLearnResume,
+  setPlaybackMs,
   type LearnQuizPasses,
 } from '@/lib/bookTrainingPreferences';
 
@@ -124,6 +127,14 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   // The post-answer solution navigator must not move the active drill cursor.
   const [solutionPreviewIndex, setSolutionPreviewIndex] = useState<number | null>(null);
   const [queuedPremove, setQueuedPremove] = useState<{ from: string; to: string } | null>(null);
+  // Flow-style autoplay of the studied line (qchess "Repertoire Flow").
+  const [autoPlaying, setAutoPlaying] = useState(false);
+  const [playbackMs, setPlaybackMsState] = useState(1200);
+  useEffect(() => {
+    setPlaybackMsState(readPlaybackMs());
+  }, []);
+  // Blindfold training: pieces hidden, moves must be visualised.
+  const [blindfold, setBlindfold] = useState(false);
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
   const saveInFlightRef = useRef<Promise<boolean> | null>(null);
@@ -275,6 +286,25 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
       setLastMoveUci([s.uci.slice(0, 2), s.uci.slice(2, 4)]);
     }
   }, [linePhase, browseIndex, line]);
+
+  // Flow autoplay: advance one study move per beat until the line ends.
+  useEffect(() => {
+    if (!autoPlaying || linePhase !== 'browse' || !line) return;
+    if (browseIndex >= browseLimit) {
+      setAutoPlaying(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      setBrowseIndex((i) => Math.min(browseLimit, i + 1));
+    }, playbackMs);
+    return () => window.clearTimeout(t);
+  }, [autoPlaying, linePhase, browseIndex, browseLimit, playbackMs, line]);
+
+  // Blindfold mode only makes sense with notation input: there is nothing
+  // visible to click on.
+  useEffect(() => {
+    if (blindfold) setInputMode('keyboard');
+  }, [blindfold]);
 
   useEffect(() => {
     if (linePhase !== 'drill' || !step || feedback) return;
@@ -543,6 +573,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
 
   const startDrilling = useCallback(() => {
     if (!line) return;
+    setAutoPlaying(false);
     if (line.isInfoOnly || userStepIndexes.length === 0) {
       setLinePhase('line-done');
       return;
@@ -601,13 +632,21 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
       if (linePhase === 'browse' && line) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
+          setAutoPlaying(false);
           setBrowseIndex((i) => Math.max(0, i - 1));
           return;
         }
-        if (e.key === 'ArrowRight' || e.key === ' ') {
+        if (e.key === 'ArrowRight') {
           e.preventDefault();
+          setAutoPlaying(false);
           const next = browseIndex + 1;
           if (next <= browseLimit) setBrowseIndex(next);
+          return;
+        }
+        if (e.key === ' ') {
+          // Space plays/pauses the line like a video; arrows step manually.
+          e.preventDefault();
+          setAutoPlaying((p) => !p);
           return;
         }
         if (e.key === 'ArrowUp') {
@@ -829,7 +868,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-ghost)]">{phaseLabel}</p>
           </div>
 
-          <div className="-mx-5 overflow-x-clip md:mx-0">
+          <div className={`-mx-5 overflow-x-clip md:mx-0 ${blindfold ? 'blindfold-board' : ''}`}>
             <ResizableDiagramFrame
               className="training-board-frame max-w-full -mx-2 md:mx-0"
               caption={isBrowsing ? `Move ${browseIndex} / ${line.steps.length}` : `Move ${Math.min(questionIndex + 1, userMovesInLine)} / ${userMovesInLine}`}
@@ -888,7 +927,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             </p>
             <p className="mt-3 font-display-italic text-[15px] text-[color:var(--ink-soft)]">
               {isBrowsing
-                ? 'Navigate with ← → · read the annotations · press Enter or Start drill when ready.'
+                ? 'Navigate with ← → · Space plays the line · Enter or Start drill when ready.'
                 : isLineDone
                   ? 'Review the result, then continue.'
                   : betweenDrills
@@ -900,6 +939,42 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
                       : 'The position is loading.'}
             </p>
           </section>
+
+          {(isBrowsing || isDrilling) && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              {isBrowsing && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setAutoPlaying((p) => !p)}
+                    className={`px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${autoPlaying ? 'bg-[color:var(--library-green)] text-[#151615]' : 'border border-[color:var(--paper-edge)] text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'}`}
+                  >
+                    {autoPlaying ? '❚❚ Pause' : '▶ Play line'}
+                  </button>
+                  <div className="flex items-center overflow-hidden border border-[color:var(--paper-edge)]">
+                    {PLAYBACK_SPEEDS.map((s) => (
+                      <button
+                        key={s.ms}
+                        type="button"
+                        onClick={() => { setPlaybackMsState(s.ms); setPlaybackMs(s.ms); }}
+                        className={`px-2.5 py-2 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors duration-200 ${playbackMs === s.ms ? 'bg-[color:var(--ink)] text-[color:var(--paper)]' : 'text-[color:var(--ink-faint)] hover:bg-[color:var(--paper-deep)]'}`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setBlindfold((b) => !b)}
+                title="Hide the pieces and play from visualization"
+                className={`px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${blindfold ? 'bg-[color:var(--margin-red)] text-[#151615]' : 'border border-[color:var(--paper-edge)] text-[color:var(--ink-faint)] hover:bg-[color:var(--paper-deep)]'}`}
+              >
+                Blindfold {blindfold ? 'on' : 'off'}
+              </button>
+            </div>
+          )}
 
           {isBrowsing && browseAnnotation && (
             <section>
