@@ -59,11 +59,11 @@ export default async function Home() {
       <LandingNav ctaHref="/sign-in" ctaLabel="Start training" isLoggedIn={false} />
 
       <section className="mx-auto grid min-h-[92vh] w-full max-w-7xl items-center gap-14 px-5 pb-16 pt-28 md:px-10 lg:grid-cols-[minmax(0,1.03fr)_minmax(0,.97fr)] lg:px-14">
-        <LandingReveal className="min-w-0">
+        <LandingReveal className="relative z-10 min-w-0">
           <p className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--library-green)]">
             Chess study that comes back when you need it
           </p>
-          <h1 className="mt-6 max-w-3xl font-display text-[clamp(3.45rem,6.1vw,5.9rem)] font-semibold leading-[0.9] tracking-[-0.06em] text-balance">
+          <h1 className="mt-6 max-w-3xl font-display text-[clamp(2.9rem,5.4vw,5rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-balance [hyphens:auto] [overflow-wrap:anywhere]">
             Stop collecting.
             <br />
             <span className="font-display-italic font-normal text-[color:var(--margin-red)]">
@@ -95,8 +95,7 @@ export default async function Home() {
         </LandingReveal>
 
         <LandingReveal delay={140} className="min-w-0">
-          <div className="relative ml-auto max-w-[620px] rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-3 shadow-[0_28px_90px_rgba(47,58,50,0.14)] md:p-5">
-            <div className="mb-4 flex items-start justify-between gap-5 px-1">
+          <div className="relative ml-auto max-w-[620px] rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface)] p-3 shadow-[0_28px_90px_rgba(47,58,50,0.14)] md:p-5">            <div className="mb-4 flex items-start justify-between gap-5 px-1">
               <div>
                 <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[color:var(--ink-faint)]">
                   Today’s position

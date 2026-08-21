@@ -16,7 +16,7 @@ export const ukTranslations: Record<string, string> = {
   'Your routine': 'Твій ритм',
   'Chess study that comes back when you need it': 'Шахи, до яких повертаєшся',
   'Stop collecting.': 'Не накопичуй.',
-  'Start remembering.': 'Памʼятай.',
+  'Start remembering.': 'Пам’ятай.',
   'RepDrill turns the positions you care about into focused practice — so your books, openings, and game lessons show up over the board.':
     'RepDrill перетворює важливі позиції на тренування — з книг, дебютів і партій.',
   'Build my training library': 'Створити бібліотеку',

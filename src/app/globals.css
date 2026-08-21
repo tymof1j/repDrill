@@ -108,6 +108,12 @@ body::after {
   letter-spacing: -0.01em;
 }
 
+/* Ukrainian words run long ("запамʼятовування"); display headings must wrap
+   instead of overflowing their column behind adjacent panels. */
+h1, h2, h3 {
+  overflow-wrap: break-word;
+}
+
 /* A restrained editorial accent for chess notes and annotations. */
 .font-display-italic {
   font-family: var(--font-blad), ui-serif, Georgia, serif;
