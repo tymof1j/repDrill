@@ -346,9 +346,6 @@ export function WoodpeckerTrainer({
     }
   };
 
-  const answerVisible = status === 'correct' || status === 'revealed';
-  const analysisMode = status !== 'ready';
-  const firstMove = solution.solutionUci[0];
   const lichessUrl = `https://lichess.org/analysis/standard/${puzzle.fen.replaceAll(' ', '_')}?color=${puzzle.turn}`;
   const cleanSolutionText = puzzle.solutionText.replace(/\uF0FC/g, '').replace(/\s{2,}/g, ' ').trim();
   const nextMainline = nextExercise();
