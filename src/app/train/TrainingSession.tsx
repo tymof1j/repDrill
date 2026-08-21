@@ -127,7 +127,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
   const saveInFlightRef = useRef<Promise<boolean> | null>(null);
-  const lineAdvanceInFlightRef = useRef(false);
   const lineSaveAttemptedRef = useRef(false);
   const submitRatings = useMutation(api.training.submitLineRatings);
   const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
@@ -250,7 +249,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setErrorQueue([]);
     setLineSaving(false);
     setLineSaved(false);
-    setSaveError(null);
+    // saveError is deliberately NOT cleared here: with optimistic advancing,
+    // a failed background save must stay visible on the next line until the
+    // next save attempt clears it.
     lineSaveAttemptedRef.current = false;
     setLastMoveUci(undefined);
     setNotationInput('');
@@ -291,6 +292,8 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     if (!inErrorRecovery && questionIndex >= userStepIndexes.length) {
       if (drillRun < drillPassCount) {
         setDrill1Stats({ correct: lineCorrect, wrong: lineWrong });
+        // Short beat so the learner notices the pass ended, but short enough
+        // that repeated drilling keeps its rhythm.
         const t = setTimeout(() => {
           setDrillRun((r) => r + 1);
           setQuestionIndex(0);
@@ -302,7 +305,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           setWaitingForUser(false);
           setTracePreviewIndex(null);
           setErrorQueue([]);
-        }, 900);
+        }, 400);
         return () => clearTimeout(t);
       }
       if (errorQueue.length > 0) {
@@ -584,18 +587,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [line, lineIndex, lines, studyMode]);
 
-  const continueToNextLine = useCallback(async () => {
-    // The automatic save starts as soon as the line is completed. Space/click
-    // should wait for that same request instead of being ignored while it is
-    // in flight.
-    if (lineAdvanceInFlightRef.current) return;
-    lineAdvanceInFlightRef.current = true;
-    try {
-      const saved = await persistLineProgress(true);
-      if (saved) advanceLine();
-    } finally {
-      lineAdvanceInFlightRef.current = false;
-    }
+  const continueToNextLine = useCallback(() => {
+    // Optimistic: the automatic save already fired when the line completed,
+    // and its closure captured this line's results. Advancing must never wait
+    // on the network — if the save fails, the error surfaces via saveError.
+    void persistLineProgress(true);
+    advanceLine();
   }, [advanceLine, persistLineProgress]);
 
   useEffect(() => {
@@ -798,19 +795,23 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           )}
           <SecondaryButton
             onClick={saveAndExit}
-            disabled={lineSaving}
             className="min-h-12 px-4 text-[11px]"
           >
-            {lineSaving ? 'Saving…' : 'Save & exit'}
+            Save & exit
           </SecondaryButton>
           {isLineDone && (
-            <PremiumButton onClick={continueToNextLine} disabled={lineSaving} className="min-h-12 px-5 text-[11px]">
-              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
+            <PremiumButton onClick={continueToNextLine} className="min-h-12 px-5 text-[11px]">
+              {lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
             </PremiumButton>
           )}
         </div>
       </div>
 
+      {lineSaving && !saveError && (
+        <p aria-live="polite" className="mb-4 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
+          Saving progress…
+        </p>
+      )}
       {saveError && (
         <p role="alert" className="mb-4 border-l-2 border-[color:var(--margin-red)] pl-3 font-display-italic text-sm text-[color:var(--margin-red)]">
           {saveError}
