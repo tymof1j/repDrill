@@ -221,8 +221,17 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     [step?.annotation, step?.annotations],
   );
 
+  // Reset drill state only when the drilled line actually changes. Keying on
+  // a stable primitive (lineId + index + mode) instead of the `line` object
+  // identity prevents parent refetches from wiping in-flight drill state, and
+  // removing configuredQuizPasses from the trigger means changing the setting
+  // mid-line no longer resets the current drill — the next line picks it up.
+  const lineResetKey = `${line?.lineId ?? ''}:${lineIndex}:${studyMode}`;
+  const lastResetKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!line) return;
+    if (lastResetKeyRef.current === lineResetKey) return;
+    lastResetKeyRef.current = lineResetKey;
     const firstFen = line.steps[0]?.parentFen ?? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
     setBoardFen(toCompleteFen(firstFen));
     setBrowseIndex(0);
@@ -251,7 +260,8 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setSolutionPreviewIndex(null);
     setQueuedPremove(null);
     setLinePhase(studyMode || line.isInfoOnly || line.isNew ? 'browse' : 'drill');
-  }, [configuredQuizPasses, line, lineIndex, studyMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset intentionally reads the latest settings without re-triggering on them
+  }, [lineResetKey, line]);
 
   useEffect(() => {
     if (linePhase !== 'browse' || !line || line.steps.length === 0) return;

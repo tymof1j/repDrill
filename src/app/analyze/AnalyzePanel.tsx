@@ -730,14 +730,17 @@ export function DeviationViewer({
   }, [game.playedAt, game.whiteUsername, game.blackUsername]);
 
   const annotationKey = `${game.source}:${game.gameId}:annotations`;
+  const lastSavedAnnotationsRef = useRef<string | null>(null);
   useEffect(() => {
     if (readOnly) {
+      lastSavedAnnotationsRef.current = JSON.stringify(initialAnnotations ?? {});
       setAnnotationsByPly(initialAnnotations ?? {});
       return;
     }
     try {
       const raw = window.localStorage.getItem(annotationKey);
       if (!raw) {
+        lastSavedAnnotationsRef.current = '{}';
         setAnnotationsByPly({});
         return;
       }
@@ -747,8 +750,10 @@ export function DeviationViewer({
         const idx = Number(k);
         if (Number.isFinite(idx) && idx >= 0 && typeof v === 'string') next[idx] = v;
       }
+      lastSavedAnnotationsRef.current = JSON.stringify(next);
       setAnnotationsByPly(next);
     } catch {
+      lastSavedAnnotationsRef.current = '{}';
       setAnnotationsByPly({});
     }
   }, [annotationKey, readOnly, initialAnnotations]);
@@ -756,15 +761,30 @@ export function DeviationViewer({
   useEffect(() => {
     if (readOnly) return;
     const timer = window.setTimeout(() => {
+      const serialized = JSON.stringify(annotationsByPly);
+      // Skip the save entirely when nothing changed since the last persist —
+      // otherwise the effect fires on mount and rewrites identical data.
+      if (serialized === lastSavedAnnotationsRef.current) return;
       try {
-        window.localStorage.setItem(annotationKey, JSON.stringify(annotationsByPly));
-        setAnnotationSaved(true);
+        window.localStorage.setItem(annotationKey, serialized);
       } catch {
         // no-op
       }
-      if (game.id) {
-        import('./actions').then((m) => m.saveAnalysisAnnotations(game.id!, annotationsByPly)).catch(() => {});
+      if (!game.id) {
+        lastSavedAnnotationsRef.current = serialized;
+        setAnnotationSaved(true);
+        return;
       }
+      import('./actions')
+        .then((m) => m.saveAnalysisAnnotations(game.id!, annotationsByPly))
+        .then(() => {
+          lastSavedAnnotationsRef.current = serialized;
+          setAnnotationSaved(true);
+        })
+        .catch(() => {
+          // Server save failed: leave the "Saved" indicator off so the user
+          // knows the annotation is only stored locally.
+        });
     }, 220);
     return () => window.clearTimeout(timer);
   }, [annotationKey, annotationsByPly, readOnly, game.id]);

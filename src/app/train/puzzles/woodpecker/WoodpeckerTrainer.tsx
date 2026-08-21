@@ -330,6 +330,20 @@ export function WoodpeckerTrainer({
   const answerVisible = status === 'correct' || status === 'revealed';
   const analysisMode = status !== 'ready';
   const firstMove = solution.solutionUci[0];
+  // Stable identities keep ChessBoard's api.set() effect from re-running on
+  // every parent render (fresh object literals defeat its memoization).
+  const boardMovable = useMemo(
+    () => (analysisMode
+      ? { free: true, color: 'both' as const, showDests: false }
+      : { color: puzzle.turn, dests: legalDests, showDests: true }),
+    [analysisMode, puzzle.turn, legalDests],
+  );
+  const boardArrows = useMemo(
+    () => ((answerVisible || hintVisible) && firstMove
+      ? [{ orig: firstMove.slice(0, 2), dest: firstMove.slice(2, 4), brush: 'green' }]
+      : undefined),
+    [answerVisible, hintVisible, firstMove],
+  );
   const lichessUrl = `https://lichess.org/analysis/standard/${puzzle.fen.replaceAll(' ', '_')}?color=${puzzle.turn}`;
   const cleanSolutionText = puzzle.solutionText.replace(/\uF0FC/g, '').replace(/\s{2,}/g, ' ').trim();
   const nextMainline = nextExercise();
@@ -403,12 +417,8 @@ export function WoodpeckerTrainer({
               orientation={puzzle.turn}
               lastMove={lastMove}
               viewOnly={solution.solutionUci.length === 0}
-              movable={analysisMode
-                ? { free: true, color: 'both', showDests: false }
-                : { color: puzzle.turn, dests: legalDests, showDests: true }}
-              arrows={(answerVisible || hintVisible) && firstMove
-                ? [{ orig: firstMove.slice(0, 2), dest: firstMove.slice(2, 4), brush: 'green' }]
-                : undefined}
+              movable={boardMovable}
+              arrows={boardArrows}
               onMove={onMove}
             />
           </div>
