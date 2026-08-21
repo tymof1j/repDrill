@@ -52,6 +52,25 @@ function courseRow(row: Record<string, unknown>) {
   };
 }
 
+function analysisGameRow(row: Record<string, unknown>) {
+  return {
+    ...row,
+    _id: row.id,
+    gameId: row.game_id,
+    whiteUsername: row.white_username,
+    blackUsername: row.black_username,
+    playedAt: dateMs(row.played_at),
+    playedAs: row.played_as,
+    deviationKind: row.deviation_kind,
+    deviationMoveNumber: row.deviation_move_number,
+    deviationPly: row.deviation_ply,
+    playedSan: row.played_san,
+    expectedSans: row.expected_sans,
+    deviationFen: row.deviation_fen,
+    totalPlies: row.total_plies,
+  };
+}
+
 function chapterRow(row: Record<string, unknown>) {
   return {
     ...row,
@@ -523,13 +542,16 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
   }
   if (operation === 'courses.deleteChapter') {
     const chapterId = String(args.id);
-    const owned = await db`
-      select ch.id from public.chapters ch join public.courses c on c.id = ch.course_id
-      where ch.id = ${chapterId} and c.user_id = ${user.id}
-    `;
-    if (!owned[0]) throw new Error('Not found');
-    await db`delete from public.moves where chapter_id = ${chapterId}`;
-    await db`delete from public.chapters where id = ${chapterId}`;
+    await db.begin(async (tx: any) => {
+      const owned = await tx`
+        select ch.id from public.chapters ch join public.courses c on c.id = ch.course_id
+        where ch.id = ${chapterId} and c.user_id = ${user.id}
+      `;
+      if (!owned[0]) throw new Error('Not found');
+      // Atomic: a failure between the two deletes must not orphan moves.
+      await tx`delete from public.moves where chapter_id = ${chapterId}`;
+      await tx`delete from public.chapters where id = ${chapterId}`;
+    });
     return null;
   }
   if (operation === 'courses.setLineInfoOnly') {
@@ -727,9 +749,24 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
     const course = await publicCourse(db, String(args.token));
     return course;
   }
-  if (operation === 'sharing.listSharedAnalysis' || operation === 'sharing.listMySharedAnalysis') {
-    const rows = await db`select sl.*, ag.* from public.share_links sl join public.analyzed_games ag on ag.id::text = sl.resource_id where sl.resource_type = 'analysis' and (sl.owner_id = ${user.id} or sl.access <> 'none')`;
-    return rows.map((row: BackendRow) => ({ ...row, _id: row.id, gameId: row.game_id, whiteUsername: row.white_username, blackUsername: row.black_username, playedAt: dateMs(row.played_at), playedAs: row.played_as, deviationKind: row.deviation_kind, deviationMoveNumber: row.deviation_move_number, deviationPly: row.deviation_ply, playedSan: row.played_san, expectedSans: row.expected_sans, deviationFen: row.deviation_fen, totalPlies: row.total_plies }));
+  if (operation === 'sharing.listMySharedAnalysis') {
+    const rows = await db`
+      select distinct ag.* from public.share_links sl
+      join public.analyzed_games ag on ag.id::text = sl.resource_id
+      where sl.resource_type = 'analysis' and sl.owner_id = ${user.id}
+    `;
+    return rows.map((row: BackendRow) => ({ resource: analysisGameRow(row) }));
+  }
+  if (operation === 'sharing.listSharedAnalysis') {
+    const rows = await db`
+      select distinct ag.*, owner.name as owner_name, owner.email as owner_email
+      from public.share_invitations si
+      join public.users recipient on lower(recipient.email) = lower(si.email)
+      join public.analyzed_games ag on ag.id::text = si.resource_id
+      join public.users owner on owner.id = si.owner_id
+      where recipient.id = ${user.id} and si.owner_id <> ${user.id} and si.resource_type = 'analysis'
+    `;
+    return rows.map((row: BackendRow) => ({ resource: analysisGameRow(row) }));
   }
 
   if (operation === 'bookProgress.getBookProgress') {
@@ -742,27 +779,35 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
     const puzzle = Number(args.puzzle);
     const success = Boolean(args.success);
     const now = new Date();
-    let summaries = await db`select * from public.book_progress where user_id = ${user.id} and book_key = ${bookKey} limit 1`;
-    if (!summaries[0]) {
-      const setSize = bookKey === 'woodpecker-method' ? 1128 : 1000;
-      summaries = await db`insert into public.book_progress (user_id, book_key, cycle, position, set_size, started_at) values (${user.id}, ${bookKey}, 1, 1, ${setSize}, null) returning *`;
-    }
-    const summary = summaries[0];
-    if (puzzle < 1 || puzzle > summary.set_size) throw new Error('Puzzle is outside the current set');
-    const sourceAttemptKey = `native:${String(args.attemptId ?? crypto.randomUUID())}`;
-    const duplicate = args.attemptId ? await db`select id from public.book_puzzle_attempts where user_id = ${user.id} and book_key = ${bookKey} and source_attempt_key = ${sourceAttemptKey} limit 1` : [];
-    if (duplicate[0]) return executeSupabaseOperation('bookProgress.getBookProgress', args, user);
-    const states = await db`select * from public.book_puzzle_progress where user_id = ${user.id} and book_key = ${bookKey} and cycle = ${summary.cycle} and puzzle = ${puzzle} limit 1`;
-    const state = states[0];
-    const attempt = Number(state?.attempt_count ?? 0) + 1;
-    await db`insert into public.book_puzzle_attempts (user_id, book_key, cycle, puzzle, attempt, success, duration_ms, recorded_at, source, source_marker, source_attempt_key) values (${user.id}, ${bookKey}, ${summary.cycle}, ${puzzle}, ${attempt}, ${success}, ${args.durationMs == null ? null : Math.round(Number(args.durationMs))}, ${now}, 'native', 'native', ${sourceAttemptKey})`;
-    const solved = Boolean(state?.solved) || success;
-    const missed = solved ? false : Boolean(state?.missed) || !success;
-    if (state) await db`update public.book_puzzle_progress set solved = ${solved}, missed = ${missed}, attempt_count = ${attempt}, last_time_ms = ${args.durationMs == null ? null : Math.round(Number(args.durationMs))}, last_success = ${success}, last_attempt_at = ${now}, updated_at = now() where id = ${state.id}`;
-    else await db`insert into public.book_puzzle_progress (user_id, book_key, cycle, puzzle, solved, missed, attempt_count, last_time_ms, last_success, last_attempt_at, source_marker) values (${user.id}, ${bookKey}, ${summary.cycle}, ${puzzle}, ${solved}, ${missed}, ${attempt}, ${args.durationMs == null ? null : Math.round(Number(args.durationMs))}, ${success}, ${now}, 'native')`;
-    const solvedCount = Number(summary.solved_count) + (!state?.solved && solved ? 1 : 0);
-    const missedCount = Math.max(0, Number(summary.missed_count) + (!state?.missed && missed ? 1 : 0) - (state?.missed && solved ? 1 : 0));
-    await db`update public.book_progress set position = ${success ? Math.max(Number(summary.position), Math.min(Number(summary.set_size) + 1, puzzle + 1)) : Math.max(Number(summary.position), puzzle)}, solved_count = ${solvedCount}, missed_count = ${missedCount}, attempt_count = ${Number(summary.attempt_count) + 1}, started_at = coalesce(started_at, ${now}), updated_at = now() where id = ${summary.id}`;
+    // Serialize concurrent attempts (e.g. two tabs) per user+book: the
+    // read-modify-write below loses counter updates without a lock, and the
+    // summary insert can otherwise race into duplicate rows.
+    await db.begin(async (tx: any) => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`${user.id}:${bookKey}`}))`;
+      let summaries = await tx`select * from public.book_progress where user_id = ${user.id} and book_key = ${bookKey} limit 1`;
+      if (!summaries[0]) {
+        const setSize = bookKey === 'woodpecker-method' ? 1128 : 1000;
+        summaries = await tx`insert into public.book_progress (user_id, book_key, cycle, position, set_size, started_at) values (${user.id}, ${bookKey}, 1, 1, ${setSize}, null) returning *`;
+      }
+      const summary = summaries[0];
+      if (puzzle < 1 || puzzle > summary.set_size) throw new Error('Puzzle is outside the current set');
+      const sourceAttemptKey = `native:${String(args.attemptId ?? crypto.randomUUID())}`;
+      if (args.attemptId) {
+        const duplicate = await tx`select id from public.book_puzzle_attempts where user_id = ${user.id} and book_key = ${bookKey} and source_attempt_key = ${sourceAttemptKey} limit 1`;
+        if (duplicate[0]) return;
+      }
+      const states = await tx`select * from public.book_puzzle_progress where user_id = ${user.id} and book_key = ${bookKey} and cycle = ${summary.cycle} and puzzle = ${puzzle} limit 1`;
+      const state = states[0];
+      const attempt = Number(state?.attempt_count ?? 0) + 1;
+      await tx`insert into public.book_puzzle_attempts (user_id, book_key, cycle, puzzle, attempt, success, duration_ms, recorded_at, source, source_marker, source_attempt_key) values (${user.id}, ${bookKey}, ${summary.cycle}, ${puzzle}, ${attempt}, ${success}, ${args.durationMs == null ? null : Math.round(Number(args.durationMs))}, ${now}, 'native', 'native', ${sourceAttemptKey})`;
+      const solved = Boolean(state?.solved) || success;
+      const missed = solved ? false : Boolean(state?.missed) || !success;
+      if (state) await tx`update public.book_puzzle_progress set solved = ${solved}, missed = ${missed}, attempt_count = ${attempt}, last_time_ms = ${args.durationMs == null ? null : Math.round(Number(args.durationMs))}, last_success = ${success}, last_attempt_at = ${now}, updated_at = now() where id = ${state.id}`;
+      else await tx`insert into public.book_puzzle_progress (user_id, book_key, cycle, puzzle, solved, missed, attempt_count, last_time_ms, last_success, last_attempt_at, source_marker) values (${user.id}, ${bookKey}, ${summary.cycle}, ${puzzle}, ${solved}, ${missed}, ${attempt}, ${args.durationMs == null ? null : Math.round(Number(args.durationMs))}, ${success}, ${now}, 'native')`;
+      const solvedCount = Number(summary.solved_count) + (!state?.solved && solved ? 1 : 0);
+      const missedCount = Math.max(0, Number(summary.missed_count) + (!state?.missed && missed ? 1 : 0) - (state?.missed && solved ? 1 : 0));
+      await tx`update public.book_progress set position = ${success ? Math.max(Number(summary.position), Math.min(Number(summary.set_size) + 1, puzzle + 1)) : Math.max(Number(summary.position), puzzle)}, solved_count = ${solvedCount}, missed_count = ${missedCount}, attempt_count = ${Number(summary.attempt_count) + 1}, started_at = coalesce(started_at, ${now}), updated_at = now() where id = ${summary.id}`;
+    });
     return executeSupabaseOperation('bookProgress.getBookProgress', args, user);
   }
   if (operation === 'bookProgress.advanceCycle') {

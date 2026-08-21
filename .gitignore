@@ -54,7 +54,7 @@ next-env.d.ts
 # into the configured Convex deployment instead; keep any local capture only
 # in this ignored workspace directory.
 /data/import/
-/scripts/
+/scripts/*.local.*
 *.pgn
 *.status.json
 learning-progress.json

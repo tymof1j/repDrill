@@ -292,7 +292,9 @@ export async function getGameDeviationDetail(formData: FormData): Promise<{
   expectedSans?: string[];
   playedAs: 'white' | 'black';
 }> {
+  await requireToken();
   const pgn = String(formData.get('pgn') ?? '');
+  if (pgn.length > 200_000) throw new Error('PGN is too large to analyze');
   const usernameLower = String(formData.get('username') ?? '').toLowerCase();
   const whiteUsername = String(formData.get('white') ?? '');
   const blackUsername = String(formData.get('black') ?? '');

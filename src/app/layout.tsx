@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { Geist, Fraunces, JetBrains_Mono } from 'next/font/google';
+import { JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { AppShell } from '@/components/layout/AppShell';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -10,15 +11,21 @@ import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
+const fixelDisplay = localFont({
+  src: './fonts/FixelDisplay-SemiBold.otf',
+  variable: '--font-fixel-display',
+  display: 'swap',
 });
 
-const fraunces = Fraunces({
-  variable: '--font-fraunces',
-  subsets: ['latin'],
-  axes: ['SOFT', 'opsz'],
+const kyivTypeSans = localFont({
+  src: './fonts/KyivTypeSans-Regular2.ttf',
+  variable: '--font-kyiv-type',
+  display: 'swap',
+});
+
+const blad = localFont({
+  src: './fonts/Blad-Regular.otf',
+  variable: '--font-blad',
   display: 'swap',
 });
 
@@ -49,7 +56,7 @@ export default async function RootLayout({
         lang={initialLanguage}
         data-scroll-behavior="smooth"
         suppressHydrationWarning
-        className={`${geistSans.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
+        className={`${fixelDisplay.variable} ${kyivTypeSans.variable} ${blad.variable} ${jetbrainsMono.variable} h-full antialiased`}
       >
         <head>
           <script

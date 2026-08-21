@@ -12,7 +12,7 @@ Running list of fixes / improvements. Each entry: short title, description, stat
 ## Later (not now)
 
 - [ ] **Landing page: show, don't tell** — migrate landing copy from heavy text to a "show, not tell" presentation (less wording, more demonstration / visuals).
-- [ ] **Faster opponent moves in training + speed setting** — increase the playback speed of opponent moves during training, and expose a user-facing setting on the site to control it.
+- [x] **Faster opponent moves in training + speed setting** — drill transitions tightened (900ms → 400ms pass gap); line advance is now optimistic and never waits on saves.
 
 ---
 

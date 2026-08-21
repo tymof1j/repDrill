@@ -198,6 +198,13 @@ export function RepertoireViewer({
     return side === 'b' ? 'black' : 'white';
   }, [currentFen]);
 
+  // Stable identity keeps ChessBoard's api.set() effect from re-running on
+  // every parent render.
+  const boardMovable = useMemo(
+    () => ({ free: false, dests: legalDests, color: moveColor, showDests: true }),
+    [legalDests, moveColor],
+  );
+
   const onBoardMove = (orig: string, dest: string) => {
     const exact = nextMoves.find((m) => m.uci.slice(0, 2) === orig && m.uci.slice(2, 4) === dest);
     if (exact) {
@@ -300,7 +307,7 @@ export function RepertoireViewer({
               squareMarks={movablePieceMarks}
               brushes={getBoardBrushes(arrowTheme)}
               viewOnly={Boolean(activePreview)}
-              movable={{ free: false, dests: legalDests, color: moveColor, showDests: true }}
+              movable={boardMovable}
               onMove={onBoardMove}
             />
           </ResizableDiagramFrame>

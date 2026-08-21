@@ -19,27 +19,54 @@ async function callBackend(operation: Ref, args: unknown, method: 'GET' | 'POST'
   return payload?.value;
 }
 
+// Session-level stale-while-revalidate cache. Pages read instantly from this
+// on mount and revalidate in the background, so navigating between views
+// never waits on a network round trip for first paint.
+const queryCache = new Map<string, { value: unknown }>();
+
+function primeCache(key: string): unknown {
+  return queryCache.get(key)?.value;
+}
+
 export function useQuery<RefName extends Ref>(ref: RefName, args: Record<string, unknown> | Skip = {}): BackendResult<RefName> | undefined {
   const skipped = args === 'skip';
   const serializedArgs = skipped ? '' : JSON.stringify(args);
-  const [state, setState] = useState<{ value: any; error: Error | null }>({ value: undefined, error: null });
+  const cacheKey = `${ref}\u0000${serializedArgs}`;
+  const [state, setState] = useState<{ key: string; value: any; error: Error | null }>(() => ({
+    key: cacheKey,
+    value: skipped ? undefined : primeCache(cacheKey),
+    error: null,
+  }));
 
   useEffect(() => {
     let cancelled = false;
     if (skipped) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setState({ value: undefined, error: null });
+      setState({ key: cacheKey, value: undefined, error: null });
       return () => { cancelled = true; };
     }
     callBackend(ref, JSON.parse(serializedArgs))
-      .then((value) => { if (!cancelled) setState({ value, error: null }); })
-      .catch((error: unknown) => { if (!cancelled) setState({ value: undefined, error: error instanceof Error ? error : new Error(String(error)) }); });
+      .then((value) => {
+        queryCache.set(cacheKey, { value });
+        if (!cancelled) setState({ key: cacheKey, value, error: null });
+      })
+      .catch((error: unknown) => {
+        // Keep showing stale cached data on a failed revalidation.
+        if (!cancelled && primeCache(cacheKey) === undefined) {
+          setState({ key: cacheKey, value: undefined, error: error instanceof Error ? error : new Error(String(error)) });
+        }
+      });
     return () => { cancelled = true; };
-  }, [ref, serializedArgs, skipped]);
+  }, [ref, serializedArgs, cacheKey, skipped]);
 
   // Match the old reactive client's non-throwing loading behavior. A backend
   // outage should leave the page in a recoverable loading/empty state rather
   // than crash the whole React tree.
+  // A hook instance can be reused with a new query key before its effect
+  // starts. Never render the previous key's value in that interval: it may be
+  // a different course, filter, or resource. A cached value for the new key
+  // can still be returned synchronously.
+  if (state.key !== cacheKey) return primeCache(cacheKey) as BackendResult<RefName> | undefined;
   if (state.error) return undefined;
   return state.value as BackendResult<RefName> | undefined;
 }

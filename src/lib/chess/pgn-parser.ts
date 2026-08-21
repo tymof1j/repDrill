@@ -207,23 +207,37 @@ function tokenize(text: string): Token[] {
       continue;
     }
 
-    // Move number "12." or "12..." and result tokens beginning with a digit.
+    // Move number "12." and result/castling tokens beginning with a digit.
     if (/\d/.test(c)) {
       const start = i;
       while (i < text.length && /\d/.test(text[i])) i++;
-      if (text.slice(start).startsWith('1-0')) {
+      const rest = text.slice(start);
+      // Castling must be tested before treating the digits as a move number,
+      // otherwise 0-0 / 0-0-0 are consumed silently and every later move
+      // pairing shifts by one.
+      if (rest.startsWith('0-0-0')) {
+        tokens.push({ type: 'move', san: '0-0-0' });
+        i = start + 5;
+        continue;
+      }
+      if (rest.startsWith('0-0')) {
+        tokens.push({ type: 'move', san: '0-0' });
+        i = start + 3;
+        continue;
+      }
+      if (rest.startsWith('1/2-1/2')) {
+        tokens.push({ type: 'result', value: '1/2-1/2' });
+        i = start + 7;
+        continue;
+      }
+      if (rest.startsWith('1-0')) {
         tokens.push({ type: 'result', value: '1-0' });
         i = start + 3;
         continue;
       }
-      if (text.slice(start).startsWith('0-1')) {
+      if (rest.startsWith('0-1')) {
         tokens.push({ type: 'result', value: '0-1' });
         i = start + 3;
-        continue;
-      }
-      if (text.slice(start).startsWith('1/2-1/2')) {
-        tokens.push({ type: 'result', value: '1/2-1/2' });
-        i = start + 7;
         continue;
       }
       while (i < text.length && text[i] === '.') i++;
