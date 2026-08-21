@@ -3,31 +3,31 @@
 /*
  * RepDrill design system
  *
- * Aesthetic: quiet modern study room. Soft neutral surfaces, graphite text,
- * one restrained green accent, and compact product UI.
+ * Aesthetic: editorial ink-and-paper, aligned with chess.tymofij.com.
+ * Deep ink surfaces, warm paper text, one acid accent, film grain.
  */
 
 :root {
-  /* Surfaces & text */
-  --paper:        #f7f6f1;
-  --paper-shade:  #eeede7;
-  --paper-deep:   #e3e1d9;
-  --paper-rule:   #d6d3ca;
-  --paper-edge:   #bcb7aa;
-  --ink:          #171a17;
-  --ink-soft:     #474c45;
-  --ink-faint:    #7a8076;
-  --ink-ghost:    #a6aa9f;
+  /* Surfaces & text — dark ink canvas, warm paper type */
+  --paper:        #151615;
+  --paper-shade:  #1a1c1a;
+  --paper-deep:   #242622;
+  --paper-rule:   rgba(232, 227, 216, 0.14);
+  --paper-edge:   rgba(232, 227, 216, 0.28);
+  --ink:          #e8e3d8;
+  --ink-soft:     #c4bfb2;
+  --ink-faint:    #96917f;
+  --ink-ghost:    #6d685c;
 
   /* Accents */
-  --margin-red:   #a94b3f;
-  --margin-red-soft: #d6877b;
-  --library-green:#2f6f5e;
-  --library-green-soft: #87a89c;
-  --gilt:         #9a7839;
-  --walnut:       #292b27;
-  --surface:      #ffffff;
-  --surface-soft: #faf9f5;
+  --margin-red:   #ff6b57;
+  --margin-red-soft: #ff9a8a;
+  --library-green:#ffe402;
+  --library-green-soft: #fff07a;
+  --gilt:         #e6ca00;
+  --walnut:       #0f100f;
+  --surface:      #1c1e1b;
+  --surface-soft: #22241f;
 
   /* Status semantic */
   --status-due:        var(--margin-red);
@@ -35,26 +35,24 @@
   --status-mastered:   var(--library-green);
 
   /* Board */
-  --square-light: #e8e4da;
-  --square-dark:  #749387;
-  --board-shadow: 0 24px 70px rgba(47, 58, 50, 0.16), 0 1px 0 rgba(47, 58, 50, 0.08);
+  --square-light: #b3ac9b;
+  --square-dark:  #57544a;
+  --board-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(232, 227, 216, 0.06);
 }
 
-/* Evening theme. Reserved for users who toggle. */
+/* Evening theme — a deeper, quieter variant of the same voice. */
 [data-theme="evening"] {
-  --paper:        #111512;
-  --paper-shade:  #171c18;
-  --paper-deep:   #202720;
-  --paper-rule:   #2e382f;
-  --paper-edge:   #465247;
-  --ink:          #eff2ea;
-  --ink-soft:     #bcc5b7;
-  --ink-faint:    #a0ab9d;
-  --ink-ghost:    #7d887a;
-  --surface:      #171c18;
-  --surface-soft: #1d241e;
-  --margin-red-soft: #d9867b;
-  --library-green-soft: #9dbbae;
+  --paper:        #0e100e;
+  --paper-shade:  #131512;
+  --paper-deep:   #1b1e19;
+  --paper-rule:   rgba(232, 227, 216, 0.10);
+  --paper-edge:   rgba(232, 227, 216, 0.22);
+  --ink:          #ddd8cb;
+  --ink-soft:     #b5b0a2;
+  --ink-faint:    #857f6f;
+  --ink-ghost:    #5d584d;
+  --surface:      #161814;
+  --surface-soft: #1c1f1a;
 }
 
 @theme inline {
@@ -73,8 +71,8 @@
   --color-walnut: var(--walnut);
   --color-surface: var(--surface);
   --color-surface-soft: var(--surface-soft);
-  --font-display: var(--font-geist-sans);
-  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-fixel-display);
+  --font-sans: var(--font-kyiv-type);
   --font-mono: var(--font-jetbrains-mono);
 }
 
@@ -85,25 +83,35 @@ html {
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-geist-sans), -apple-system, sans-serif;
-  font-feature-settings: "ss01", "cv11";
+  font-family: var(--font-kyiv-type), -apple-system, sans-serif;
   background-image:
-    linear-gradient(rgba(23, 26, 23, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(23, 26, 23, 0.02) 1px, transparent 1px);
+    linear-gradient(rgba(232, 227, 216, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 227, 216, 0.02) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
-/* Display heading defaults */
+/* Film grain — the tactile layer from chess.tymofij.com */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0.14;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+/* Display heading defaults — FixelDisplay carries all display type */
 .font-display {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  font-feature-settings: "ss01", "cv11";
+  font-family: var(--font-fixel-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.01em;
 }
 
 /* A restrained editorial accent for chess notes and annotations. */
 .font-display-italic {
-  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
-  font-style: italic;
-  font-feature-settings: "ss01";
+  font-family: var(--font-blad), ui-serif, Georgia, serif;
+  font-style: normal;
 }
 
 /* Algebraic notation — tabular figures */
@@ -141,16 +149,13 @@ body {
 
 /* Margin number — like printed page numerals */
 .margin-num {
-  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
-  font-style: italic;
+  font-family: var(--font-blad), ui-serif, Georgia, serif;
   font-weight: 400;
-  font-feature-settings: "onum";
 }
 
 /* Pull quote / annotation marginalia */
 .marginalia {
-  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
-  font-style: italic;
+  font-family: var(--font-blad), ui-serif, Georgia, serif;
   border-left: 2px solid var(--library-green);
   padding-left: 1rem;
   color: var(--ink-soft);
@@ -282,7 +287,7 @@ cg-board square.move-dest.oc {
 /* ─── Selection ───────────────────────────────────────────────── */
 ::selection {
   background: var(--library-green);
-  color: var(--paper);
+  color: #151615;
 }
 
 /* ─── Form reset ──────────────────────────────────────────────── */
