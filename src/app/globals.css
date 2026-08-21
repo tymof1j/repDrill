@@ -8,7 +8,40 @@
  */
 
 :root {
-  /* Surfaces & text — dark ink canvas, warm paper type */
+  /* Surfaces & text — warm paper canvas, ink type */
+  --paper:        #f4f1e8;
+  --paper-shade:  #ebe7da;
+  --paper-deep:   #dfdac9;
+  --paper-rule:   rgba(21, 22, 21, 0.14);
+  --paper-edge:   rgba(21, 22, 21, 0.32);
+  --ink:          #151615;
+  --ink-soft:     #45473f;
+  --ink-faint:    #6f7166;
+  --ink-ghost:    #999b8f;
+
+  /* Accents */
+  --margin-red:   #b23a2a;
+  --margin-red-soft: #d6877b;
+  --library-green:#8a7200;
+  --library-green-soft: #6b5a00;
+  --gilt:         #8a7200;
+  --walnut:       #2a2c26;
+  --surface:      #fdfcf8;
+  --surface-soft: #f7f4ea;
+
+  /* Status semantic */
+  --status-due:        var(--margin-red);
+  --status-new:        var(--gilt);
+  --status-mastered:   var(--library-green);
+
+  /* Board */
+  --square-light: #e9e2cc;
+  --square-dark:  #77806a;
+  --board-shadow: 0 24px 70px rgba(47, 58, 50, 0.18), 0 1px 0 rgba(47, 58, 50, 0.08);
+}
+
+/* Evening theme — the deep ink editorial voice. */
+[data-theme="evening"] {
   --paper:        #151615;
   --paper-shade:  #1a1c1a;
   --paper-deep:   #242622;
@@ -18,8 +51,6 @@
   --ink-soft:     #c4bfb2;
   --ink-faint:    #96917f;
   --ink-ghost:    #6d685c;
-
-  /* Accents */
   --margin-red:   #ff6b57;
   --margin-red-soft: #ff9a8a;
   --library-green:#ffe402;
@@ -28,31 +59,9 @@
   --walnut:       #0f100f;
   --surface:      #1c1e1b;
   --surface-soft: #22241f;
-
-  /* Status semantic */
-  --status-due:        var(--margin-red);
-  --status-new:        var(--gilt);
-  --status-mastered:   var(--library-green);
-
-  /* Board */
   --square-light: #b3ac9b;
   --square-dark:  #57544a;
   --board-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(232, 227, 216, 0.06);
-}
-
-/* Evening theme — a deeper, quieter variant of the same voice. */
-[data-theme="evening"] {
-  --paper:        #0e100e;
-  --paper-shade:  #131512;
-  --paper-deep:   #1b1e19;
-  --paper-rule:   rgba(232, 227, 216, 0.10);
-  --paper-edge:   rgba(232, 227, 216, 0.22);
-  --ink:          #ddd8cb;
-  --ink-soft:     #b5b0a2;
-  --ink-faint:    #857f6f;
-  --ink-ghost:    #5d584d;
-  --surface:      #161814;
-  --surface-soft: #1c1f1a;
 }
 
 @theme inline {
@@ -85,9 +94,15 @@ body {
   color: var(--ink);
   font-family: var(--font-kyiv-type), -apple-system, sans-serif;
   background-image:
+    linear-gradient(rgba(21, 22, 21, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(21, 22, 21, 0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+[data-theme="evening"] body {
+  background-image:
     linear-gradient(rgba(232, 227, 216, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(232, 227, 216, 0.02) 1px, transparent 1px);
-  background-size: 32px 32px;
 }
 
 /* Film grain — the tactile layer from chess.tymofij.com */
@@ -298,6 +313,11 @@ cg-board square.move-dest.oc {
 
 /* ─── Selection ───────────────────────────────────────────────── */
 ::selection {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+[data-theme="evening"] ::selection {
   background: var(--library-green);
   color: #151615;
 }
