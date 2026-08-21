@@ -63,12 +63,12 @@ export default async function Home() {
           <p className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-[color:var(--library-green)]">
             Chess study that comes back when you need it
           </p>
-          <h1 className="mt-6 max-w-3xl font-display text-[clamp(2.9rem,5.4vw,5rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-balance [hyphens:auto] [overflow-wrap:anywhere]">
+          <h1 className="mt-6 max-w-3xl font-display text-[clamp(2.9rem,5.4vw,5rem)] font-semibold leading-[1.08] tracking-[-0.05em] text-balance [hyphens:auto] [overflow-wrap:anywhere]">
             Stop collecting.
             {/* Block + top margin gives the accent line its own vertical room:
                 its taller glyphs (and the Ukrainian apostrophe) must never
                 collide with the line above. */}
-            <span className="mt-[0.18em] block font-display-italic font-normal text-[color:var(--margin-red)]">
+            <span className="mt-[0.22em] block font-display-italic font-normal text-[color:var(--margin-red)]">
               Start remembering.
             </span>
           </h1>
