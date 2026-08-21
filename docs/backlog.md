@@ -12,9 +12,18 @@ Running list of fixes / improvements. Each entry: short title, description, stat
 ## Later (not now)
 
 - [ ] **Landing page: show, don't tell** — migrate landing copy from heavy text to a "show, not tell" presentation (less wording, more demonstration / visuals).
-- [ ] **Faster opponent moves in training + speed setting** — increase the playback speed of opponent moves during training, and expose a user-facing setting on the site to control it.
+- [x] **Faster opponent moves in training + speed setting** — drill transitions tightened (900ms → 400ms pass gap); line advance is now optimistic and never waits on saves.
 
 ---
+
+## Ideas borrowed from qchess.net
+
+- [ ] **Repertoire Flow-style autoplay** — spectate mode that autoplays course lines on the board with adjustable speed, arrow-key stepping, and optional engine continuation of end positions. Natural extension of the existing line viewer.
+- [ ] **Repertoire shortener** — reduce an imported repertoire to only the most important lines (by popularity/length) before drilling; pairs well with spaced repetition ("only drill what matters").
+- [ ] **Guess The Move for imported games** — score the user's guesses against the GM move and engine top choices for games imported via Analyze.
+- [ ] **Opening weakness finder** — extend Analyze to cluster deviations by opening/ECO and surface recurring weak spots instead of a flat game list.
+- [ ] **Time-management analysis** — the Analyze pipeline already fetches lichess/chesscom games; add per-move clock stats (`%clk` is already parsed losslessly by the PGN parser) to find where users "tank".
+- [ ] **Blindfold drill** — visualization exercises: show move list, hide pieces, user must play the correct reply from memory.
 
 ## Short-term, high-priority (work step by step)
 - [ ] **Audit Ukrainian translations** — check all labels/copy across the app and identify/fix missing Ukrainian translations.
