@@ -52,6 +52,25 @@ function courseRow(row: Record<string, unknown>) {
   };
 }
 
+function analysisGameRow(row: Record<string, unknown>) {
+  return {
+    ...row,
+    _id: row.id,
+    gameId: row.game_id,
+    whiteUsername: row.white_username,
+    blackUsername: row.black_username,
+    playedAt: dateMs(row.played_at),
+    playedAs: row.played_as,
+    deviationKind: row.deviation_kind,
+    deviationMoveNumber: row.deviation_move_number,
+    deviationPly: row.deviation_ply,
+    playedSan: row.played_san,
+    expectedSans: row.expected_sans,
+    deviationFen: row.deviation_fen,
+    totalPlies: row.total_plies,
+  };
+}
+
 function chapterRow(row: Record<string, unknown>) {
   return {
     ...row,
@@ -727,9 +746,24 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
     const course = await publicCourse(db, String(args.token));
     return course;
   }
-  if (operation === 'sharing.listSharedAnalysis' || operation === 'sharing.listMySharedAnalysis') {
-    const rows = await db`select sl.*, ag.* from public.share_links sl join public.analyzed_games ag on ag.id::text = sl.resource_id where sl.resource_type = 'analysis' and (sl.owner_id = ${user.id} or sl.access <> 'none')`;
-    return rows.map((row: BackendRow) => ({ ...row, _id: row.id, gameId: row.game_id, whiteUsername: row.white_username, blackUsername: row.black_username, playedAt: dateMs(row.played_at), playedAs: row.played_as, deviationKind: row.deviation_kind, deviationMoveNumber: row.deviation_move_number, deviationPly: row.deviation_ply, playedSan: row.played_san, expectedSans: row.expected_sans, deviationFen: row.deviation_fen, totalPlies: row.total_plies }));
+  if (operation === 'sharing.listMySharedAnalysis') {
+    const rows = await db`
+      select distinct ag.* from public.share_links sl
+      join public.analyzed_games ag on ag.id::text = sl.resource_id
+      where sl.resource_type = 'analysis' and sl.owner_id = ${user.id}
+    `;
+    return rows.map((row: BackendRow) => ({ resource: analysisGameRow(row) }));
+  }
+  if (operation === 'sharing.listSharedAnalysis') {
+    const rows = await db`
+      select distinct ag.*, owner.name as owner_name, owner.email as owner_email
+      from public.share_invitations si
+      join public.users recipient on lower(recipient.email) = lower(si.email)
+      join public.analyzed_games ag on ag.id::text = si.resource_id
+      join public.users owner on owner.id = si.owner_id
+      where recipient.id = ${user.id} and si.owner_id <> ${user.id} and si.resource_type = 'analysis'
+    `;
+    return rows.map((row: BackendRow) => ({ resource: analysisGameRow(row) }));
   }
 
   if (operation === 'bookProgress.getBookProgress') {

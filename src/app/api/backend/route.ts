@@ -21,6 +21,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ value });
   } catch (error) {
     console.error(`Supabase operation failed: ${body.operation}`, error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Backend operation failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Backend operation failed' }, { status: 500 });
   }
 }
