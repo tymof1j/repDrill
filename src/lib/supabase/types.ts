@@ -80,6 +80,9 @@ export type BackendAnalyzeCache = {
 };
 
 export type BackendReviewExport = {
+  lineSettings: BackendRow[];
+  infoViews: BackendRow[];
+  puzzleProgress: BackendRow[];
   cards: BackendRow[];
   logs: BackendRow[];
 };

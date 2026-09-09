@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useActionState, useRef, useState } from 'react';
 import { importPgnAction } from '../../actions';
 import {
   FieldLabel,
@@ -11,15 +11,27 @@ import {
 
 export function PgnImportForm({ courseId }: { courseId: string }) {
   const [pgn, setPgn] = useState('');
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [state, formAction, pending] = useActionState(importPgnAction, { error: null });
+  const [fileError, setFileError] = useState<string | null>(null);
   const [sourceFiles, setSourceFiles] = useState('');
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = async (files: FileList | File[]) => {
+    if (pending) return;
     const allFiles = Array.from(files);
-    const texts = await Promise.all(allFiles.map((f) => f.text()));
-    setPgn(texts.join('\n\n'));
-    setSourceFiles(allFiles.map((f) => f.name).join('\n'));
+    if (allFiles.reduce((size, file) => size + file.size, 0) > 3_500_000) {
+      setFileError('Import up to 3.5 MB at a time. Split this file into smaller chapter groups.');
+      return;
+    }
+    setFileError(null);
+    setRequestId(crypto.randomUUID());
+    try {
+      const texts = await Promise.all(allFiles.map((f) => f.text()));
+      setPgn(texts.join('\n\n'));
+      setSourceFiles(allFiles.map((f) => f.name).join('\n'));
+    } catch { setFileError('Could not read this file. Choose it again or paste the PGN.'); }
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -34,10 +46,11 @@ export function PgnImportForm({ courseId }: { courseId: string }) {
 
   return (
     <form
-      action={importPgnAction}
+      action={formAction}
       className="max-w-4xl space-y-8 border-y border-[color:var(--paper-edge)] py-8"
     >
       <input type="hidden" name="courseId" value={courseId} />
+      <input type="hidden" name="requestId" value={requestId} />
       <input type="hidden" name="sourceFiles" value={sourceFiles} />
 
       <div
@@ -89,17 +102,26 @@ export function PgnImportForm({ courseId }: { courseId: string }) {
       <FieldLabel label="Or paste the PGN directly" required hint="any standard format">
         <textarea
           name="pgn"
+          readOnly={pending}
           required
           rows={16}
           value={pgn}
-          onChange={(e) => setPgn(e.target.value)}
+          onChange={(e) => { setPgn(e.target.value); setFileError(new TextEncoder().encode(e.target.value).length > 3_500_000 ? 'Import up to 3.5 MB at a time.' : null); setRequestId(crypto.randomUUID()); }}
           placeholder={'[Event "Sicilian Najdorf"]\n[White "Repertoire"]\n\n1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 *'}
           className={`${fieldClassName} notation`}
         />
       </FieldLabel>
 
+      <FieldLabel label="How to use these chapters">
+        <select name="chapterType" className={fieldClassName} disabled={pending}>
+          <option value="training">Train these lines</option>
+          <option value="info_only">Read only — no memorization</option>
+        </select>
+      </FieldLabel>
+      {(state.error || fileError) && <p role="alert" className="text-[color:var(--margin-red)]">{fileError ?? state.error}</p>}
+      {pending && <p role="status">Importing and checking your chapters. Keep this page open.</p>}
       <div className="flex flex-wrap gap-3 pt-4">
-        <PremiumButton type="submit">Import</PremiumButton>
+        <PremiumButton type="submit" disabled={pending || Boolean(fileError)}>{pending ? 'Importing…' : 'Import'}</PremiumButton>
         <SecondaryButton href={`/courses/${courseId}`}>Cancel</SecondaryButton>
       </div>
     </form>

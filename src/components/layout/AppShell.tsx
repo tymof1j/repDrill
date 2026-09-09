@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { ProgressSyncStatus } from '@/lib/training/ProgressSync';
 import { GlobalShortcuts } from './GlobalShortcuts';
 
 export function AppShell({
@@ -48,6 +49,7 @@ export function AppShell({
         id="main-content"
         className="relative flex-1 overflow-y-auto border-l border-[color:var(--paper-rule)] bg-[color:var(--paper)]"
       >
+        <div className="px-6 pt-3"><ProgressSyncStatus /></div>
         {children}
       </main>
     </div>

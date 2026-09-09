@@ -87,25 +87,40 @@ export function parsePgn(pgn: string): PgnGame[] {
     // the complete line rather than stopping at the first `]` in a value.
     while (i < text.length && text[i] === '[') {
       const end = findHeaderEnd(text, i);
-      if (end === -1) break;
+      if (end === -1) throw new Error('Unclosed PGN header');
       const line = text.slice(i + 1, end);
       const match = line.match(/^(\w+)\s+"((?:\\.|[^"])*)"\s*$/);
-      if (match) headers[match[1]] = unescapeHeaderValue(match[2]);
+      if (!match) throw new Error('Invalid PGN header');
+      headers[match[1]] = unescapeHeaderValue(match[2]);
       i = end + 1;
       while (i < text.length && /\s/.test(text[i])) i++;
     }
 
-    // Read movetext until the next game's Event/header block.
+    // Brackets inside prose and annotations never start another game.
     const moveTextStart = i;
     while (i < text.length) {
-      if (text[i] === '[' && i + 1 < text.length && /[A-Z]/.test(text[i + 1])) break;
-      i++;
+      if (text[i] === '{') {
+        const end = findCommentEnd(text, i);
+        if (end < 0) throw new Error('Unclosed PGN comment');
+        i = end + 1;
+      } else if (text[i] === ';') {
+        const end = text.indexOf('\n', i);
+        i = end < 0 ? text.length : end + 1;
+      } else if (text[i] === '[') {
+        break;
+      } else i++;
     }
-    const moves = parseMoveText(text.slice(moveTextStart, i));
-    const startFen = headers.FEN || undefined;
-    if (Object.keys(headers).length > 0 || moves.length > 0) {
-      games.push({ headers, moves, startFen });
+    const tokens = tokenize(text.slice(moveTextStart, i));
+    let cursor = 0;
+    let first = true;
+    while (cursor < tokens.length) {
+      const { nodes, next } = readSequence(tokens, cursor);
+      if (tokens[next]?.type === 'close') throw new Error('Unexpected closing PGN variation');
+      if (nodes.length) games.push({ headers: first ? headers : {}, moves: nodes, startFen: first ? headers.FEN : undefined });
+      cursor = next + 1;
+      first = false;
     }
+    if (first && Object.keys(headers).length) games.push({ headers, moves: [], startFen: headers.FEN });
   }
 
   return games;
@@ -138,11 +153,6 @@ function unescapeHeaderValue(value: string) {
   return value.replace(/\\([\\"])/g, '$1');
 }
 
-function parseMoveText(text: string): PgnMoveNode[] {
-  const tokens = tokenize(text);
-  const { nodes } = readSequence(tokens, 0);
-  return nodes;
-}
 
 type Token =
   | { type: 'move'; san: string }
@@ -354,7 +364,7 @@ function parseLichessArrows(directive: PgnDirective): PgnArrow[] {
   return value.split(',').flatMap((item) => {
     const token = item.trim();
     if (!token) return [];
-    const match = token.match(/^([GRYB]?)([a-h][1-8])[-:]([a-h][1-8])$/i);
+    const match = token.match(/^([GRYB]?)([a-h][1-8])[-:]?([a-h][1-8])$/i);
     if (!match) return [];
     return [{ start: match[2], end: match[3], color: lichessColor(match[1] || 'G'), raw: directive.raw }];
   });
@@ -427,7 +437,8 @@ function readSequence(tokens: Token[], start: number): { nodes: PgnMoveNode[]; n
       i++;
       const { nodes: varNodes, next } = readSequence(tokens, i);
       i = next;
-      if (i < tokens.length && tokens[i].type === 'close') i++;
+      if (i >= tokens.length || tokens[i].type !== 'close') throw new Error('Unclosed PGN variation');
+      i++;
       if (nodes.length > 0) nodes[nodes.length - 1].variations.push(varNodes);
       continue;
     }

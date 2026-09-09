@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "migrate:inspect": "node supabase/scripts/inspect-convex-snapshot.mjs",
-    "migrate:import": "node supabase/scripts/migrate-convex-to-supabase.mjs"
+    "migrate:import": "node supabase/scripts/migrate-convex-to-supabase.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.92",
@@ -30,13 +32,16 @@
     "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/oxide-darwin-arm64": "^4.2.4",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "jsdom": "^30.0.1",
     "lightningcss-darwin-arm64": "^1.32.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.0"
   }
 }

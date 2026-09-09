@@ -44,7 +44,7 @@ export async function deleteCourseAction(formData: FormData): Promise<void> {
   redirect('/courses');
 }
 
-export async function importPgnAction(formData: FormData): Promise<void> {
+async function performPgnImport(formData: FormData): Promise<string> {
   const token = await requireToken();
   const courseId = String(formData.get('courseId') ?? '') as Id<"courses">;
   const pgnText = String(formData.get('pgn') ?? '').trim();
@@ -53,8 +53,11 @@ export async function importPgnAction(formData: FormData): Promise<void> {
     .map((item) => item.trim())
     .filter(Boolean);
   const fallbackFilename = sourceFiles.length === 1 ? filenameWithoutExt(sourceFiles[0]) : '';
+  const requestedType = formData.get('chapterType') === 'info_only' ? 'info_only' : 'training';
+  const requestId = String(formData.get('requestId') || crypto.randomUUID());
   if (!courseId) throw new Error('Missing courseId');
   if (!pgnText) throw new Error('Paste a PGN');
+  if (Buffer.byteLength(pgnText, 'utf8') > 3_500_000) throw new Error('Import up to 3.5 MB at a time. Split the PGN into chapter groups.');
 
   const course = await fetchQuery(api.courses.get, { id: courseId }, { token });
   if (!course) throw new Error('Course not found');
@@ -81,7 +84,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
     }>;
   }> = [];
 
-  let invalidGames = 0;
+  const invalidGames: string[] = [];
   const chapterGroups = new Map<string, (typeof chapters)[number]>();
   for (const [i, game] of games.entries()) {
     const explicitChapterName = game.headers.Chapter || game.headers.ChapterName;
@@ -90,7 +93,7 @@ export async function importPgnAction(formData: FormData): Promise<void> {
       chapterNameFromHeaders && chapterNameFromHeaders !== '?'
         ? chapterNameFromHeaders
         : fallbackFilename || `Chapter ${i + 1}`;
-    const chapterType = 'training' as const;
+    const chapterType = game.headers.RepDrillType === 'info_only' ? 'info_only' : requestedType;
 
     try {
       const tree = buildTree(game);
@@ -130,25 +133,30 @@ export async function importPgnAction(formData: FormData): Promise<void> {
         chapters.push(chapter);
       }
     } catch (error) {
-      invalidGames++;
-      console.warn('[PGN import] skipped invalid game', {
-        index: i,
-        chapterName,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      invalidGames.push(`${chapterName}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   if (chapters.length === 0) {
     throw new Error('No valid games found in PGN. At least one game contains invalid SAN/move order.');
   }
-  if (invalidGames > 0) {
-    console.warn(`[PGN import] skipped ${invalidGames} invalid game(s), importing ${chapters.length} valid game(s).`);
+  if (invalidGames.length > 0) {
+    throw new Error(`Nothing was imported. Fix ${invalidGames.length} invalid game(s): ${invalidGames.slice(0, 3).join('; ')}`);
   }
 
-  await fetchMutation(api.import.createCourseImport, { courseId, chapters }, { token });
+  await fetchMutation(api.import.createCourseImport, { courseId, chapters, requestId }, { token });
 
   revalidatePath(`/courses/${courseId}`);
+  return courseId;
+}
+
+export async function importPgnAction(_previous: { error: string | null }, formData: FormData): Promise<{ error: string | null }> {
+  let courseId: string;
+  try {
+    courseId = await performPgnImport(formData);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Import failed. Your existing course has not changed.' };
+  }
   redirect(`/courses/${courseId}`);
 }
 

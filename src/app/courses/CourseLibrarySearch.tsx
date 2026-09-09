@@ -3,14 +3,14 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Fuse from 'fuse.js';
-import { useQuery } from '@/lib/supabase/client';
+import { invalidateQueries, useMutation, useQuery } from '@/lib/supabase/client';
 import { api } from '@/lib/supabase/api';
 import {
   EmptyState,
   GhostButton,
   SecondaryButton,
 } from '@/components/ui/Premium';
-import { deleteCourseAction, renameCourseAction } from './actions';
+import { renameCourseAction } from './actions';
 import {
   CourseCover,
   ProgressBar,
@@ -60,7 +60,7 @@ export function CourseLibrarySearch({ courses }: Props) {
     const fd = new FormData();
     fd.set('id', id);
     fd.set('name', renameDraft.trim());
-    startTransition(() => void renameCourseAction(fd));
+    startTransition(async () => { await renameCourseAction(fd); invalidateQueries(['courses.']); });
     setRenameTargetId(null);
   };
 
@@ -193,15 +193,17 @@ function CourseCard({
   onDeleteCancel: () => void;
   lineProgress?: CourseLineProgressSummary;
 }) {
+  const removeCourse = useMutation(api.courses.remove);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const meta = getCourseMeta(course.name, course.description, course.mode);
   const bookProgress = useBuiltInBookProgress(course);
   const progress = getProgress(course, lineProgress, bookProgress);
   const href = course.href ?? `/courses/${course.id}`;
   const learnHref = course.isBuiltIn
     ? getBuiltInBookLearnHref(course, bookProgress) ?? course.href ?? href
-    : `/train?courseId=${encodeURIComponent(course.id)}&mode=learn`;
+    : `/train?courseId=${encodeURIComponent(course.id)}${course.mode === 'puzzles' ? '' : '&mode=learn'}`;
   const reviewHref = course.mode === 'puzzles'
-    ? getBuiltInBookReviewHref(course, bookProgress) ?? course.href ?? '/train'
+    ? getBuiltInBookReviewHref(course, bookProgress) ?? `/train?courseId=${encodeURIComponent(course.id)}`
     : `/train?courseId=${encodeURIComponent(course.id)}`;
 
   return (
@@ -263,7 +265,7 @@ function CourseCard({
           key={`actions-${course.id}-${bookProgress?.updatedAt ?? 'pending'}-${learnHref}-${reviewHref}-${progress.due}`}
           className="mt-6 flex flex-wrap items-center gap-2"
         >
-          <Link href={learnHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[color:var(--ink)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)] active:translate-y-0">Learn{progress.newLines > 0 ? ` · ${progress.newLines}` : ''}<span aria-hidden className="ml-2">→</span></Link>
+          <Link href={learnHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-[color:var(--ink)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--paper)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[color:var(--library-green)] active:translate-y-0">{course.mode === 'puzzles' ? 'Solve' : 'Learn'}{progress.newLines > 0 ? ` · ${progress.newLines}` : ''}<span aria-hidden className="ml-2">→</span></Link>
           <Link href={reviewHref} className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-[color:var(--paper-rule)] bg-[color:var(--surface-soft)] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[color:var(--ink)] transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--library-green)] hover:bg-[color:var(--surface)] active:translate-y-0">Review{progress.due > 0 ? ` · ${progress.due}` : ''}</Link>
         </div>
 
@@ -283,7 +285,7 @@ function CourseCard({
         ) : course.isShared ? (
           <span className="mt-4 font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--gilt)]">Shared study</span>
         ) : isDeleting ? (
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-[color:var(--paper-shade)] px-3 py-2"><span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">Delete this course?</span><div className="flex items-center gap-2"><GhostButton onClick={onDeleteCancel}>Cancel</GhostButton><form action={deleteCourseAction}><input type="hidden" name="id" value={course.id} /><button type="submit" className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--margin-red)] hover:underline">Delete</button></form></div></div>
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-[color:var(--paper-shade)] px-3 py-2"><span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--margin-red)]">Delete this course?</span>{deleteError && <span role="alert">{deleteError}</span>}<div className="flex items-center gap-2"><GhostButton onClick={onDeleteCancel}>Cancel</GhostButton><form action={async () => { try { await removeCourse({ id: course.id }); } catch { setDeleteError("Could not delete this course. Try again."); } }}><input type="hidden" name="id" value={course.id} /><button type="submit" className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--margin-red)] hover:underline">Delete</button></form></div></div>
         ) : (
           <button type="button" onClick={onDelete} className="mt-4 self-start font-mono text-[9px] uppercase tracking-[0.16em] text-[color:var(--ink-ghost)] transition-colors hover:text-[color:var(--margin-red)]">Manage course · Delete</button>
         )}

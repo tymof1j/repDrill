@@ -27,9 +27,7 @@ import {
 import { ResizableDiagramFrame } from '@/components/board/ResizableDiagramFrame';
 import type { TrainingLine, LineStep } from './types';
 import { parseStudyMarkup, toCompleteFen } from './annotation';
-import { useMutation } from '@/lib/supabase/client';
-import { api } from '@/lib/supabase/api';
-import type { Id } from '@/lib/supabase/types';
+import { useProgressSync } from '@/lib/training/ProgressSync';
 import { normalizeNotation } from '@/lib/chess/notation';
 import {
   PLAYBACK_SPEEDS,
@@ -40,8 +38,7 @@ import {
   type LearnQuizPasses,
 } from '@/lib/bookTrainingPreferences';
 
-type MoveResult = { cardId: string; correct: boolean; responseTimeMs: number };
-type LinePhase = 'browse' | 'drill' | 'line-done';
+type LinePhase = 'resetting' | 'browse' | 'drill' | 'line-done';
 type SessionPhase = 'playing' | 'done';
 type Props = {
   initialLines: TrainingLine[];
@@ -91,8 +88,9 @@ function buildLinePgn(line: TrainingLine) {
 export function TrainingSession({ initialLines, filterBar, studyMode = false, initialLineId = null }: Props) {
   const router = useRouter();
   const [lines] = useState(initialLines);
-  const [lineIndex, setLineIndex] = useState(0);
-  const [linePhase, setLinePhase] = useState<LinePhase>('browse');
+  const [lineIndex, setLineIndex] = useState(() => Math.max(0, initialLines.findIndex((line) => studyMode && line.lineId === initialLineId)));
+  const [storedLinePhase, setLinePhase] = useState<LinePhase>('browse');
+  const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>('playing');
 
   const [browseIndex, setBrowseIndex] = useState(0);
@@ -104,7 +102,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const [waitingForUser, setWaitingForUser] = useState(false);
   const [showAnnotation, setShowAnnotation] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'correct' | 'wrong'; text: string } | null>(null);
-  const [lineResults, setLineResults] = useState<MoveResult[]>([]);
   const [lineCorrect, setLineCorrect] = useState(0);
   const [lineWrong, setLineWrong] = useState(0);
   // Timing is telemetry only; keeping it in a ref avoids a render for every
@@ -112,9 +109,11 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const moveStartTimeRef = useRef(0);
   const [inErrorRecovery, setInErrorRecovery] = useState(false);
   const [errorQueue, setErrorQueue] = useState<number[]>([]);
-  const [lineSaving, setLineSaving] = useState(false);
-  const [lineSaved, setLineSaved] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const { enqueue } = useProgressSync();
+  const reviewedCardsRef = useRef(new Set<string>());
+  const completedLinesRef = useRef(new Set<string>());
+  const answeredStepsRef = useRef(new Set<number>());
+  const recallStatsRef = useRef({ correct: 0, wrong: 0 });
 
   const [boardFen, setBoardFen] = useState('');
   const [lastMoveUci, setLastMoveUci] = useState<[string, string] | undefined>();
@@ -137,11 +136,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   const [blindfold, setBlindfold] = useState(false);
   const notationRef = useRef<HTMLInputElement>(null);
   const viewportRestoreFrameRef = useRef<number | null>(null);
-  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   const lineAdvanceInFlightRef = useRef(false);
-  const lineSaveAttemptedRef = useRef(false);
-  const submitRatings = useMutation(api.training.submitLineRatings);
-  const markInfoLineViewed = useMutation(api.training.markInfoLineViewed);
 
   const [sessionStats, setSessionStats] = useState({
     linesCompleted: 0,
@@ -151,12 +146,9 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
   });
 
   const line = lines[lineIndex] ?? null;
+  // Effects must never apply the previous line’s completion to the next line.
+  const linePhase: LinePhase = activeLineId === line?.lineId ? storedLinePhase : 'resetting';
 
-  useEffect(() => {
-    if (!studyMode || !initialLineId) return;
-    const index = lines.findIndex((candidate) => candidate.lineId === initialLineId);
-    if (index >= 0) setLineIndex(index);
-  }, [initialLineId, lines, studyMode]);
 
   useEffect(() => {
     const onPasses = () => setConfiguredQuizPasses(readLearnQuizPasses());
@@ -243,28 +235,25 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     if (!line) return;
     if (lastResetKeyRef.current === lineResetKey) return;
     lastResetKeyRef.current = lineResetKey;
+    setActiveLineId(line.lineId);
     const firstFen = line.steps[0]?.parentFen ?? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
     setBoardFen(toCompleteFen(firstFen));
     setBrowseIndex(0);
     setDrillRun(1);
-    setDrillPassCount(studyMode ? configuredQuizPasses : line.isNew ? 2 : 1);
+    setDrillPassCount(line.trainingMode === 'puzzles' ? 1 : studyMode ? configuredQuizPasses : line.isNew ? 2 : 1);
     setDrill1Stats(null);
     setQuestionIndex(0);
     setWaitingForUser(false);
     setShowAnnotation(false);
     setFeedback(null);
-    setLineResults([]);
     setLineCorrect(0);
     setLineWrong(0);
     moveStartTimeRef.current = 0;
     setInErrorRecovery(false);
     setErrorQueue([]);
-    setLineSaving(false);
-    setLineSaved(false);
-    // saveError is deliberately NOT cleared here: with optimistic advancing,
-    // a failed background save must stay visible on the next line until the
-    // next save attempt clears it.
-    lineSaveAttemptedRef.current = false;
+    lineAdvanceInFlightRef.current = false;
+    answeredStepsRef.current.clear();
+    recallStatsRef.current = { correct: 0, wrong: 0 };
     setLastMoveUci(undefined);
     setNotationInput('');
     setNotationError(null);
@@ -272,7 +261,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setTracePreviewIndex(null);
     setSolutionPreviewIndex(null);
     setQueuedPremove(null);
-    setLinePhase(studyMode || line.isInfoOnly || line.isNew ? 'browse' : 'drill');
+    setLinePhase(line.isInfoOnly || (line.trainingMode !== 'puzzles' && (studyMode || line.isNew)) ? 'browse' : 'drill');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset intentionally reads the latest settings without re-triggering on them
   }, [lineResetKey, line]);
 
@@ -314,7 +303,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setWaitingForUser(true);
     moveStartTimeRef.current = Date.now();
     if (inputMode === 'keyboard') {
-      setTimeout(() => notationRef.current?.focus(), 50);
+      setTimeout(() => notationRef.current?.focus({ preventScroll: true }), 50);
     }
   }, [linePhase, step, feedback, inputMode]);
 
@@ -363,65 +352,27 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [linePhase, feedback, inErrorRecovery, questionIndex, userStepIndexes.length, drillRun, drillPassCount, lineCorrect, lineWrong, errorQueue.length, line]);
 
-  const persistLineProgress = useCallback(async (completeLine: boolean) => {
-    if (lineSaved) return true;
-    if (saveInFlightRef.current) return saveInFlightRef.current;
-
-    const promise = (async () => {
-      setLineSaving(true);
-      setSaveError(null);
-      try {
-        if (completeLine && line?.isInfoOnly) {
-          await markInfoLineViewed({
-            chapterId: line.chapterId as Id<'chapters'>,
-            lineKey: line.lineKey,
-          });
-        }
-        if (lineResults.length > 0) {
-          await submitRatings({
-            results: lineResults.map((r) => ({
-              cardId: r.cardId as Id<'reviewCards'>,
-              correct: r.correct,
-              responseTimeMs: r.responseTimeMs,
-            })),
-          });
-        }
-        if (completeLine) {
-          setSessionStats((s) => ({
-            ...s,
-            linesCompleted: s.linesCompleted + 1,
-            totalCorrect: s.totalCorrect + lineCorrect,
-            totalWrong: s.totalWrong + lineWrong,
-          }));
-          setLineSaved(true);
-        }
-        return true;
-      } catch {
-        setSaveError('Progress could not be saved. Try again while this session is still open.');
-        return false;
-      } finally {
-        setLineSaving(false);
-      }
-    })();
-
-    saveInFlightRef.current = promise;
-    try {
-      return await promise;
-    } finally {
-      if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
+  const completeLine = useCallback(() => {
+    if (!line || completedLinesRef.current.has(line.lineId)) return;
+    if (line.trainingMode === 'puzzles' && !line.isInfoOnly) {
+      enqueue({ id: crypto.randomUUID(), kind: 'puzzle', chapterId: line.chapterId,
+        lineKey: line.lineKey, correct: recallStatsRef.current.wrong === 0, reviewedAt: Date.now() });
     }
-  }, [line, lineResults, lineCorrect, lineWrong, lineSaved, markInfoLineViewed, submitRatings]);
+    if (line.isInfoOnly) {
+      enqueue({ id: crypto.randomUUID(), kind: 'info', chapterId: line.chapterId,
+        lineKey: line.lineKey, reviewedAt: Date.now() });
+    }
+    completedLinesRef.current.add(line.lineId);
+    const stats = recallStatsRef.current;
+    setSessionStats((previous) => ({ ...previous, linesCompleted: previous.linesCompleted + 1,
+      totalCorrect: previous.totalCorrect + stats.correct, totalWrong: previous.totalWrong + stats.wrong }));
+  }, [enqueue, line]);
 
   useEffect(() => {
-    if (linePhase !== 'line-done' || lineSaving || lineSaved || lineSaveAttemptedRef.current) return;
-    lineSaveAttemptedRef.current = true;
-    void persistLineProgress(true);
-  }, [linePhase, lineSaving, lineSaved, persistLineProgress]);
+    if (linePhase === 'line-done') completeLine();
+  }, [linePhase, completeLine]);
 
-  const saveAndExit = useCallback(async () => {
-    const saved = await persistLineProgress(false);
-    if (saved) router.push('/courses');
-  }, [persistLineProgress, router]);
+  const saveAndExit = useCallback(() => router.push('/courses'), [router]);
 
   const tryMove = useCallback(
     (from: string, to: string, promotion?: string) => {
@@ -434,8 +385,17 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         const correct = playedUci === step.uci || result.san === step.san;
         const responseTimeMs = Math.max(0, Date.now() - moveStartTimeRef.current);
 
-        if (step.cardId) {
-          setLineResults((prev) => [...prev, { cardId: step.cardId!, correct, responseTimeMs }]);
+        // Score the first recall, before any retry or guided second pass.
+        // Shared moves are scheduled once per session, including transpositions.
+        if (!answeredStepsRef.current.has(currentStepIndex)) {
+          answeredStepsRef.current.add(currentStepIndex);
+          if (correct) recallStatsRef.current.correct++;
+          else recallStatsRef.current.wrong++;
+        }
+        if (step.cardId && !reviewedCardsRef.current.has(step.cardId) && !line.isInfoOnly) {
+          enqueue({ id: crypto.randomUUID(), kind: 'review', cardId: step.cardId,
+            correct, responseTimeMs: Math.min(86_400_000, responseTimeMs), reviewedAt: Date.now() });
+          reviewedCardsRef.current.add(step.cardId);
         }
         if (correct) setLineCorrect((c) => c + 1);
         else setLineWrong((c) => c + 1);
@@ -480,7 +440,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         // invalid move
       }
     },
-    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex],
+    [line, step, linePhase, waitingForUser, inErrorRecovery, currentStepIndex, enqueue],
   );
 
   const onBoardMove = useCallback((orig: string, dest: string) => {
@@ -581,7 +541,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
     setLinePhase('drill');
     setDrillRun(1);
-    setDrillPassCount(studyMode ? readLearnQuizPasses() : line.isNew ? 2 : 1);
+    setDrillPassCount(line.trainingMode === 'puzzles' ? 1 : studyMode ? readLearnQuizPasses() : line.isNew ? 2 : 1);
     setQuestionIndex(0);
     setInErrorRecovery(false);
     setErrorQueue([]);
@@ -590,7 +550,6 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     setWaitingForUser(false);
     setLineCorrect(0);
     setLineWrong(0);
-    setLineResults([]);
     const firstUserStep = line.steps[userStepIndexes[0]];
     setBoardFen(toCompleteFen(firstUserStep?.parentFen ?? line.steps[0]?.parentFen));
     setLastMoveUci(undefined);
@@ -619,19 +578,12 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
     }
   }, [line, lineIndex, lines, studyMode]);
 
-  const continueToNextLine = useCallback(async () => {
-    // The automatic save starts at completion. Wait for that same request so
-    // a transient failure leaves this line open and retryable instead of
-    // losing its ratings after we advance to the next line.
-    if (lineAdvanceInFlightRef.current) return;
+  const continueToNextLine = useCallback(() => {
+    if (lineAdvanceInFlightRef.current || linePhase !== 'line-done') return;
     lineAdvanceInFlightRef.current = true;
-    try {
-      const saved = await persistLineProgress(true);
-      if (saved) advanceLine();
-    } finally {
-      lineAdvanceInFlightRef.current = false;
-    }
-  }, [advanceLine, persistLineProgress]);
+    completeLine();
+    advanceLine();
+  }, [advanceLine, completeLine, linePhase]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -686,7 +638,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         e.preventDefault();
         setInputMode((m) => {
           const next = m === 'mouse' ? 'keyboard' : 'mouse';
-          if (next === 'keyboard') setTimeout(() => notationRef.current?.focus(), 50);
+          if (next === 'keyboard') setTimeout(() => notationRef.current?.focus({ preventScroll: true }), 50);
           return next;
         });
       }
@@ -730,7 +682,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
         <PageHeader
           eyebrow="End of session — § fin"
           title={<>Session <span className="font-display-italic">closed</span>.</>}
-          body="Your recall data has been written back into the schedule. The next review will appear when memory is due."
+          body="Your answers are recorded. The next review will appear when memory is due."
         />
         <div className="grid grid-cols-2 gap-x-2 gap-y-8 border-y border-[color:var(--paper-edge)] py-8 md:grid-cols-5">
           <StatTile label="Lines drilled" value={sessionStats.linesCompleted} />
@@ -841,29 +793,18 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
           )}
           <SecondaryButton
             onClick={saveAndExit}
-            disabled={lineSaving}
             className="min-h-12 px-4 text-[11px]"
           >
-            {lineSaving ? 'Saving…' : 'Save & exit'}
+            Save & exit
           </SecondaryButton>
           {isLineDone && (
-            <PremiumButton onClick={continueToNextLine} disabled={lineSaving} className="min-h-12 px-5 text-[11px]">
-              {lineSaving ? 'Saving…' : lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
+            <PremiumButton onClick={continueToNextLine} className="min-h-12 px-5 text-[11px]">
+              {lineIndex + 1 < lines.length ? <>Next line <span className="font-mono text-[10px] font-normal tracking-[0.08em] text-[color:var(--paper)]/65">Space</span></> : 'Finish session'}
             </PremiumButton>
           )}
         </div>
       </div>
 
-      {lineSaving && !saveError && (
-        <p aria-live="polite" className="mb-4 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--ink-faint)]">
-          Saving progress…
-        </p>
-      )}
-      {saveError && (
-        <p role="alert" className="mb-4 border-l-2 border-[color:var(--margin-red)] pl-3 font-display-italic text-sm text-[color:var(--margin-red)]">
-          {saveError}
-        </p>
-      )}
 
       <div className="mb-6 h-px bg-[color:var(--paper-rule)]">
         <div className="h-full bg-[color:var(--margin-red)] transition-[width] duration-500 ease-out" style={{ width: `${lineProgress}%` }} />
@@ -995,7 +936,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
             <div className="space-y-4">
               <div className="grid grid-cols-2 divide-x divide-[color:var(--paper-edge)] border border-[color:var(--paper-edge)]">
                 {(['mouse', 'keyboard'] as const).map((mode) => (
-                  <button key={mode} type="button" onClick={() => { setInputMode(mode); if (mode === 'keyboard') setTimeout(() => notationRef.current?.focus(), 50); }} className={`px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${inputMode === mode ? 'bg-[color:var(--ink)] text-[color:var(--paper)]' : 'text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'}`}>
+                  <button key={mode} type="button" onClick={() => { setInputMode(mode); if (mode === 'keyboard') setTimeout(() => notationRef.current?.focus({ preventScroll: true }), 50); }} className={`px-3 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${inputMode === mode ? 'bg-[color:var(--ink)] text-[color:var(--paper)]' : 'text-[color:var(--ink)] hover:bg-[color:var(--paper-deep)]'}`}>
                     {mode === 'mouse' ? 'Board' : 'Notation'}
                   </button>
                 ))}
@@ -1003,7 +944,7 @@ export function TrainingSession({ initialLines, filterBar, studyMode = false, in
               {isDrilling && waitingForUser && inputMode === 'keyboard' && (
                 <div className="flex items-baseline gap-3 border-b border-[color:var(--paper-edge)] pb-2">
                   <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--ink-faint)]">→</span>
-                  <input ref={notationRef} type="text" value={notationInput} onChange={(e) => { setNotationInput(e.target.value); setNotationError(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleNotationSubmit(); } }} placeholder="e.g. Nf3" className="notation flex-1 bg-transparent text-lg text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none" autoFocus />
+                  <input ref={notationRef} type="text" value={notationInput} onChange={(e) => { setNotationInput(e.target.value); setNotationError(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleNotationSubmit(); } }} placeholder="e.g. Nf3" className="notation flex-1 bg-transparent text-lg text-[color:var(--ink)] placeholder:text-[color:var(--ink-ghost)] focus:outline-none" />
                   <SecondaryButton onClick={handleNotationSubmit}>Play</SecondaryButton>
                 </div>
               )}

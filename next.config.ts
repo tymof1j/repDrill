@@ -8,6 +8,7 @@ const workosRedirectUri =
   process.env.WORKOS_REDIRECT_URI?.trim();
 
 const nextConfig: NextConfig = {
+  experimental: { serverActions: { bodySizeLimit: '4mb' } },
   ...(workosRedirectUri
     ? { env: { NEXT_PUBLIC_WORKOS_REDIRECT_URI: workosRedirectUri } }
     : {}),

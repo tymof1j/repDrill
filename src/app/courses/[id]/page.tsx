@@ -17,27 +17,15 @@ export default async function CourseDetailPage({
   const course = await fetchQuery(api.courses.get, { id: id as Id<"courses"> }, { token });
   if (!course) notFound();
 
-  const chapters = await fetchQuery(api.courses.listChapters, { courseId: course._id }, { token });
-  const lineStatuses = await fetchQuery(api.training.getCourseLineStatuses, { courseId: course._id }, { token });
-
-  // Load each chapter's tree in parallel — each query is bounded by its
-  // own chapter, avoiding the 32k document-read limit per query.
-  const chapterTrees = await Promise.all(
-    chapters.map((ch) =>
-      fetchQuery(api.courses.getChapterTree, { chapterId: ch._id }, { token }),
-    ),
-  );
-
+  const [tree, lineStatuses] = await Promise.all([
+    fetchQuery(api.courses.getTree, { courseId: course._id }, { token }),
+    fetchQuery(api.training.getCourseLineStatuses, { courseId: course._id }, { token }),
+  ]);
+  if (!tree) notFound();
+  const chapters = tree.chapters;
   const chapterNameById = new Map(chapters.map((chapter) => [chapter._id, chapter.name]));
-
-  const allMoves = chapterTrees.flatMap((t) => t?.moves ?? []);
-  const positionsById = new Map<string, { _id: string; fen: string; annotation?: string }>();
-  for (const tree of chapterTrees) {
-    for (const position of tree?.positions ?? []) {
-      positionsById.set(position._id, { ...position, annotation: position.annotation ?? undefined });
-    }
-  }
-  const allPositions = Array.from(positionsById.values());
+  const allMoves = tree.moves;
+  const allPositions = tree.positions;
 
   const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
   const childIds = new Set(allMoves.map((m) => m.childPositionId as string));
@@ -52,6 +40,7 @@ export default async function CourseDetailPage({
         id: course._id,
         name: course.name,
         color: course.color,
+        trainingMode: course.trainingMode,
         description: course.description ?? null,
         isPublic: course.isPublic,
         shareToken: course.shareToken ?? null,

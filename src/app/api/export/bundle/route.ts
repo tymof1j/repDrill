@@ -26,11 +26,17 @@ export async function GET() {
       id: course._id,
       name: course.name,
       color: course.color,
+      trainingMode: course.trainingMode,
+      sourceCourseId: course.sourceCourseId,
+      sourceUrl: course.sourceUrl,
       description: course.description ?? null,
       chapters: tree.chapters.map((chapter) => ({
         id: chapter._id,
         name: chapter.name,
         sortOrder: chapter.sortOrder,
+        chapterType: chapter.chapterType,
+        sourceChapterId: chapter.sourceChapterId,
+        sourceFile: chapter.sourceFile,
         description: chapter.description ?? null,
         moves: tree.moves
           .filter((move) => move.chapterId === chapter._id)
@@ -45,6 +51,8 @@ export async function GET() {
             isMainLine: move.isMainLine,
             moveType: move.moveType,
             sortOrder: move.sortOrder,
+            comment: move.comment,
+            annotations: move.annotations,
           })),
       })),
     });
@@ -52,6 +60,9 @@ export async function GET() {
 
   const bundle = {
     version: 1,
+    lineSettings: reviewData.lineSettings,
+    infoViews: reviewData.infoViews,
+    puzzleProgress: reviewData.puzzleProgress,
     exportedAt: new Date().toISOString(),
     courses: courseBundles,
     positions: Array.from(positionsByFen.values()),
@@ -66,6 +77,7 @@ export async function GET() {
       reps: card.reps,
       lapses: card.lapses,
       state: card.state,
+      learningSteps: card.learningSteps,
       lastReview: card.lastReview ? new Date(card.lastReview).toISOString() : null,
     })),
     reviewLogs: reviewData.logs.map((log) => ({

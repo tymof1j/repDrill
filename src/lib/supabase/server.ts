@@ -12,7 +12,11 @@ export function getSupabaseDb() {
   client ??= postgres(connectionString, {
     // Supabase transaction poolers do not support prepared statements.
     prepare: false,
-    max: 5,
+    max: 3,
+    idle_timeout: 20,
+    connect_timeout: 8,
+    max_lifetime: 600,
+    connection: { statement_timeout: 25_000 },
   });
   return client;
 }

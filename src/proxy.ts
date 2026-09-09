@@ -21,6 +21,7 @@ const workosProxy = authkitProxy({
       '/sign-in',
       '/auth/:path*',
       '/api/source-documents/:path*',
+      '/api/backend', // The route returns JSON 401; never redirect background saves to HTML.
       '/api/internal/counter-refresh',
     ],
   },

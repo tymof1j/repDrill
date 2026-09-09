@@ -29,6 +29,7 @@ export const api = {
     ensureImported: 'courses.ensureImported',
     remove: 'courses.remove',
     rename: 'courses.rename',
+    setTrainingMode: 'courses.setTrainingMode',
     renameChapter: 'courses.renameChapter',
     reorderChapters: 'courses.reorderChapters',
     deleteChapter: 'courses.deleteChapter',

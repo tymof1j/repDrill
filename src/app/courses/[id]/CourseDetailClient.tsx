@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { GripVertical, Pencil } from 'lucide-react';
-import { useQuery } from '@/lib/supabase/client';
+import { useQuery, useMutation } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/supabase/api';
 import type { Id } from '@/lib/supabase/types';
@@ -42,6 +42,7 @@ type Props = {
     id: string;
     name: string;
     color: string;
+    trainingMode?: 'theory' | 'puzzles';
     description: string | null;
     isPublic: boolean;
     shareToken: string | null;
@@ -171,6 +172,8 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
   const [dragArmedChapterId, setDragArmedChapterId] = useState<string | null>(null);
   const [chapterActionError, setChapterActionError] = useState<string | null>(null);
   const router = useRouter();
+  const changeTrainingMode = useMutation(api.courses.setTrainingMode);
+  const [modeError, setModeError] = useState<string | null>(null);
   const courseImports = useQuery(api.import.listCourseImports, { courseId: course.id as Id<'courses'> }) ?? [];
   const activeImport = courseImports.find((item) => item.status === 'queued' || item.status === 'processing') ?? null;
 
@@ -396,8 +399,21 @@ export function CourseDetailClient({ course, chapters, rootPositionId, positions
             <div className="mt-4"><ProgressBar value={courseProgress.percent} label={`${courseProgress.learned} / ${courseProgress.total || '—'} lines`} tone={courseProgress.due > 0 ? 'red' : 'green'} /></div>
             <div className="mt-6 grid grid-cols-2 gap-3 border-y border-[color:var(--paper-rule)] py-5"><Metric value={orderedChapters.length} label="Chapters" /><Metric value={courseProgress.due} label="Due now" tone={courseProgress.due > 0 ? 'red' : 'ink'} /></div>
             <div className="mt-auto flex flex-col gap-2 pt-6 lg:sticky lg:top-6">
-              <PremiumButton href={`/train?courseId=${encodeURIComponent(course.id)}`}>Review due lines <span className="ml-1">→</span></PremiumButton>
-              <SecondaryButton href={`/train?courseId=${encodeURIComponent(course.id)}&mode=learn`}>Learn course <span className="ml-1">→</span></SecondaryButton>
+              <PremiumButton href={`/train?courseId=${encodeURIComponent(course.id)}`}>{course.trainingMode === 'puzzles' ? 'Solve positions' : 'Review due lines'} <span className="ml-1">→</span></PremiumButton>
+              {course.trainingMode !== 'puzzles' && <SecondaryButton href={`/train?courseId=${encodeURIComponent(course.id)}&mode=learn`}>Learn course <span className="ml-1">→</span></SecondaryButton>}
+              <label className="mt-3 text-sm text-[color:var(--ink-soft)]">Training method
+                <select className={`${fieldClassName} mt-2`} value={course.trainingMode ?? 'theory'} disabled={pending} onChange={(event) => {
+                  const mode = event.target.value;
+                  startTransition(async () => {
+                    try { await changeTrainingMode({ courseId: course.id, mode }); setModeError(null); router.refresh(); }
+                    catch { setModeError('Could not change the training method. Try again.'); }
+                  });
+                }}>
+                  <option value="theory">Memorize with spaced repetition</option>
+                  <option value="puzzles">Solve puzzles — no memorization</option>
+                </select>
+              </label>
+              {modeError && <p role="alert">{modeError}</p>}
               <div className="mt-2 flex flex-wrap gap-2"><PremiumButton href={`/courses/${course.id}/import`} className="min-h-9 px-3 py-2 text-[10px]">Import PGN</PremiumButton><SecondaryButton href={`/api/export/course?id=${course.id}`} className="min-h-9 px-3 py-2 text-[10px]">Export</SecondaryButton><ShareDialog resourceType="course" resourceId={course.id} title={course.name} scopes={shareScopes} /></div>
             </div>
           </aside>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery } from '@/lib/supabase/client';
+import { useMutation, useQuery, useQueryState } from '@/lib/supabase/client';
 import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/supabase/api';
@@ -35,14 +35,17 @@ export default function CoursesListPage() {
     return () => window.clearInterval(interval);
   }, [ensureCounterSnapshot, isAuthenticated]);
 
-  const items = useQuery(api.courses.list);
-  const sharedItems = useQuery(api.sharing.listSharedCourses);
-  if (!isAuthenticated || items === undefined || sharedItems === undefined) return null;
+  const { data: items, error, retry } = useQueryState(api.courses.list);
+  const sharedItems = useQuery(api.sharing.listSharedCourses, tab === 'shared' ? {} : 'skip') ?? [];
+  if (!isAuthenticated) return null;
+  if (error && !items) return <AppSurface><p role="alert">Your library could not be loaded.</p><SecondaryButton onClick={() => void retry()}>Try again</SecondaryButton></AppSurface>;
+  if (!items) return <AppSurface><p role="status">Loading your courses…</p></AppSurface>;
 
   const courses: CourseListItem[] = items.map((item) => ({
     id: item._id,
     name: item.name,
     color: item.color,
+    mode: item.trainingMode,
     description: item.description ?? null,
   }));
   courses.unshift({

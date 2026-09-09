@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery, useMutation } from '@/lib/supabase/client';
+import { useQuery, useQueryState } from '@/lib/supabase/client';
 import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/supabase/api';
@@ -32,8 +32,8 @@ export default function TrainPage() {
   const courseParam = searchParams.get('courseId') ?? undefined;
   const chapterParam = searchParams.get('chapterId') ?? undefined;
   const learnMode = searchParams.get('mode') === 'learn';
+  const [visitId] = useState(() => crypto.randomUUID());
 
-  const [cardsReady, setCardsReady] = useState(false);
   const resumeLineId = learnMode && courseParam && !chapterParam
     ? readLearnResume(courseParam)
     : null;
@@ -42,7 +42,6 @@ export default function TrainPage() {
       ? { type: 'course', id: courseParam as Id<'courses'> }
       : { type: 'all' },
   );
-  const ensureCards = useMutation(api.training.ensureCards);
 
   // Keep deep links (and client-side navigation between course cards) in sync
   // with the selector.  This runs only when the URL parameter changes, so a
@@ -55,43 +54,33 @@ export default function TrainPage() {
   }, [courseParam]);
 
   useEffect(() => {
-    if (isLoading) return;
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    ensureCards({})
-      .then(() => setCardsReady(true))
-      .catch(() => setCardsReady(true));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, isAuthenticated]);
+    if (!isLoading && !isAuthenticated) router.replace('/login');
+  }, [isLoading, isAuthenticated, router]);
 
-  const courses = useQuery(api.courses.list);
-  const repertoires = useQuery(api.repertoires.list);
+  const courses = useQuery(api.courses.list) ?? [];
+  const repertoires = useQuery(api.repertoires.list) ?? [];
 
-  const onlyCourse = courses?.length === 1 ? courses[0]._id : undefined;
-
-  const queryArgs = cardsReady && courses !== undefined && repertoires !== undefined
+  const queryArgs = isAuthenticated
     ? {
+        visitId, // A new visit loads current due dates; an active queue stays fixed.
         fromPositionId: fromParam as Id<'positions'> | undefined,
         chapterId: chapterParam as Id<'chapters'> | undefined,
         learnMode,
         courseId:
           selection.type === 'course'
             ? selection.id
-            : onlyCourse && selection.type === 'all'
-              ? onlyCourse
-              : undefined,
+            : undefined,
         repertoireId:
           selection.type === 'repertoire' ? selection.id : undefined,
       }
     : 'skip' as const;
 
-  const result = useQuery(api.training.getTrainingLines, queryArgs);
+  const { data: result, error, retry } = useQueryState(api.training.getTrainingLines, queryArgs);
 
   if (isLoading) return <TrainingLoadingState label="Checking your session…" />;
   if (!isAuthenticated) return null;
-  if (!cardsReady || result === undefined || courses === undefined || repertoires === undefined) {
+  if (error && !result) return <AppSurface><p role="alert">The training queue could not be loaded. Your saved progress is safe.</p><SecondaryButton onClick={() => void retry()}>Try again</SecondaryButton></AppSurface>;
+  if (result === undefined) {
     return <TrainingLoadingState label="Preparing your review queue…" />;
   }
 
@@ -192,7 +181,7 @@ export default function TrainPage() {
     : selection.type === 'repertoire'
       ? `repertoire:${selection.id}`
       : 'all';
-  const sessionScopeKey = `${sessionKey}|from:${fromParam ?? ''}|chapter:${chapterParam ?? ''}|mode:${learnMode ? 'learn' : 'review'}`;
+  const sessionScopeKey = `${user?.id}|${sessionKey}|from:${fromParam ?? ''}|chapter:${chapterParam ?? ''}|mode:${learnMode ? 'learn' : 'review'}`;
 
   // The session intentionally snapshots its queue so a completed line cannot
   // disappear underneath the user when Convex updates card due dates.  A key

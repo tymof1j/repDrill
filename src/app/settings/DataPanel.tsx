@@ -1,5 +1,6 @@
 'use client';
 
+import { invalidateQueries } from '@/lib/supabase/client';
 import { useRef, useState } from 'react';
 import {
   PremiumPanel,
@@ -30,6 +31,7 @@ export function DataPanel() {
         throw new Error(msg || `Import failed (${res.status})`);
       }
       const summary = await res.json();
+      invalidateQueries();
       setMessage(
         `Imported ${summary.coursesCreated} courses, ${summary.movesCreated} moves, ${summary.cardsCreated} review cards.`,
       );

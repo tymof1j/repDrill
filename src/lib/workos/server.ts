@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 
 import { withAuth, getSignInUrl, signOut } from '@workos-inc/authkit-nextjs';
 import { getSupabaseDb } from '@/lib/supabase/server';
@@ -16,13 +17,16 @@ export async function getCurrentWorkOSUser() {
 }
 
 /**
- * Make the WorkOS identity available to application tables. This is an
- * upsert, so it is safe to call on every authenticated server request and it
- * also handles a WorkOS profile update without a separate webhook race.
+ * Resolve the WorkOS identity once per server render. Existing users take
+ * the read-only path; missing identities are provisioned idempotently.
  */
-export async function ensureAppUser() {
+export const ensureAppUser = cache(async function ensureAppUser() {
   const { user } = await withAuth({ ensureSignedIn: true });
   const db = getSupabaseDb();
+  // Almost every request is an existing identity. Avoid two writes and row
+  // locks for every read; profile provisioning happens only when necessary.
+  const existing = await db`select * from public.users where workos_user_id = ${user.id} limit 1`;
+  if (existing[0]) return existing[0];
   const linkedRows = await db`
     update public.users
     set workos_user_id = ${user.id},
@@ -56,4 +60,4 @@ export async function ensureAppUser() {
   `;
   if (!rows[0]) throw new Error('Unable to provision the authenticated RepDrill user');
   return rows[0];
-}
+});

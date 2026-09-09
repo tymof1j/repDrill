@@ -10,6 +10,7 @@ import { cookies } from 'next/headers';
 import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { ProgressSyncProvider } from '@/lib/training/ProgressSync';
 
 const fixelDisplay = localFont({
   src: './fonts/FixelDisplay-SemiBold.otf',
@@ -68,7 +69,9 @@ export default async function RootLayout({
       <body className="min-h-full text-[color:var(--ink)]">
           <AuthKitProvider initialAuth={initialAuth}>
             <I18nProvider initialLanguage={initialLanguage}>
-              <AppShell sidebar={<Sidebar />}>{children}</AppShell>
+              <ProgressSyncProvider>
+                <AppShell sidebar={<Sidebar />}>{children}</AppShell>
+              </ProgressSyncProvider>
             </I18nProvider>
             <SpeedInsights />
           </AuthKitProvider>

@@ -4,7 +4,7 @@ A self-hostable chess opening repertoire trainer built around position memory, F
 
 RepDrill is for players who already collect PGNs, coach files, opening notes, or study chapters and want those materials to become a living training system. Import theory, merge it into a repertoire, drill only the positions that are due, then turn recent games into review material.
 
-Built with Next.js 16, React 19, Convex, Convex Auth, chess.js, chessground, and `ts-fsrs`. Licensed under AGPL-3.0.
+Built with Next.js 16, React 19, PostgreSQL (Supabase), WorkOS AuthKit, chess.js, chessground, and `ts-fsrs`. Licensed under AGPL-3.0.
 
 ## Why this matters
 
@@ -56,10 +56,10 @@ RepDrill exists to make high-quality repertoire training more open:
 
 - If a PGN game has a meaningful `ChapterName` or `Event`, RepDrill uses it as the chapter name.
 - If headers are missing or placeholder values such as `?`, single-file imports fall back to the uploaded filename without `.pgn`.
-- RepDrill detects informational material and can mark chapters as `info-only` when it sees terms such as `idea`, `ideas`, `game`, or `games` in filenames, PGN headers, or comments.
+- Choose training or read-only chapters on import; an explicit `RepDrillType "info_only"` PGN header marks informational content.
 - `Info-only` chapters and lines remain visible in course and repertoire views.
 - `Info-only` content is not scheduled as FSRS memorization work.
-- In Learn/training order, an `info-only` line can be shown once and then treated as viewed.
+- Information lines remain browsable in Learn and are excluded from scheduled review.
 - Users can manually switch chapter and line type between `training` and `info-only`.
 
 ### Repertoires
@@ -77,7 +77,7 @@ RepDrill exists to make high-quality repertoire training more open:
 ### Training
 
 - FSRS-backed spaced repetition using `ts-fsrs`.
-- Server-side card state stored in Convex.
+- Server-side card state stored in PostgreSQL, with a durable browser queue for background synchronization.
 - Drill due and new positions, not whole files.
 - Opponent moves play automatically.
 - Enter moves on the board or through notation input.
@@ -201,6 +201,9 @@ explains the role of the maintained importer tooling.
 - Deviation detection in [`src/lib/games/deviation.ts`](src/lib/games/deviation.ts).
 
 ## Getting Started
+
+The active backend is Supabase/PostgreSQL with WorkOS. Follow [current setup and migration instructions](supabase/README.md) and [trainer reliability/deployment notes](docs/trainer-reliability.md). Convex instructions below describe the legacy backend.
+
 
 Install dependencies:
 

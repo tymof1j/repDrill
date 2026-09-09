@@ -3,6 +3,10 @@ import 'server-only';
 
 import { getSupabaseDb } from './server';
 import type { BackendRow } from './types';
+import { saveProgress } from '../training/saveProgress';
+import { buildTrainingQueue } from '../training/queue';
+import { importBundle } from '../import/bundle';
+import { insertImportedChapter } from '../import/chapter';
 
 type AppUser = { id: string; email: string | null; language?: string | null; [key: string]: unknown } | null;
 
@@ -42,6 +46,7 @@ function courseRow(row: Record<string, unknown>) {
     _id: row.id,
     _creationTime: row.created_at instanceof Date ? row.created_at.getTime() : row.created_at,
     userId: row.user_id,
+    trainingMode: row.training_mode,
     sourceCourseId: row.source_course_id,
     sourceUrl: row.source_url,
     isPublic: row.is_public,
@@ -124,6 +129,7 @@ function reviewCardRow(row: Record<string, unknown>) {
     due: dateMs(row.due),
     elapsedDays: row.elapsed_days,
     scheduledDays: row.scheduled_days,
+    learningSteps: row.learning_steps,
   };
 }
 
@@ -140,50 +146,6 @@ function reviewLogRow(row: Record<string, unknown>) {
   };
 }
 
-async function upsertPosition(db: any, userId: string, fen: string, annotation?: string | null) {
-  const rows = await db`
-    insert into public.positions (user_id, fen, annotation)
-    values (${userId}, ${fen}, ${annotation ?? null})
-    on conflict (user_id, fen) do update set annotation = coalesce(public.positions.annotation, excluded.annotation)
-    returning *
-  `;
-  return rows[0];
-}
-
-function courseMoveType(courseColor: string, colorToMove: string) {
-  return (colorToMove === 'white' ? 'black' : 'white') === courseColor ? 'repertoire' : 'opponent';
-}
-
-async function insertImportedChapter(db: any, userId: string, course: any, input: any) {
-  const chapters = await db`
-    insert into public.chapters (course_id, name, chapter_type, sort_order, description, source_chapter_id, source_file)
-    values (${course.id}, ${input.chapterName ?? input.name ?? 'Chapter'}, ${input.chapterType ?? 'training'}, ${input.sortOrder ?? 0}, ${input.description ?? null}, ${input.sourceChapterId ?? null}, ${input.sourceFile ?? null})
-    returning *
-  `;
-  const chapter = chapters[0];
-  const positionByFen = new Map<string, any>();
-  const allMoves = input.moves ?? [];
-  if (input.rootFen) positionByFen.set(input.rootFen, await upsertPosition(db, course.user_id, input.rootFen));
-  let movesCreated = 0;
-  for (const [index, move] of allMoves.entries()) {
-    const parentFen = move.parentFen;
-    const childFen = move.fen ?? move.childFen;
-    if (!parentFen || !childFen || !move.san || !move.uci) continue;
-    if (!positionByFen.has(parentFen)) positionByFen.set(parentFen, await upsertPosition(db, course.user_id, parentFen));
-    if (!positionByFen.has(childFen)) positionByFen.set(childFen, await upsertPosition(db, course.user_id, childFen, move.comment ?? null));
-    const parent = positionByFen.get(parentFen);
-    const child = positionByFen.get(childFen);
-    const moveType = move.moveType ?? courseMoveType(course.color, move.colorToMove ?? 'white');
-    const inserted = await db`
-      insert into public.moves (chapter_id, parent_position_id, child_position_id, san, uci, move_number, color_to_move, is_main_line, move_type, sort_order, comment, annotations)
-      values (${chapter.id}, ${parent.id}, ${child.id}, ${move.san}, ${move.uci}, ${move.moveNumber ?? 1}, ${move.colorToMove ?? 'white'}, ${move.isMainLine ?? true}, ${moveType}, ${move.sortOrder ?? index}, ${move.comment ?? null}, ${move.annotations ? db.json(move.annotations) : null})
-      on conflict (chapter_id, parent_position_id, uci, move_type) do nothing
-      returning id
-    `;
-    if (inserted[0]) movesCreated++;
-  }
-  return { chapter, movesCreated };
-}
 
 async function loadRepertoireTree(db: any, repertoireId: string, userId: string) {
   const reps = await db`select * from public.repertoires where id = ${repertoireId} and user_id = ${userId} limit 1`;
@@ -237,162 +199,30 @@ async function publicCourse(db: any, token: string) {
   };
 }
 
-function isUnseenCard(card: any) {
-  return card && Number(card.state) === 0 && !card.last_review;
-}
-
-function chapterRoots(moves: any[]) {
-  const parents = new Set(moves.map((move) => String(move.parent_position_id)));
-  const children = new Set(moves.map((move) => String(move.child_position_id)));
-  const roots = [...parents].filter((id) => !children.has(id));
-  return roots.length ? roots : (moves[0] ? [String(moves[0].parent_position_id)] : []);
-}
-
 async function buildTrainingLines(db: any, user: AppUser, args: Record<string, unknown>) {
-  const courseRows = await db`select * from public.courses where user_id = ${user!.id} order by created_at`;
-  let courses = courseRows;
-  if (args.courseId) courses = courses.filter((course: any) => String(course.id) === String(args.courseId));
-  if (args.repertoireId) {
-    const bindings = await db`select course_id from public.repertoire_courses where repertoire_id = ${String(args.repertoireId)}`;
-    const ids = new Set(bindings.map((row: any) => String(row.course_id)));
-    courses = courses.filter((course: any) => ids.has(String(course.id)));
-  }
+  const courses = await db`select c.* from public.courses c where c.user_id = ${user!.id}
+    ${args.courseId ? db`and c.id = ${String(args.courseId)}` : db`and c.training_mode = 'theory'`}
+    ${args.repertoireId ? db`and c.id in (select rc.course_id from public.repertoire_courses rc join public.repertoires r on r.id = rc.repertoire_id where r.id = ${String(args.repertoireId)} and r.user_id = ${user!.id})` : db``}
+    order by c.created_at, c.id`;
   if (!courses.length) return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
-  const courseIds = courses.map((course: any) => course.id);
-  const chapters = await db`select * from public.chapters where course_id in ${db(courseIds)} ${args.chapterId ? db`and id = ${String(args.chapterId)}` : db``} order by sort_order, created_at`;
+  const chapters = await db`select * from public.chapters where course_id in ${db(courses.map((course: any) => course.id))}
+    ${args.chapterId ? db`and id = ${String(args.chapterId)}` : db``} order by sort_order, created_at, id`;
   if (!chapters.length) return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
   const chapterIds = chapters.map((chapter: any) => chapter.id);
-  const moves = await db`select * from public.moves where chapter_id in ${db(chapterIds)} order by sort_order`;
-  if (!moves.length) return { lines: [], totalLines: 0, dueLines: 0, newLines: 0 };
-  const positionIds = [...new Set(moves.flatMap((move: any) => [move.parent_position_id, move.child_position_id]))];
-  const positions = await db`select * from public.positions where id in ${db(positionIds)}`;
-  const posById = new Map<string, any>(positions.map((position: any) => [String(position.id), position] as [string, any]));
-  const cards = await db`select * from public.review_cards where user_id = ${user!.id}`;
-  const cardByMoveId = new Map<string, any>(cards.map((card: any) => [String(card.move_id), card] as [string, any]));
-  // Keep the review queue on the database clock.  The cached library counter
-  // uses the same predicate, while comparing timestamp/state values after
-  // they have crossed the Postgres -> Node boundary can silently produce an
-  // empty Review queue even though the counter says cards are due.
-  const dueCardRows = await db`
-    select rc.id
-    from public.review_cards rc
-    join public.moves m on m.id = rc.move_id
-    where rc.user_id = ${user!.id}
-      and m.chapter_id in ${db(chapterIds)}
-      and rc.due <= now()
-      and (rc.last_review is not null or rc.state <> 0)
-  `;
-  const dueCardIds = new Set(dueCardRows.map((row: any) => String(row.id)));
-  const settings = await db`select * from public.chapter_line_settings where chapter_id in ${db(chapterIds)}`;
-  const settingByKey = new Map(settings.map((setting: any) => [`${setting.chapter_id}:${setting.line_key}`, Boolean(setting.info_only)]));
-  const views = await db`select * from public.info_line_views where user_id = ${user!.id} and chapter_id in ${db(chapterIds)}`;
-  const viewed = new Set(views.map((view: any) => `${view.chapter_id}:${view.line_key}`));
-  const courseById = new Map<string, any>(courses.map((course: any) => [String(course.id), course] as [string, any]));
-  const chapterMoves = new Map<string, any[]>();
-  for (const move of moves) {
-    const list = chapterMoves.get(String(move.chapter_id)) ?? [];
-    list.push(move);
-    chapterMoves.set(String(move.chapter_id), list);
-  }
-  for (const list of chapterMoves.values()) list.sort((a, b) => Number(b.is_main_line) - Number(a.is_main_line) || Number(a.sort_order) - Number(b.sort_order));
-  const extracted: any[] = [];
-  let totalLines = 0;
-  let dueLines = 0;
-  let newLines = 0;
-  for (const chapter of chapters) {
-    const list = chapterMoves.get(String(chapter.id)) ?? [];
-    const byParent = new Map<string, any[]>();
-    for (const move of list) {
-      const siblings = byParent.get(String(move.parent_position_id)) ?? [];
-      siblings.push(move);
-      byParent.set(String(move.parent_position_id), siblings);
-    }
-    const rawLines: any[][] = [];
-    const onPath = new Set<string>();
-    const walk = (positionId: string, path: any[]) => {
-      if (onPath.has(positionId)) {
-        if (path.length) rawLines.push([...path]);
-        return;
-      }
-      onPath.add(positionId);
-      const children = byParent.get(positionId) ?? [];
-      if (!children.length) {
-        if (path.length) rawLines.push([...path]);
-        onPath.delete(positionId);
-        return;
-      }
-      for (const move of children) {
-        path.push(move);
-        walk(String(move.child_position_id), path);
-        path.pop();
-      }
-      onPath.delete(positionId);
-    };
-    for (const root of chapterRoots(list)) walk(root, []);
-    const course = courseById.get(String(chapter.course_id));
-    if (!course) continue;
-    rawLines.forEach((rawMoves, lineIndex) => {
-      let selected = rawMoves;
-      if (args.fromPositionId) {
-        const start = rawMoves.findIndex((move) => String(move.parent_position_id) === String(args.fromPositionId));
-        if (start < 0) return;
-        selected = rawMoves.slice(start);
-      }
-      const lineKey = selected.map((move) => move.uci).join(' ');
-      const infoOnly = settingByKey.get(`${chapter.id}:${lineKey}`) === true;
-      const steps = selected.map((move) => {
-        const parent = posById.get(String(move.parent_position_id));
-        const child = posById.get(String(move.child_position_id));
-        const card = move.move_type === 'repertoire' ? cardByMoveId.get(String(move.id)) : null;
-        return {
-          san: move.san,
-          uci: move.uci,
-          parentFen: parent?.fen ?? '',
-          childFen: child?.fen ?? '',
-          parentPositionId: String(move.parent_position_id),
-          childPositionId: String(move.child_position_id),
-          moveNumber: move.move_number,
-          isUserMove: move.move_type === 'repertoire',
-          annotation: move.comment?.trim() || child?.annotation || null,
-          annotations: move.annotations ?? null,
-          cardId: card?.id ?? null,
-          isNew: Boolean(isUnseenCard(card)),
-        };
-      });
-      if (!steps.some((step) => step.isUserMove) && !infoOnly) return;
-      if (!args.learnMode && infoOnly) return;
-      if (infoOnly && viewed.has(`${chapter.id}:${lineKey}`) && !args.learnMode) return;
-      const lineIsNew = steps.some((step) => step.isNew);
-      const dueCount = steps.filter((step) => {
-        return step.cardId ? dueCardIds.has(String(step.cardId)) : false;
-      }).length;
-      if (!args.learnMode && !args.fromPositionId && !infoOnly && dueCount === 0) return;
-      totalLines++;
-      if (lineIsNew) newLines++;
-      if (dueCount > 0) dueLines++;
-      extracted.push({
-        lineId: `${chapter.id}-${lineIndex}`,
-        courseId: String(chapter.course_id),
-        chapterId: String(chapter.id),
-        chapterSortOrder: chapter.sort_order,
-        chapterLineIndex: lineIndex,
-        lineKey,
-        courseName: course.name,
-        courseColor: course.color,
-        chapterName: chapter.name,
-        steps,
-        isNew: infoOnly ? false : lineIsNew,
-        dueCount: infoOnly ? 0 : dueCount,
-        isInfoOnly: infoOnly,
-      });
-    });
-  }
-  extracted.sort((a, b) => (a.isNew !== b.isNew ? Number(a.isNew) - Number(b.isNew) : b.dueCount - a.dueCount));
-  const limit = args.learnMode ? Number.POSITIVE_INFINITY : Number(args.newLineLimit ?? 5);
-  let seenNew = 0;
-  const lines = extracted.filter((line) => !line.isNew || ++seenNew <= limit);
-  return { lines, totalLines, dueLines, newLines };
+  const [moves, positions, cards, settings, views, puzzleProgress] = await Promise.all([
+    db`select * from public.moves where chapter_id in ${db(chapterIds)} order by sort_order, id`,
+    db`select p.id, p.fen, p.annotation from public.positions p where p.id in (
+      select parent_position_id from public.moves where chapter_id in ${db(chapterIds)}
+      union select child_position_id from public.moves where chapter_id in ${db(chapterIds)})`,
+    db`select rc.* from public.review_cards rc join public.moves m on m.id = rc.move_id where rc.user_id = ${user!.id} and m.chapter_id in ${db(chapterIds)}`,
+    db`select * from public.chapter_line_settings where chapter_id in ${db(chapterIds)}`,
+    db`select chapter_id, line_key from public.info_line_views where user_id = ${user!.id} and chapter_id in ${db(chapterIds)}`,
+    courses.some((course: any) => course.training_mode === 'puzzles') ? db`select * from public.puzzle_line_progress where user_id = ${user!.id} and chapter_id in ${db(chapterIds)}` : [],
+  ]);
+  return buildTrainingQueue({ courses, chapters, moves, positions, cards, settings, views, puzzleProgress }, args);
 }
+
+
 
 function dateMs(value: unknown) {
   return value instanceof Date ? value.getTime() : value;
@@ -515,6 +345,15 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
   if (operation === 'courses.remove') {
     const rows = await db`delete from public.courses where id = ${String(args.id)} and user_id = ${user.id} returning id`;
     if (!rows[0]) throw new Error('Not found');
+    return null;
+  }
+  if (operation === 'courses.setTrainingMode') {
+    if (!['theory', 'puzzles'].includes(String(args.mode))) throw new Error('Invalid training mode');
+    await db.begin(async (tx: any) => {
+      const rows = await tx`update public.courses set training_mode = ${args.mode}, updated_at = now() where id = ${String(args.courseId)} and user_id = ${user.id} returning id`;
+      if (!rows[0]) throw new Error('Course not found');
+      await tx`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', true) on conflict (user_id) do update set requested_at = now(), status = 'queued', force_refresh = true`;
+    });
     return null;
   }
   if (operation === 'courses.rename') {
@@ -873,21 +712,18 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
     }));
   }
 
-  if (operation === 'training.ensureCards') {
+  if (operation === 'training.ensureCards' || operation === 'training.getTrainingLines') {
     const result = await db`
       insert into public.review_cards (user_id, move_id, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state)
       select ${user.id}, m.id, now(), 0, 0, 0, 0, 0, 0, 0
-      from public.moves m
-      join public.chapters ch on ch.id = m.chapter_id
-      join public.courses c on c.id = ch.course_id
-      where c.user_id = ${user.id} and m.move_type = 'repertoire'
-      on conflict (user_id, move_id) do nothing
-      returning id
+      from public.moves m join public.chapters ch on ch.id = m.chapter_id join public.courses c on c.id = ch.course_id
+      where c.user_id = ${user.id} and c.training_mode = 'theory' and m.move_type = 'repertoire'
+        ${args.courseId ? db`and c.id = ${String(args.courseId)}` : db``}
+        ${args.chapterId ? db`and ch.id = ${String(args.chapterId)}` : db``}
+        and not exists (select 1 from public.review_cards rc where rc.user_id = ${user.id} and rc.move_id = m.id)
+      on conflict (user_id, move_id) do nothing returning id
     `;
-    return result.length;
-  }
-  if (operation === 'training.getTrainingLines') {
-    return buildTrainingLines(db, user, args);
+    return operation === 'training.ensureCards' ? result.length : buildTrainingLines(db, user, args);
   }
   if (operation === 'training.getCourseLineStatuses') {
     const result = await buildTrainingLines(db, user, { ...args, learnMode: true });
@@ -896,33 +732,20 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
       lineIndex: line.chapterLineIndex,
       lineKey: line.lineKey,
       grade: line.isNew ? 'N' : line.dueCount > 0 ? 'D' : 'A',
-      category: line.isInfoOnly ? 'info' : line.isNew ? 'new' : line.dueCount > 0 ? 'due' : 'mastered',
-      nextReviewAt: null,
+      category: line.isInfoOnly ? 'info' : line.trainingMode === 'puzzles' ? (line.puzzleSolved ? 'mastered' : 'new') : line.isNew ? 'new' : line.dueCount > 0 ? 'due' : 'mastered',
+      nextReviewAt: Number.isFinite(line.nextReviewAt) ? line.nextReviewAt : null,
       isInfoOnly: line.isInfoOnly,
     }));
   }
+  if (operation === 'training.syncProgress') return saveProgress(db, user.id, args.events);
   if (operation === 'training.submitLineRatings') {
     const results = Array.isArray(args.results) ? args.results : [];
-    for (const item of results as any[]) {
-      const cards = await db`select * from public.review_cards where id = ${String(item.cardId)} and user_id = ${user.id} limit 1`;
-      const card = cards[0];
-      if (!card) continue;
-      const now = new Date();
-      const correct = Boolean(item.correct);
-      const responseMs = Math.max(0, Number(item.responseTimeMs) || 0);
-      const due = new Date(now.getTime() + (correct ? Math.max(1, Number(card.scheduled_days) || 1) * 24 * 60 * 60 * 1000 : 10 * 60 * 1000));
-      await db`
-        update public.review_cards
-        set due = ${due}, stability = ${Math.max(1, Number(card.stability) + (correct ? 0.5 : -0.2))}, difficulty = ${Math.max(1, Math.min(10, Number(card.difficulty) + (correct ? -0.1 : 0.2)))}, elapsed_days = ${Number(card.elapsed_days) || 0}, scheduled_days = ${correct ? Math.max(1, Number(card.scheduled_days) || 1) * 2 : 0}, reps = ${Number(card.reps) + (correct ? 1 : 0)}, lapses = ${Number(card.lapses) + (correct ? 0 : 1)}, state = ${correct ? 2 : 1}, last_review = ${now}
-        where id = ${card.id} and user_id = ${user.id}
-      `;
-      await db`
-        insert into public.review_logs (card_id, rating, response_time_ms, reviewed_at, prev_stability, prev_difficulty, prev_state)
-        values (${card.id}, ${correct ? (responseMs < 3000 ? 4 : responseMs < 8000 ? 3 : 2) : 1}, ${responseMs}, ${now}, ${card.stability}, ${card.difficulty}, ${card.state})
-      `;
-    }
-    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', false) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = public.counter_refresh_jobs.force_refresh or excluded.force_refresh`;
-    return null;
+    if (!results.length) return null;
+    return saveProgress(db, user.id, results.map((item: any) => ({
+      id: item.eventId ?? crypto.randomUUID(), kind: 'review', cardId: item.cardId,
+      correct: item.correct, responseTimeMs: Math.round(Math.max(0, Number(item.responseTimeMs) || 0)),
+      reviewedAt: item.reviewedAt ?? Date.now(),
+    })));
   }
   if (operation === 'training.markInfoLineViewed') {
     const accessible = await db`
@@ -947,7 +770,12 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
     const cards = await db`select * from public.review_cards where user_id = ${user.id} order by id`;
     const cardIds = cards.map((card: any) => card.id);
     const logs = cardIds.length ? await db`select * from public.review_logs where card_id in ${db(cardIds)} order by reviewed_at` : [];
-    return { cards: cards.map(reviewCardRow), logs: logs.map(reviewLogRow) };
+    const [lineSettings, infoViews, puzzleProgress] = await Promise.all([
+      db`select s.* from public.chapter_line_settings s join public.chapters ch on ch.id = s.chapter_id join public.courses c on c.id = ch.course_id where c.user_id = ${user.id}`,
+      db`select * from public.info_line_views where user_id = ${user.id}`,
+      db`select * from public.puzzle_line_progress where user_id = ${user.id}`,
+    ]);
+    return { cards: cards.map(reviewCardRow), logs: logs.map(reviewLogRow), lineSettings, infoViews, puzzleProgress };
   }
 
   if (operation === 'training.getCachedLineStats') {
@@ -966,7 +794,7 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
     if (stale) {
       await db`
         insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh, error)
-        values (${user.id}, now(), 'queued', ${!rows[0]}, null)
+        values (${user.id}, now(), 'queued', true, null)
         on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = public.counter_refresh_jobs.force_refresh or excluded.force_refresh, error = null
       `;
     }
@@ -1055,78 +883,42 @@ export async function executeSupabaseOperation(operation: string, args: Record<s
   if (operation === 'import.importTreeIntoChapter') {
     const courseRows = await db`select * from public.courses where id = ${String(args.courseId)} and user_id = ${user.id} limit 1`;
     if (!courseRows[0]) throw new Error('Course not found');
-    const result = await insertImportedChapter(db, user.id, courseRows[0], args);
+    const result = await db.begin((tx: any) => insertImportedChapter(tx, user.id, courseRows[0], args));
     return { chapterId: result.chapter.id, movesCreated: result.movesCreated, movesSkipped: 0 };
   }
   if (operation === 'import.createCourseImport') {
-    const courseRows = await db`select * from public.courses where id = ${String(args.courseId)} and user_id = ${user.id} limit 1`;
-    if (!courseRows[0]) throw new Error('Course not found');
     const chapters = Array.isArray(args.chapters) ? args.chapters : [];
     if (chapters.length === 0) throw new Error('No chapters to import');
-    const imports = await db`
-      insert into public.course_imports (course_id, user_id, status, total_chapters, completed_chapters, updated_at)
-      values (${courseRows[0].id}, ${user.id}, 'processing', ${chapters.length}, 0, now())
-      returning id
+    return db.begin(async (tx: any) => {
+      const courseRows = await tx`select * from public.courses where id = ${String(args.courseId)} and user_id = ${user.id} for update`;
+      if (!courseRows[0]) throw new Error('Course not found');
+    const imports = await tx`
+      insert into public.course_imports (course_id, user_id, request_id, status, total_chapters, completed_chapters, updated_at)
+      values (${courseRows[0].id}, ${user.id}, ${args.requestId ?? null}, 'processing', ${chapters.length}, 0, now())
+      on conflict (user_id, request_id) do nothing returning id
     `;
+    if (!imports[0]) {
+      const [existing] = await tx`select id from public.course_imports where user_id = ${user.id} and request_id = ${args.requestId} and course_id = ${courseRows[0].id}`;
+      if (!existing) throw new Error('Import request belongs to another course');
+      return existing.id;
+    }
     const importId = imports[0].id;
+    const [order] = await tx`select coalesce(max(sort_order), -1) + 1 as start from public.chapters where course_id = ${courseRows[0].id}`;
     let completed = 0;
     for (const chapterInput of chapters) {
-      const result = await insertImportedChapter(db, user.id, courseRows[0], chapterInput);
-      await db`
+      const result = await insertImportedChapter(tx, user.id, courseRows[0], { ...chapterInput, sortOrder: Number(order.start) + completed });
+      await tx`
         insert into public.course_import_chapters (import_id, course_id, user_id, chapter_name, chapter_type, sort_order, course_color, root_fen, source_chapter_id, source_file, status, total_moves, processed_moves, move_chunk_count, created_chapter_id)
         values (${importId}, ${courseRows[0].id}, ${user.id}, ${chapterInput.chapterName}, ${chapterInput.chapterType ?? 'training'}, ${chapterInput.sortOrder ?? completed}, ${courseRows[0].color}, ${chapterInput.rootFen ?? ''}, ${chapterInput.sourceChapterId ?? null}, ${chapterInput.sourceFile ?? null}, 'done', ${(chapterInput.moves ?? []).length}, ${(chapterInput.moves ?? []).length}, 0, ${result.chapter.id})
       `;
       completed++;
     }
-    await db`update public.course_imports set status = 'done', completed_chapters = ${completed}, updated_at = now() where id = ${importId}`;
-    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', true) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = true`;
-    return importId;
+    await tx`update public.course_imports set status = 'done', completed_chapters = ${completed}, updated_at = now() where id = ${importId}`;
+    await tx`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', true) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = true`;
+      return importId;
+    });
   }
-  if (operation === 'import.importBundle') {
-    const bundle: any = args.bundle;
-    if (!bundle || bundle.version !== 1 || !Array.isArray(bundle.courses)) throw new Error('Unsupported bundle');
-    const annotations = new Map((bundle.positions ?? []).filter((p: any) => p?.fen).map((p: any) => [p.fen, p.annotation ?? null]));
-    let coursesCreated = 0;
-    let chaptersCreated = 0;
-    let movesCreated = 0;
-    for (const inputCourse of bundle.courses) {
-      if (!inputCourse?.name || !['white', 'black'].includes(inputCourse.color)) continue;
-      const inserted = await db`
-        insert into public.courses (user_id, name, color, description, source_course_id, source_url)
-        values (${user.id}, ${inputCourse.name}, ${inputCourse.color}, ${inputCourse.description ?? null}, ${inputCourse.sourceCourseId ?? null}, ${inputCourse.sourceUrl ?? null})
-        returning *
-      `;
-      const course = inserted[0];
-      coursesCreated++;
-      const positionByFen = new Map<string, any>();
-      const getPosition = async (fen: string) => {
-        if (!positionByFen.has(fen)) positionByFen.set(fen, await upsertPosition(db, user.id, fen, annotations.get(fen) as string | null | undefined));
-        return positionByFen.get(fen);
-      };
-      for (const [chapterIndex, inputChapter] of (inputCourse.chapters ?? []).entries()) {
-        const chapters = await db`
-          insert into public.chapters (course_id, name, chapter_type, sort_order, description, source_chapter_id, source_file)
-          values (${course.id}, ${inputChapter.name ?? `Chapter ${chapterIndex + 1}`}, ${inputChapter.chapterType ?? 'training'}, ${inputChapter.sortOrder ?? chapterIndex}, ${inputChapter.description ?? null}, ${inputChapter.sourceChapterId ?? null}, ${inputChapter.sourceFile ?? null})
-          returning id
-        `;
-        const chapterId = chapters[0].id;
-        chaptersCreated++;
-        for (const [moveIndex, move] of (inputChapter.moves ?? []).entries()) {
-          if (!move?.parentFen || !move.childFen || !move.san || !move.uci) continue;
-          const parent = await getPosition(move.parentFen);
-          const child = await getPosition(move.childFen);
-          const insertedMove = await db`
-            insert into public.moves (chapter_id, parent_position_id, child_position_id, san, uci, move_number, color_to_move, is_main_line, move_type, sort_order, comment, annotations)
-            values (${chapterId}, ${parent.id}, ${child.id}, ${move.san}, ${move.uci}, ${move.moveNumber ?? 1}, ${move.colorToMove ?? 'white'}, ${move.isMainLine ?? true}, ${move.moveType ?? courseMoveType(course.color, move.colorToMove ?? 'white')}, ${move.sortOrder ?? moveIndex}, ${move.comment ?? null}, ${move.annotations ? db.json(move.annotations) : null})
-            on conflict (chapter_id, parent_position_id, uci, move_type) do nothing returning id
-          `;
-          if (insertedMove[0]) movesCreated++;
-        }
-      }
-    }
-    await db`insert into public.counter_refresh_jobs (user_id, requested_at, status, force_refresh) values (${user.id}, now(), 'queued', true) on conflict (user_id) do update set requested_at = excluded.requested_at, status = 'queued', force_refresh = true`;
-    return { coursesCreated, chaptersCreated, movesCreated, cardsCreated: 0 };
-  }
+  if (operation === 'import.importBundle') return importBundle(db, user.id, args.bundle);
 
   throw new Error(`Supabase operation is not migrated yet: ${operation}`);
 }

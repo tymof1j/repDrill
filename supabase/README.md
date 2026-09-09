@@ -2,7 +2,7 @@
 
 The migration is designed as a one-way, append-only cutover:
 
-1. Create a Supabase project and run `migrations/0001_repdrill.sql` in the SQL editor (or with the Supabase CLI).
+1. Create a Supabase project and run every SQL file under `migrations/` in numeric order in the SQL editor (or with the Supabase CLI).
 2. Configure WorkOS AuthKit with:
    - Sign-in endpoint: `/sign-in`
    - Callback URI: `/auth/callback`
@@ -40,9 +40,9 @@ available for audit and reconciliation.
 The counter design is separate from the migration. `counter_snapshots` stores
 the last computed totals and the app reads them immediately. The totals are
 aggregated terminal training lines, not individual positions. A refresh is
-checked every minute, but it only traverses the graph when a course was
-actually reviewed after the last snapshot (or when imported course data needs
-its first snapshot).
+checked every minute while the library is open. Stale snapshots are queued
+for a forced refresh because cards become due with time even without a new
+review. Imports and saved progress also queue refreshes.
 
 For a fully independent refresh after cutover, enable Supabase's Cron module
 (`pg_cron`). Migration `0002` schedules `repdrill-counter-refresh` every
@@ -60,3 +60,6 @@ select cron.schedule(
 
 The `/api/internal/counter-refresh` endpoint remains available for a secured
 manual or external scheduler using `Authorization: Bearer $COUNTER_REFRESH_SECRET`.
+
+For the current training changes, deployment order, and verification, see
+[trainer reliability](../docs/trainer-reliability.md).

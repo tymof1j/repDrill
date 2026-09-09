@@ -93,12 +93,12 @@ export function ShareDialog({
     scopeOptions.find((scope) => `${scope.type}:${scope.id ?? ''}` === scopeKey) ?? scopeOptions[0];
   const selectedScopeKey = `${selectedScope.type}:${selectedScope.id ?? ''}`;
 
-  const settings = useQuery(api.sharing.getSettings, {
+  const settings = useQuery(api.sharing.getSettings, open ? {
     resourceType,
     resourceId,
     scopeType: selectedScope.type,
     scopeId: selectedScope.id,
-  });
+  } : 'skip');
   const setLinkAccess = useMutation(api.sharing.setLinkAccess);
   const upsertInvitation = useMutation(api.sharing.upsertInvitation);
   const removeInvitation = useMutation(api.sharing.removeInvitation);
@@ -145,8 +145,12 @@ export function ShareDialog({
     };
   }, [open]);
 
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (!open) triggerRef.current?.focus();
+    // Restoring focus is only appropriate after closing a dialog. Doing it
+    // on mount made every library card scroll its Share button into view.
+    if (wasOpenRef.current && !open) triggerRef.current?.focus({ preventScroll: true });
+    wasOpenRef.current = open;
   }, [open]);
 
   const copy = async () => {

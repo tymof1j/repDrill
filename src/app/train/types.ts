@@ -27,6 +27,7 @@ export type LineStep = {
 };
 
 export type TrainingLine = {
+  trainingMode?: 'theory' | 'puzzles';
   lineId: string;
   courseId: string;
   chapterId: string;
